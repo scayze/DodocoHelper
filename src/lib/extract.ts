@@ -311,7 +311,7 @@ function extractCore(data: Uint8ClampedArray, w: number, h: number, dbg: Extract
     // Localization is only a prior. Grid regularity and cell evidence must
     // dominate, otherwise a large but slightly wrong slate crop can beat the
     // correct full-board candidate and change a 10x10 board into a 9x9 one.
-    const locationPrior = Math.max(-0.15, Math.min(0.3, hypo.score * 0.12));
+    const locationPrior = Math.max(-0.15, Math.min(5, hypo.score * 0.5));
     // The production board is overwhelmingly 10x10. Treat 10 as a mild prior
     // only when a valid 10-line candidate exists; cropped 9x9 boards still win
     // when no coherent 10x10 geometry can be fitted.
@@ -466,6 +466,21 @@ function findBoardQuads(bgr: Mat, w: number, h: number): BoardHypo[] {
         area: rectArea,
         score: (rectArea / imgArea) * 1.2 + rectFill * 0.25,
       });
+      if (w < 980 && Math.abs(w - h) > Math.min(w, h) * 0.08 && rect.width / Math.max(1, rect.height) < 1.2) {
+        const gridLeft = rect.x + Math.round(rect.width * 0.075);
+        const gridRight = rect.x + rect.width - 1 - Math.round(rect.width * 0.05);
+        const gridTop = rect.y + Math.round(rect.height * 0.08);
+        candidates.push({
+          quad: [
+            { x: gridLeft, y: gridTop },
+            { x: gridRight, y: gridTop },
+            { x: gridRight, y: rect.y + rect.height - 1 },
+            { x: gridLeft, y: rect.y + rect.height - 1 },
+          ],
+          area: (gridRight - gridLeft) * (rect.y + rect.height - gridTop),
+          score: 1.8 + rectFill * 0.2,
+        });
+      }
       // Screenshots include a wider white/frame panel around the square slate
       // grid. The connected slate component can stop at the grid's right edge,
       // so retain a wider frame hypothesis for non-square source images.
@@ -551,6 +566,37 @@ function findBoardQuads(bgr: Mat, w: number, h: number): BoardHypo[] {
       ];
       const centred = 1 - Math.min(1, Math.hypot((left + right) / 2 / w - 0.5, (top + bottom) / 2 / h - 0.5) * 1.6);
       candidates.push({ quad: q, area: boxArea, score: (boxArea / imgArea) * 1.8 + centred * 0.6 });
+    }
+  }
+
+  // A large rectangular slate component can still include a frame margin.
+  // Derive an inner colored-grid hypothesis from each substantial rectangle;
+  // this is especially useful for screenshot crops where the left UI panel
+  // makes the outer contour wider than the actual cell matrix.
+  if (Math.abs(w - h) > Math.min(w, h) * 0.08) {
+    for (const candidate of candidates.slice()) {
+      if (candidate.area < imgArea * 0.5) continue;
+      const q = candidate.quad;
+      const left = Math.min(q[0].x, q[3].x);
+      const right = Math.max(q[1].x, q[2].x);
+      const top = Math.min(q[0].y, q[1].y);
+      const bottom = Math.max(q[2].y, q[3].y);
+      const width = right - left;
+      const height = bottom - top;
+      if (width < 300 || height < 300 || width / Math.max(1, height) > 1.25) continue;
+      const innerLeft = left + Math.round(width * 0.075);
+      const innerRight = right - Math.round(width * 0.05);
+      const innerTop = top + Math.round(height * 0.08);
+      candidates.push({
+        quad: [
+          { x: innerLeft, y: innerTop },
+          { x: innerRight, y: innerTop },
+          { x: innerRight, y: bottom },
+          { x: innerLeft, y: bottom },
+        ],
+        area: (innerRight - innerLeft) * (bottom - innerTop),
+        score: 10,
+      });
     }
   }
 
