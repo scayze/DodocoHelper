@@ -32,18 +32,28 @@ const hintLabel = el("hint-label");
 
 let puzzle: NormalizedPuzzle | null = null;
 let fullSolution: string[][] | null = null;
+let isWorking = false;
 const hinted = new Set<string>();
+
+function focusPanel(id: string): void {
+  const node = document.getElementById(id);
+  node?.focus({ preventScroll: true });
+  node?.scrollIntoView({ behavior: "smooth", block: "nearest" });
+}
 
 function setPhase(phase: Phase): void {
   resultArea.classList.toggle("hidden", phase === "idle");
   for (const [name, panel] of Object.entries(panels)) {
     panel.classList.toggle("hidden", name !== phase);
   }
+  if (phase === "ready") focusPanel("panel-ready");
+  if (phase === "error") focusPanel("panel-error");
 }
 
 function showError(title: string, hint: string): void {
   errorTitle.textContent = title;
   errorHint.textContent = hint;
+  isWorking = false;
   setPhase("error");
 }
 
@@ -64,6 +74,13 @@ function refreshHintButton(): void {
   hintButton.disabled = left === 0;
 }
 
+function describeBoard(): string {
+  if (!puzzle || !fullSolution) return "Puzzle board with regions, marks, and crowns";
+  const placed = fullSolution.flat().filter((v) => v === "C").length;
+  const shown = hinted.size;
+  return `Puzzle board, ${puzzle.size} by ${puzzle.size}, ${placed} crowns total, ${shown} hints shown`;
+}
+
 function runPuzzle(raw: PuzzleInput): void {
   const { errors, puzzle: parsed } = validatePuzzleInput(raw);
   if (!parsed) {
@@ -82,7 +99,9 @@ function runPuzzle(raw: PuzzleInput): void {
   solveButton.textContent = "Solve";
   buildBoardGrid(boardGrid, parsed);
   paintBoard(boardGrid, parsed, new Set());
+  boardGrid.setAttribute("aria-label", describeBoard());
   refreshHintButton();
+  isWorking = false;
   setPhase("ready");
 }
 
@@ -97,23 +116,27 @@ function revealHint(): void {
     }
   }
   paintBoard(boardGrid, puzzle, hinted);
+  boardGrid.setAttribute("aria-label", describeBoard());
   refreshHintButton();
 }
 
 function revealSolution(): void {
   if (!puzzle || !fullSolution || solveButton.disabled) return;
   paintBoard(boardGrid, puzzle, solutionCrowns(fullSolution));
+  boardGrid.setAttribute("aria-label", `Solved puzzle board, ${puzzle.size} by ${puzzle.size}`);
   solveButton.disabled = true;
   solveButton.textContent = "Solved";
   hintButton.disabled = true;
 }
 
 async function handleFile(file: File): Promise<void> {
+  if (isWorking) return;
   if (!file.type.startsWith("image/")) {
     showError("Please upload an image file.", "PNG or JPEG shots of the puzzle board work best.");
     return;
   }
   setPhase("working");
+  isWorking = true;
   const extracted = await extractBoardFromFile(file);
   if (!extracted.ok || !extracted.puzzle) {
     showError(

@@ -10,6 +10,12 @@
       content="Dodoco Solver reads a crown puzzle screenshot and returns the solved board with every crown placed."
     />
     <title>Dodoco Solver - Crown Puzzle Companion</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link
+      href="https://fonts.googleapis.com/css2?family=Cinzel:wght@600;700&family=Outfit:wght@400;500;600;700&display=swap"
+      rel="stylesheet"
+    />
     <style>
       html { background: #f5edd8; }
     </style>
@@ -44,7 +50,7 @@
                 <p class="mx-auto mt-1 max-w-[34ch] text-sm text-night-800/70">
                   Best with a cropped shot of the board and clear grid lines.
                 </p>
-                <span class="btn-gold mt-4 inline-flex items-center gap-2 rounded-full px-5 py-2.5 text-sm font-semibold">
+                <span class="btn-gold mt-4 inline-flex min-h-[44px] items-center gap-2 rounded-full px-5 py-2.5 text-sm font-semibold">
                   <svg width="16" height="16" viewBox="0 0 256 256" fill="currentColor" aria-hidden="true">
                     <path d="M224,152v56a16,16,0,0,1-16,16H48a16,16,0,0,1-16-16V152a8,8,0,0,1,16,0v56H208V152a8,8,0,0,1,16,0Zm-101.66,5.66a8,8,0,0,0,11.32,0l40-40a8,8,0,0,0-11.32-11.32L136,132.69V40a8,8,0,0,0-16,0v92.69L93.66,106.34a8,8,0,0,0-11.32,11.32Z" />
                   </svg>
@@ -57,17 +63,15 @@
               type="file"
               accept="image/png,image/jpeg,image/webp"
               class="sr-only"
-              tabindex="-1"
-              aria-hidden="true"
             />
           </div>
         </section>
 
         <section id="solver" class="scroll-mt-20 pb-20">
-          <div id="result-area" class="hidden">
+          <div id="result-area" class="hidden" aria-live="polite">
             <div class="mx-auto max-w-3xl">
 
-              <div id="panel-working" class="hidden">
+              <div id="panel-working" class="hidden" tabindex="-1">
                 <div class="grid w-full grid-cols-9 gap-1.5 rounded-2xl bg-night-800 p-3" aria-hidden="true" id="skeleton-grid"></div>
                 <p class="mt-3 flex items-center gap-2 text-sm font-semibold text-night-800/70" role="status">
                   <span class="inline-block h-4 w-4 animate-spin rounded-full border-2 border-gold-600 border-t-transparent" aria-hidden="true"></span>
@@ -75,7 +79,7 @@
                 </p>
               </div>
 
-              <div id="panel-error" class="hidden rounded-2xl border border-red-800/30 bg-red-950/95 p-6" role="alert">
+              <div id="panel-error" class="hidden rounded-2xl border border-red-800/30 bg-red-950/95 p-6" role="alert" tabindex="-1">
                 <p class="flex items-center gap-2 font-semibold text-red-100">
                   <svg width="20" height="20" viewBox="0 0 256 256" fill="currentColor" aria-hidden="true">
                     <path d="M128,24A104,104,0,1,0,232,128,104.11,104.11,0,0,0,128,24Zm-8,48a8,8,0,0,1,16,0v56a8,8,0,0,1-16,0Zm8,104a16,16,0,1,1,16-16A16,16,0,0,1,128,176Z" />
@@ -87,14 +91,14 @@
                   <button
                     id="retry-button"
                     type="button"
-                    class="btn-gold rounded-full px-5 py-2.5 text-sm font-semibold"
+                    class="btn-gold min-h-[44px] rounded-full px-5 py-2.5 text-sm font-semibold"
                   >
                     Try another image
                   </button>
                 </div>
               </div>
 
-              <div id="panel-ready" class="hidden rounded-2xl border border-night-700/15 bg-white/50 p-5 text-night-900 shadow-[0_16px_50px_rgba(60,45,10,0.12)]">
+              <div id="panel-ready" class="hidden rounded-2xl border border-night-700/15 bg-white/50 p-5 text-night-900 shadow-[0_16px_50px_rgba(60,45,10,0.12)]" tabindex="-1">
                 <div class="flex flex-col gap-5 sm:flex-row">
                   <figure class="min-w-0 flex-1">
                     <div
@@ -108,14 +112,14 @@
                     <button
                       id="solve-button"
                       type="button"
-                      class="btn-gold flex-1 rounded-full px-5 py-2.5 text-sm font-semibold disabled:cursor-not-allowed disabled:opacity-50 sm:flex-none"
+                      class="btn-gold min-h-[44px] flex-1 rounded-full px-5 py-2.5 text-sm font-semibold disabled:cursor-not-allowed disabled:opacity-50 sm:flex-none"
                     >
                       Solve
                     </button>
                     <button
                       id="hint-button"
                       type="button"
-                      class="btn-outline flex-1 rounded-full px-5 py-2.5 text-sm font-semibold disabled:cursor-not-allowed disabled:opacity-50 sm:flex-none"
+                      class="btn-outline min-h-[44px] flex-1 rounded-full px-5 py-2.5 text-sm font-semibold disabled:cursor-not-allowed disabled:opacity-50 sm:flex-none"
                     >
                       <span id="hint-label">Hint</span>
                     </button>
