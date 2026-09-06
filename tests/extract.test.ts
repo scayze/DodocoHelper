@@ -1,6 +1,6 @@
-import { describe, it } from "node:test";
+import { describe, it, before } from "node:test";
 import assert from "node:assert/strict";
-import { extractFromPixels } from "../src/lib/extract.js";
+import { ensureOpenCV, extractFromPixels } from "../src/lib/extract.js";
 
 type RGB = [number, number, number];
 
@@ -174,6 +174,10 @@ function tilted(board: { data: Uint8ClampedArray; w: number; h: number }): {
 }
 
 describe("extractFromPixels (resilient importer)", () => {
+  before(async () => {
+    await ensureOpenCV();
+  });
+
   it("recovers a clean 9x9 board with X and crown marks", () => {
     const regions = bandedRegions(9);
     const { data, w, h } = renderBoard(9, 44, 5, regions, { "0,1": "x", "1,1": "crown", "8,8": "x" });

@@ -1,5 +1,5 @@
 import "./index.css";
-import { extractBoardFromFile } from "./lib/extract";
+import { ensureOpenCV, extractBoardFromFile } from "./lib/extract";
 import { buildBoardGrid, paintBoard, solutionCrowns } from "./lib/renderBoard";
 import { solvePuzzle } from "./core/solver.js";
 import { validatePuzzleInput } from "./core/validator.js";
@@ -33,6 +33,7 @@ const hintLabel = el("hint-label");
 let puzzle: NormalizedPuzzle | null = null;
 let fullSolution: string[][] | null = null;
 let isWorking = false;
+let openCVReady: Promise<void> | null = null;
 const hinted = new Set<string>();
 
 function focusPanel(id: string): void {
@@ -137,15 +138,24 @@ async function handleFile(file: File): Promise<void> {
   }
   setPhase("working");
   isWorking = true;
-  const extracted = await extractBoardFromFile(file);
-  if (!extracted.ok || !extracted.puzzle) {
+  try {
+    if (!openCVReady) openCVReady = ensureOpenCV();
+    await openCVReady;
+    const extracted = await extractBoardFromFile(file);
+    if (!extracted.ok || !extracted.puzzle) {
+      showError(
+        "The grid reader could not map that shot.",
+        extracted.error ?? "Keep the whole board visible with the grid clearly shown.",
+      );
+      return;
+    }
+    runPuzzle(extracted.puzzle);
+  } catch (e) {
     showError(
-      "The grid reader could not map that shot.",
-      extracted.error ?? "Keep the whole board visible with the grid clearly shown.",
+      "OpenCV runtime failed to load.",
+      e instanceof Error ? `${e.message}. Please reload the page.` : "Please reload the page.",
     );
-    return;
   }
-  runPuzzle(extracted.puzzle);
 }
 
 function setDragOver(on: boolean): void {

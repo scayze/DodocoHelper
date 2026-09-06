@@ -8,7 +8,9 @@ import { fileURLToPath } from "node:url";
 import pkg from "pngjs";
 const { PNG } = pkg;
 import jpeg from "jpeg-js";
-import { extractFromPixels } from "../dist/src/lib/extract.js";
+import { extractFromPixels, ensureOpenCV } from "../dist/src/lib/extract.js";
+
+await ensureOpenCV();
 
 const root = join(dirname(fileURLToPath(import.meta.url)), "..");
 const dir = join(root, "test_fixtures");
