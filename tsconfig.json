@@ -1,15 +1,7 @@
 {
-  "include": ["src", "tests"],
-  "compilerOptions": {
-    "target": "ES2022",
-    "module": "NodeNext",
-    "moduleResolution": "NodeNext",
-    "strict": true,
-    "types": ["node"],
-    "outDir": "dist",
-    "rootDir": ".",
-    "resolveJsonModule": false,
-    "declaration": false,
-    "sourceMap": false
-  }
+  "files": [],
+  "references": [
+    { "path": "./tsconfig.app.json" },
+    { "path": "./tsconfig.node.json" }
+  ]
 }

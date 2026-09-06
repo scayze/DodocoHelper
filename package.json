@@ -1,18 +1,25 @@
 {
   "name": "dodoco-solver",
+  "private": true,
   "version": "1.0.0",
-  "description": "Solver for the 9x9 2-crowns no-touch puzzle game",
+  "description": "Crown puzzle companion web app: upload a board screenshot, get every crown placed.",
   "type": "module",
   "scripts": {
-    "build": "tsc",
-    "solve": "node dist/src/cli.js",
-    "render": "node dist/src/render-cli.js",
-    "test": "npm run build && node --test dist/tests/solver.test.js dist/tests/render.test.js"
+    "dev": "vite",
+    "build": "tsc -b && vite build",
+    "preview": "vite preview",
+    "test": "tsc -p tsconfig.test.json && node --test dist/tests/solver.test.js",
+    "typecheck": "tsc -b"
   },
   "engines": {
     "node": ">=20"
   },
+  "dependencies": {},
   "devDependencies": {
-    "@types/node": "^26.4.1"
+    "@tailwindcss/vite": "^4.3.3",
+    "@types/node": "^26.4.1",
+    "tailwindcss": "^4.3.3",
+    "typescript": "~6.0.2",
+    "vite": "^8.2.2"
   }
 }

@@ -1,9 +1,9 @@
 import "./index.css";
 import { extractBoardFromFile } from "./lib/extract";
 import { buildBoardGrid, paintBoard, solutionCrowns } from "./lib/renderBoard";
-import { solvePuzzle } from "./lib/solver";
-import { validatePuzzleInput } from "./lib/validator";
-import type { NormalizedPuzzle, PuzzleInput } from "./lib/types";
+import { solvePuzzle } from "./core/solver.js";
+import { validatePuzzleInput } from "./core/validator.js";
+import type { NormalizedPuzzle, PuzzleInput } from "./core/types.js";
 
 type Phase = "idle" | "working" | "ready" | "error";
 

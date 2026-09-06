@@ -1,9 +1,9 @@
 import { describe, it } from "node:test";
 import assert from "node:assert/strict";
-import { validatePuzzleInput, validateSolution } from "../src/validator.js";
-import { solveAll, solvePuzzle } from "../src/solver.js";
-import { validatePuzzleInput as checkInput } from "../src/validator.js";
-import type { NormalizedPuzzle } from "../src/types.js";
+import { validatePuzzleInput, validateSolution } from "../src/core/validator.js";
+import { solveAll, solvePuzzle } from "../src/core/solver.js";
+import { validatePuzzleInput as checkInput } from "../src/core/validator.js";
+import type { NormalizedPuzzle } from "../src/core/types.js";
 
 // ---------------------------------------------------------------------------
 // Shared fixtures

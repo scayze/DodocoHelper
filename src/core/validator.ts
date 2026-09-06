@@ -1,4 +1,4 @@
-import type { NormalizedPuzzle, PuzzleInput } from "./types.js";
+import type { NormalizedPuzzle } from "./types.js";
 import { CROWN, EMPTY, UNKNOWN } from "./types.js";
 
 export interface InputCheck {

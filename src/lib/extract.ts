@@ -1,4 +1,4 @@
-import type { PuzzleInput } from "./types";
+import type { PuzzleInput } from "../core/types.js";
 
 export type RGB = [number, number, number];
 
@@ -102,9 +102,8 @@ function loadImage(src: string): Promise<HTMLImageElement> {
 }
 
 /**
- * Simple board extraction, mirroring tools/extract-board.ps1:
- * line scan, off-center background sampling, center-whiteness X test,
- * greedy color clustering with distance threshold 30.
+ * Board extraction from a screenshot: line scan, off-center background
+ * sampling, center-whiteness X test, greedy color clustering.
  */
 export async function extractBoardFromFile(file: File): Promise<ExtractResult> {
   const fail = (error: string): ExtractResult => ({
