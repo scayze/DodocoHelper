@@ -38,7 +38,6 @@ const hinted = new Set<string>();
 function focusPanel(id: string): void {
   const node = document.getElementById(id);
   node?.focus({ preventScroll: true });
-  node?.scrollIntoView({ behavior: "smooth", block: "nearest" });
 }
 
 function setPhase(phase: Phase): void {
@@ -151,7 +150,7 @@ async function handleFile(file: File): Promise<void> {
 function setDragOver(on: boolean): void {
   dropzone.classList.toggle("drop-active", on);
   dropzone.classList.toggle("border-gold-500", on);
-  dropzoneTitle.textContent = on ? "Drop it to solve" : "Drag a screenshot here";
+  dropzoneTitle.textContent = on ? "Drop it to solve" : "Drag a screenshot here or click to browse";
 }
 
 dropzone.addEventListener("click", () => fileInput.click());

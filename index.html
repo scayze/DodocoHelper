@@ -21,24 +21,24 @@
     </style>
   </head>
   <body>
-    <div class="parchment-page min-h-[100dvh]">
-      <main id="top" class="mx-auto w-full max-w-5xl px-4">
-        <section class="grid grid-cols-1 items-center gap-10 pt-14 pb-10 md:grid-cols-2 md:pt-20">
+    <div class="parchment-page">
+      <main id="top" class="mx-auto flex w-full max-w-5xl flex-1 flex-col justify-center px-4">
+        <section class="grid grid-cols-1 items-center gap-6 pt-8 pb-6 md:grid-cols-2 md:pt-10">
           <div>
             <p class="text-[11px] font-semibold uppercase tracking-[0.22em] text-gold-600">
-              Genshin crown puzzle companion
+              Minigame companion for dummies like loor
             </p>
             <h1 class="font-display mt-4 max-w-[14ch] text-4xl leading-[1.05] tracking-tight text-night-900 md:text-6xl">
-              Upload the board. Place every crown.
+              Upload the board
             </h1>
           </div>
-          <div>
+          <div class="flex md:justify-end">
             <div
               id="dropzone"
               role="button"
               tabindex="0"
               aria-label="Upload a board screenshot"
-              class="grid min-h-56 cursor-pointer place-items-center rounded-2xl border-2 border-dashed border-night-700/30 bg-white/50 px-6 py-10 text-center text-night-900 shadow-[0_16px_50px_rgba(60,45,10,0.12)] transition-colors hover:border-gold-600"
+              class="grid min-h-40 w-full max-w-sm cursor-pointer place-items-center rounded-2xl border-2 border-dashed border-night-700/30 bg-white/50 px-6 py-8 text-center text-night-900 shadow-[0_16px_50px_rgba(60,45,10,0.12)] transition-colors hover:border-gold-600"
             >
               <div>
                 <svg width="36" height="36" viewBox="0 0 256 256" fill="none" stroke="currentColor" stroke-width="16" class="mx-auto text-night-700/70" aria-hidden="true">
@@ -46,16 +46,10 @@
                   <circle cx="100" cy="100" r="16" fill="currentColor" stroke="none" />
                   <path d="m32,192 60-60 40,40 32-32 60,60" stroke-linecap="round" stroke-linejoin="round" />
                 </svg>
-                <p id="dropzone-title" class="mt-3 font-semibold">Drag a screenshot here</p>
+                <p id="dropzone-title" class="mt-3 font-semibold">Drag a screenshot here or click to browse</p>
                 <p class="mx-auto mt-1 max-w-[34ch] text-sm text-night-800/70">
                   Best with a cropped shot of the board and clear grid lines.
                 </p>
-                <span class="btn-gold mt-4 inline-flex min-h-[44px] items-center gap-2 rounded-full px-5 py-2.5 text-sm font-semibold">
-                  <svg width="16" height="16" viewBox="0 0 256 256" fill="currentColor" aria-hidden="true">
-                    <path d="M224,152v56a16,16,0,0,1-16,16H48a16,16,0,0,1-16-16V152a8,8,0,0,1,16,0v56H208V152a8,8,0,0,1,16,0Zm-101.66,5.66a8,8,0,0,0,11.32,0l40-40a8,8,0,0,0-11.32-11.32L136,132.69V40a8,8,0,0,0-16,0v92.69L93.66,106.34a8,8,0,0,0-11.32,11.32Z" />
-                  </svg>
-                  Choose image
-                </span>
               </div>
             </div>
             <input
@@ -67,9 +61,9 @@
           </div>
         </section>
 
-        <section id="solver" class="scroll-mt-20 pb-20">
+        <section id="solver" class="pb-0">
           <div id="result-area" class="hidden" aria-live="polite">
-            <div class="mx-auto max-w-3xl">
+            <div class="mx-auto w-fit max-w-md">
 
               <div id="panel-working" class="hidden" tabindex="-1">
                 <div class="grid w-full grid-cols-9 gap-1.5 rounded-2xl bg-night-800 p-3" aria-hidden="true" id="skeleton-grid"></div>
@@ -98,28 +92,28 @@
                 </div>
               </div>
 
-              <div id="panel-ready" class="hidden rounded-2xl border border-night-700/15 bg-white/50 p-5 text-night-900 shadow-[0_16px_50px_rgba(60,45,10,0.12)]" tabindex="-1">
-                <div class="flex flex-col gap-5 sm:flex-row">
+              <div id="panel-ready" class="hidden w-fit rounded-xl border border-night-700/15 bg-white/50 p-3 text-night-900 shadow-[0_8px_24px_rgba(60,45,10,0.10)]" tabindex="-1">
+                <div class="flex flex-col gap-2">
                   <figure class="min-w-0 flex-1">
                     <div
                       id="board-grid"
                       role="img"
                       aria-label="Puzzle board with regions, marks, and crowns"
-                      class="grid w-full gap-1.5 rounded-xl bg-[rgb(95,112,128)] p-1.5"
+                      class="grid w-full gap-1 rounded-lg bg-[rgb(95,112,128)] p-1"
                     ></div>
                   </figure>
-                  <div class="flex flex-row gap-2 sm:w-40 sm:flex-col sm:justify-center">
+                  <div class="flex flex-row justify-center gap-2">
                     <button
                       id="solve-button"
                       type="button"
-                      class="btn-gold min-h-[44px] flex-1 rounded-full px-5 py-2.5 text-sm font-semibold disabled:cursor-not-allowed disabled:opacity-50 sm:flex-none"
+                      class="btn-gold min-h-[44px] flex-1 rounded-full px-5 py-2.5 text-sm font-semibold disabled:cursor-not-allowed disabled:opacity-50 sm:max-w-40"
                     >
                       Solve
                     </button>
                     <button
                       id="hint-button"
                       type="button"
-                      class="btn-outline min-h-[44px] flex-1 rounded-full px-5 py-2.5 text-sm font-semibold disabled:cursor-not-allowed disabled:opacity-50 sm:flex-none"
+                      class="btn-outline min-h-[44px] flex-1 rounded-full px-5 py-2.5 text-sm font-semibold disabled:cursor-not-allowed disabled:opacity-50 sm:max-w-40"
                     >
                       <span id="hint-label">Hint</span>
                     </button>

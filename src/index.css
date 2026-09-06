@@ -17,7 +17,15 @@
 }
 
 html {
-  scroll-behavior: smooth;
+  height: 100%;
+  overflow: hidden;
+  overscroll-behavior: none;
+}
+
+body {
+  height: 100dvh;
+  overflow: hidden;
+  overscroll-behavior: none;
 }
 
 body {
@@ -32,6 +40,10 @@ body {
 }
 
 .parchment-page {
+  height: 100dvh;
+  overflow: hidden;
+  display: flex;
+  flex-direction: column;
   background:
     radial-gradient(ellipse 90% 40% at 50% -10%, rgba(255, 255, 255, 0.65), transparent 70%),
     radial-gradient(ellipse 60% 40% at 90% 110%, rgba(200, 160, 40, 0.14), transparent 70%),
@@ -143,6 +155,28 @@ body {
 @keyframes shimmer {
   0%, 100% { opacity: 0.35; }
   50% { opacity: 0.75; }
+}
+
+#result-area {
+  min-height: 0;
+}
+
+#board-grid {
+  width: min(78vw, 38dvh, 340px);
+  margin-inline: auto;
+}
+
+#skeleton-grid {
+  width: min(78vw, 38dvh, 340px);
+  margin-inline: auto;
+}
+
+#panel-ready,
+#panel-working,
+#panel-error {
+  width: fit-content;
+  max-width: min(88vw, 380px);
+  margin-inline: auto;
 }
 
 @media (prefers-reduced-motion: reduce) {
