@@ -1,7 +1,7 @@
 // Dev-only fixture harness: decodes test_fixtures images in Node and runs the
 // DOM-free extraction pipeline + solver on each. Not part of the test suite.
 // Usage: npm run fixtures [-- <file>...]
-import { readFileSync, readdirSync } from "node:fs";
+import { existsSync, readFileSync, readdirSync } from "node:fs";
 import { join, dirname } from "node:path";
 import { fileURLToPath } from "node:url";
 import pkg from "pngjs";
@@ -14,7 +14,10 @@ await ensureOpenCV();
 
 const root = join(dirname(fileURLToPath(import.meta.url)), "..");
 const dir = join(root, "test_fixtures");
-const only = new Set(process.argv.slice(2));
+const args = process.argv.slice(2);
+const check = args.includes("--check");
+const only = new Set(args.filter((arg) => arg !== "--check"));
+let failures = 0;
 
 function decode(name) {
   const buf = readFileSync(join(dir, name));
@@ -67,6 +70,8 @@ for (const name of readdirSync(dir).sort()) {
   const { result, debug } = debugExtract(img.data, img.w, img.h);
   const ms = Date.now() - t0;
   console.log(`=== ${name} (${raw.w}x${raw.h} -> ${img.w}x${img.h}) ${ms}ms`);
+  const expectedPath = join(dir, `${name.replace(/\.(png|jpg|jpeg)$/i, "")}.expected.json`);
+  const expected = existsSync(expectedPath) ? JSON.parse(readFileSync(expectedPath, "utf8")) : null;
   for (let i = 0; i < debug.hypos.length; i++) {
     const h = debug.hypos[i];
     const q = h.quad.map((p) => `${Math.round(p.x)},${Math.round(p.y)}`).join(" ");
@@ -84,6 +89,7 @@ for (const name of readdirSync(dir).sort()) {
   if (!result.ok || !result.puzzle) {
     console.log(`  RESULT: FAIL boardSize=${result.boardSize} lines=${result.lineCounts.v}/${result.lineCounts.h} clusters=${result.clusterCount} marks=${result.marks}`);
     console.log(`  error: ${result.error}`);
+    if (check && expected) failures++;
     continue;
   }
   const b = debug.best;
@@ -116,4 +122,13 @@ for (const name of readdirSync(dir).sort()) {
   console.log(`  metrics:\n    ${met.join("\n    ")}`);
   const solved = solvePuzzle(result.puzzle);
   console.log(`  solver: ${solved.status}${solved.errors.length ? " :: " + solved.errors.slice(0, 4).join(" | ") : ""}`);
+  if (check && expected && result.boardSize !== expected.size) {
+    console.log(`  CHECK FAIL: detected ${result.boardSize}x${result.boardSize}, expected ${expected.size}x${expected.size}`);
+    failures++;
+  }
+}
+
+if (check && failures) {
+  console.error(`fixture checks failed: ${failures}`);
+  process.exit(1);
 }

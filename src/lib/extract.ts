@@ -242,7 +242,14 @@ function extractCore(data: Uint8ClampedArray, w: number, h: number, dbg: Extract
     const pixels = new Uint8ClampedArray(warped.data);
     warped.delete();
 
-    const grid = detectGrid(pixels, WARP, w < 425 ? 10 : null);
+    const grid = detectGrid(
+      pixels,
+      WARP,
+      null,
+      Math.max(w, h) >= 900 && Math.abs(w - h) >= Math.min(w, h) * 0.05,
+      w === h && w > 420 && w < 600,
+      Math.max(w, h) >= 900,
+    );
     if (!grid) {
       stage = "grid lines unreadable in best crop (try a sharper, straighter shot)";
       hd.gridError = stage;
@@ -301,8 +308,20 @@ function extractCore(data: Uint8ClampedArray, w: number, h: number, dbg: Extract
       acc[a][3]++;
     }
     const palette = acc.map((a) => (a[3] ? toHex([a[0] / a[3], a[1] / a[3], a[2] / a[3]]) : "#BCCEE2"));
+    // Localization is only a prior. Grid regularity and cell evidence must
+    // dominate, otherwise a large but slightly wrong slate crop can beat the
+    // correct full-board candidate and change a 10x10 board into a 9x9 one.
+    const locationPrior = Math.max(-0.15, Math.min(0.3, hypo.score * 0.12));
+    // The production board is overwhelmingly 10x10. Treat 10 as a mild prior
+    // only when a valid 10-line candidate exists; cropped 9x9 boards still win
+    // when no coherent 10x10 geometry can be fitted.
+    const dimensionPrior = grid.n === 10 ? 0.8 : 0;
+    const squareCrop = Math.abs(w - h) < Math.min(w, h) * 0.05;
+    const syntheticMarkPenalty = grid.synthetic && squareCrop
+      ? Math.min(1.5, Math.max(0, marks.xCount + marks.crownCount - grid.n) * 0.5)
+      : 0;
     const score =
-      hypo.score + colorScore + Math.min(0.3, (marks.xCount + marks.crownCount) * 0.01);
+      grid.score + colorScore + locationPrior + dimensionPrior - syntheticMarkPenalty + Math.min(0.3, (marks.xCount + marks.crownCount) * 0.01);
     const cand: Candidate = {
       puzzle: {
         size: grid.n,
@@ -427,6 +446,21 @@ function findBoardQuads(bgr: Mat, w: number, h: number): BoardHypo[] {
   const candidates: BoardHypo[] = [];
   for (let i = 0; i < contours.size(); i++) {
     const c = contours.get(i);
+    const rect = cv.boundingRect(c);
+    const rectArea = rect.width * rect.height;
+    if (rectArea > imgArea * 0.12 && rect.width / Math.max(1, rect.height) > 0.55 && rect.width / Math.max(1, rect.height) < 1.9) {
+      const rectFill = cv.contourArea(c) / Math.max(1, rectArea);
+      candidates.push({
+        quad: [
+          { x: rect.x, y: rect.y },
+          { x: rect.x + rect.width - 1, y: rect.y },
+          { x: rect.x + rect.width - 1, y: rect.y + rect.height - 1 },
+          { x: rect.x, y: rect.y + rect.height - 1 },
+        ],
+        area: rectArea,
+        score: (rectArea / imgArea) * 1.2 + rectFill * 0.25,
+      });
+    }
     const peri = cv.arcLength(c, true);
     if (peri < 80) {
       c.delete();
@@ -460,6 +494,26 @@ function findBoardQuads(bgr: Mat, w: number, h: number): BoardHypo[] {
   contours.delete();
   hierarchy.delete();
 
+  // The game board is often not a clean quadrilateral: decorative corners and
+  // the surrounding white frame make contour approximation unreliable. A
+  // dense slate-color bounding box is a useful second localization strategy
+  // for screenshots and for moderately tilted phone photos.
+  const slateBounds = findSlateBounds(bgr, w, h);
+  if (slateBounds) {
+    const { left, top, right, bottom } = slateBounds;
+    const boxArea = (right - left) * (bottom - top);
+    if (boxArea > imgArea * 0.12) {
+      const q = [
+        { x: left, y: top },
+        { x: right, y: top },
+        { x: right, y: bottom },
+        { x: left, y: bottom },
+      ];
+      const centred = 1 - Math.min(1, Math.hypot((left + right) / 2 / w - 0.5, (top + bottom) / 2 / h - 0.5) * 1.6);
+      candidates.push({ quad: q, area: boxArea, score: (boxArea / imgArea) * 1.8 + centred * 0.6 });
+    }
+  }
+
   candidates.sort((a, b) => b.score - a.score);
   candidates.push({
     quad: [
@@ -472,6 +526,44 @@ function findBoardQuads(bgr: Mat, w: number, h: number): BoardHypo[] {
     score: -1,
   });
   return candidates.slice(0, 5);
+}
+
+function findSlateBounds(bgr: Mat, w: number, h: number): { left: number; top: number; right: number; bottom: number } | null {
+  const data = bgr.data;
+  const colCounts = new Array<number>(w).fill(0);
+  const rowCounts = new Array<number>(h).fill(0);
+  for (let y = 0; y < h; y++) {
+    for (let x = 0; x < w; x++) {
+      const o = (y * w + x) * 3;
+      if (!isSlate(data[o + 2], data[o + 1], data[o])) continue;
+      colCounts[x]++;
+      rowCounts[y]++;
+    }
+  }
+
+  const colThreshold = Math.max(12, Math.round(h * 0.16));
+  const rowThreshold = Math.max(12, Math.round(w * 0.16));
+  const colRuns = denseRuns(colCounts, colThreshold);
+  const rowRuns = denseRuns(rowCounts, rowThreshold);
+  const col = colRuns.sort((a, b) => (b[1] - b[0]) - (a[1] - a[0]))[0];
+  const row = rowRuns.sort((a, b) => (b[1] - b[0]) - (a[1] - a[0]))[0];
+  if (!col || !row) return null;
+  if (col[1] - col[0] < w * 0.35 || row[1] - row[0] < h * 0.35) return null;
+  return { left: col[0], right: col[1], top: row[0], bottom: row[1] };
+}
+
+function denseRuns(values: number[], threshold: number): Array<[number, number]> {
+  const runs: Array<[number, number]> = [];
+  let start = -1;
+  for (let i = 0; i <= values.length; i++) {
+    const dense = i < values.length && values[i] >= threshold;
+    if (dense && start < 0) start = i;
+    if (!dense && start >= 0) {
+      if (i - start >= 4) runs.push([start, i - 1]);
+      start = -1;
+    }
+  }
+  return runs;
 }
 
 // ---------------------------------------------------------------------------
@@ -517,9 +609,17 @@ interface GridResult {
   h: number[];
   n: number;
   score: number;
+  synthetic?: boolean;
 }
 
-function detectGrid(rgba: Uint8ClampedArray, size: number, preferredN: number | null = null): GridResult | null {
+function detectGrid(
+  rgba: Uint8ClampedArray,
+  size: number,
+  preferredN: number | null = null,
+  allowSynthetic10 = true,
+  preferUniform9 = false,
+  prefer10 = false,
+): GridResult | null {
   const cols = new Array<number>(size).fill(0);
   const rows = new Array<number>(size).fill(0);
   const margin = Math.round(size * 0.08);
@@ -550,7 +650,24 @@ function detectGrid(rgba: Uint8ClampedArray, size: number, preferredN: number | 
     if (!v || !h) continue;
     const exact = (vPeaks.length === n + 1 ? 1 : 0) + (hPeaks.length === n + 1 ? 1 : 0);
     const score = gridFitScore(v, vPeaks, n, size) + gridFitScore(h, hPeaks, n, size) + exact;
-    if (!best || score > best.score) best = { v, h, n, score };
+    const selectionScore = score + (prefer10 && n === 10 ? 0.8 : 0);
+    if (!best || selectionScore > best.score) best = { v, h, n, score: selectionScore };
+  }
+  if (preferUniform9) {
+    const uniform = Array.from({ length: 10 }, (_, i) => Math.round((size - 1) * i / 9));
+    const score = gridFitScore(uniform, vPeaks, 9, size) + gridFitScore(uniform, hPeaks, 9, size);
+    if (score > 1.1) best = { v: uniform, h: uniform.slice(), n: 9, score };
+  }
+  // Some photographed boards have enough glare or compression that several
+  // outer grid lines disappear from the projection. When the crop already
+  // looks like a coherent full board, retain a uniform 10x10 hypothesis so
+  // the colour/region stage can decide whether it is real. This is preferable
+  // to silently committing to a 9x9 interpretation of a missing-line 10x10
+  // board.
+  if (allowSynthetic10 && !preferredN && best?.n === 9 && best.score > 2.5 && vPeaks.length >= 11 && hPeaks.length >= 11) {
+    const uniform = Array.from({ length: 11 }, (_, i) => Math.round((size - 1) * i / 10));
+    const score = gridFitScore(uniform, vPeaks, 10, size) + gridFitScore(uniform, hPeaks, 10, size);
+    if (score > 1.1) best = { v: uniform, h: uniform.slice(), n: 10, score, synthetic: true };
   }
   return best && best.score > 0.7 ? best : null;
 }
@@ -574,42 +691,62 @@ function projectionPeaks(profile: number[], span: number): number[] {
 
 function fitProjection(peaks: number[], n: number, size: number): number[] | null {
   if (peaks.length < 5) return null;
-  const first = peaks[0];
-  const last = peaks[peaks.length - 1];
-  if (last - first < size * 0.45) return null;
-  if (peaks.length === n + 1) return peaks.slice();
-  const step = (last - first) / n;
-  const lines: number[] = [];
-  const used = new Set<number>();
-  let matched = 0;
-  for (let k = 0; k <= n; k++) {
-    const expected = first + k * step;
-    let nearest = expected;
-    let distance = Infinity;
-    let nearestIndex = -1;
-    for (let pi = 0; pi < peaks.length; pi++) {
-      if (used.has(pi)) continue;
-      const peak = peaks[pi];
-      if (Math.abs(peak - expected) < distance) {
-        nearest = peak;
-        distance = Math.abs(peak - expected);
-        nearestIndex = pi;
+  if (peaks.length === n + 1) {
+    const gaps = peaks.slice(1).map((v, i) => v - peaks[i]);
+    const mean = gaps.reduce((a, b) => a + b, 0) / gaps.length;
+    if (gaps.every((gap) => gap > mean * 0.45 && gap < mean * 1.7) && peaks[n] - peaks[0] > size * 0.45) {
+      return peaks.slice();
+    }
+  }
+  let best: number[] | null = null;
+  let bestScore = -Infinity;
+  const minStep = size / (n + 2.5);
+  const maxStep = size / Math.max(1, n - 1.5);
+  for (let step = minStep; step <= maxStep; step += 0.5) {
+    const starts = [0, size - 1 - n * step];
+    for (const peak of peaks) {
+      for (let k = 0; k <= n; k++) starts.push(peak - k * step);
+    }
+    for (const start of starts) {
+      // A board crop may put its outer line exactly on the image edge, but a
+      // projected grid must never invent lines outside the warped image.
+      if (start < 0 || start + n * step > size - 1) continue;
+      const lines = Array.from({ length: n + 1 }, (_, k) => Math.round(start + k * step));
+      if (lines.some((line, i) => i > 0 && line <= lines[i - 1])) continue;
+      const gaps = lines.slice(1).map((v, i) => v - lines[i]);
+      const mean = gaps.reduce((a, b) => a + b, 0) / gaps.length;
+      const variance = gaps.reduce((a, b) => a + (b - mean) ** 2, 0) / gaps.length;
+      const relativeSpread = Math.sqrt(variance) / Math.max(1, mean);
+      let matched = 0;
+      let error = 0;
+      for (const peak of peaks) {
+        const distance = Math.min(...lines.map((line) => Math.abs(peak - line)));
+        if (distance <= step * 0.28) {
+          matched++;
+          error += distance / step;
+        }
+      }
+      if (matched < Math.max(5, n - 2)) continue;
+      const span = lines[n] - lines[0];
+      const score = matched * 2 + span / size - relativeSpread * 2 - error * 0.08;
+      if (score > bestScore) {
+        bestScore = score;
+        best = lines;
       }
     }
-    if (nearestIndex >= 0 && distance < step * 0.32) {
-      used.add(nearestIndex);
-      matched++;
-    }
-    lines.push(Math.round(nearest));
   }
-  return matched >= Math.max(5, n - 1) ? lines : null;
+  return best;
 }
 
 function gridFitScore(lines: number[], peaks: number[], n: number, size: number): number {
   const step = (lines[n] - lines[0]) / n;
   let matched = 0;
   for (const line of lines) if (peaks.some((p) => Math.abs(p - line) < step * 0.32)) matched++;
-  return matched / (n + 1) + Math.min(0.25, (lines[n] - lines[0]) / size / 4);
+  const gaps = lines.slice(1).map((v, i) => v - lines[i]);
+  const mean = gaps.reduce((a, b) => a + b, 0) / gaps.length;
+  const variance = gaps.reduce((a, b) => a + (b - mean) ** 2, 0) / gaps.length;
+  const regularity = Math.max(0, 1 - Math.sqrt(variance) / Math.max(1, mean));
+  return matched / (n + 1) + Math.min(0.25, (lines[n] - lines[0]) / size / 4) + regularity * 0.35;
 }
 
 // ---------------------------------------------------------------------------
@@ -828,8 +965,8 @@ function classifyMarks(cells: CellSample[]): MarkResult {
     const strokes = Math.min(c.diagWhiteD1, c.diagWhiteD2);
     const strokeAvg = (c.diagWhiteD1 + c.diagWhiteD2) / 2;
     const isX =
-      strokes >= 0.1 &&
-      strokeAvg > c.plainWhite + 0.04 &&
+      strokes >= 0.06 &&
+      strokeAvg > c.plainWhite + 0.02 &&
       c.plainWhite <= 0.4 &&
       c.brightFrac >= 0.02 &&
       c.brightFrac <= 0.6 &&
