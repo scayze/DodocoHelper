@@ -94,24 +94,32 @@
                 </div>
               </div>
 
-              <div id="panel-ready" class="hidden rounded-2xl bg-night-900 p-5">
-                <div class="grid grid-cols-1 gap-4 sm:grid-cols-2">
-                  <figure>
-                    <figcaption class="mb-2 text-xs font-semibold uppercase tracking-[0.16em] text-parchment-100/60">
-                      Detected board
-                    </figcaption>
-                    <img
-                      id="detected-img"
-                      alt="Uploaded board screenshot as read by the extractor"
-                      class="h-auto w-full rounded-xl border border-white/10"
-                    />
+              <div id="panel-ready" class="hidden rounded-2xl border border-night-700/15 bg-white/50 p-5 text-night-900 shadow-[0_16px_50px_rgba(60,45,10,0.12)]">
+                <div class="flex flex-col gap-5 sm:flex-row">
+                  <figure class="min-w-0 flex-1">
+                    <div
+                      id="board-grid"
+                      role="img"
+                      aria-label="Puzzle board with regions, marks, and crowns"
+                      class="grid w-full gap-1.5 rounded-xl bg-[rgb(95,112,128)] p-1.5"
+                    ></div>
                   </figure>
-                  <figure>
-                    <figcaption class="mb-2 text-xs font-semibold uppercase tracking-[0.16em] text-gold-400">
-                      Solved board
-                    </figcaption>
-                    <canvas id="solved-canvas" role="img" aria-label="Solved board with crowns placed" class="h-auto w-full rounded-xl"></canvas>
-                  </figure>
+                  <div class="flex flex-row gap-2 sm:w-40 sm:flex-col sm:justify-center">
+                    <button
+                      id="solve-button"
+                      type="button"
+                      class="btn-gold flex-1 rounded-full px-5 py-2.5 text-sm font-semibold disabled:cursor-not-allowed disabled:opacity-50 sm:flex-none"
+                    >
+                      Solve
+                    </button>
+                    <button
+                      id="hint-button"
+                      type="button"
+                      class="btn-outline flex-1 rounded-full px-5 py-2.5 text-sm font-semibold disabled:cursor-not-allowed disabled:opacity-50 sm:flex-none"
+                    >
+                      <span id="hint-label">Hint</span>
+                    </button>
+                  </div>
                 </div>
               </div>
             </div>

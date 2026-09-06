@@ -59,9 +59,70 @@ body {
   transform: translateY(1px) scale(0.98);
 }
 
+.btn-outline {
+  border: 1px solid #a37f1c;
+  color: #7c6115;
+  background: transparent;
+  transition: transform 150ms ease, background 150ms ease;
+}
+
+.btn-outline:hover {
+  background: rgba(200, 160, 40, 0.15);
+}
+
+.btn-outline:active {
+  transform: translateY(1px) scale(0.98);
+}
+
 .drop-active {
   border-color: #e6c96a;
   background: rgba(200, 160, 40, 0.1);
+}
+
+.board-cell {
+  position: relative;
+  aspect-ratio: 1 / 1;
+  border-radius: 0.55rem;
+  display: grid;
+  place-items: center;
+  overflow: hidden;
+}
+
+.board-cell svg {
+  width: 62%;
+  height: 62%;
+  animation: crown-pop 320ms cubic-bezier(0.16, 1, 0.3, 1);
+}
+
+.board-cell.has-x::before,
+.board-cell.has-x::after {
+  content: "";
+  position: absolute;
+  left: 50%;
+  top: 50%;
+  width: 44%;
+  height: 9%;
+  border-radius: 999px;
+  background: rgba(255, 255, 255, 0.92);
+}
+
+.board-cell.has-x::before {
+  transform: translate(-50%, -50%) rotate(45deg);
+}
+
+.board-cell.has-x::after {
+  transform: translate(-50%, -50%) rotate(-45deg);
+}
+
+@keyframes crown-pop {
+  from {
+    opacity: 0;
+    transform: scale(0.6);
+  }
+  to {
+    opacity: 1;
+    transform: scale(1);
+  }
 }
 
 .skeleton-cell {
@@ -80,6 +141,9 @@ body {
   .skeleton-cell {
     animation: none;
     opacity: 0.5;
+  }
+  .board-cell svg {
+    animation: none;
   }
   *, *::before, *::after {
     transition-duration: 0.01ms;

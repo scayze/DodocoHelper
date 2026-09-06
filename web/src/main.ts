@@ -1,9 +1,9 @@
 import "./index.css";
 import { extractBoardFromFile } from "./lib/extract";
-import { drawBoard } from "./lib/renderCanvas";
+import { buildBoardGrid, paintBoard, solutionCrowns } from "./lib/renderBoard";
 import { solvePuzzle } from "./lib/solver";
 import { validatePuzzleInput } from "./lib/validator";
-import type { PuzzleInput } from "./lib/types";
+import type { NormalizedPuzzle, PuzzleInput } from "./lib/types";
 
 type Phase = "idle" | "working" | "ready" | "error";
 
@@ -25,8 +25,14 @@ const resultArea = el("result-area");
 const errorTitle = el("error-title");
 const errorHint = el("error-hint");
 const retryButton = el<HTMLButtonElement>("retry-button");
-const detectedImg = el<HTMLImageElement>("detected-img");
-const solvedCanvas = el<HTMLCanvasElement>("solved-canvas");
+const boardGrid = el("board-grid");
+const solveButton = el<HTMLButtonElement>("solve-button");
+const hintButton = el<HTMLButtonElement>("hint-button");
+const hintLabel = el("hint-label");
+
+let puzzle: NormalizedPuzzle | null = null;
+let fullSolution: string[][] | null = null;
+const hinted = new Set<string>();
 
 function setPhase(phase: Phase): void {
   resultArea.classList.toggle("hidden", phase === "idle");
@@ -41,9 +47,26 @@ function showError(title: string, hint: string): void {
   setPhase("error");
 }
 
-function runPuzzle(raw: PuzzleInput, photoUrl: string): void {
-  const { errors, puzzle } = validatePuzzleInput(raw);
-  if (!puzzle) {
+function hintedCount(p: NormalizedPuzzle, solution: string[][]): number {
+  let n = 0;
+  for (let r = 0; r < p.size; r++) {
+    for (let c = 0; c < p.size; c++) {
+      if (solution[r][c] === "C" && p.initial[r][c] !== "C" && !hinted.has(`${r},${c}`)) n++;
+    }
+  }
+  return n;
+}
+
+function refreshHintButton(): void {
+  if (!puzzle || !fullSolution) return;
+  const left = hintedCount(puzzle, fullSolution);
+  hintLabel.textContent = left > 0 ? `Hint (${left} left)` : "Hint";
+  hintButton.disabled = left === 0;
+}
+
+function runPuzzle(raw: PuzzleInput): void {
+  const { errors, puzzle: parsed } = validatePuzzleInput(raw);
+  if (!parsed) {
     showError("That board did not pass validation.", errors.join(" "));
     return;
   }
@@ -52,9 +75,37 @@ function runPuzzle(raw: PuzzleInput, photoUrl: string): void {
     showError("No crowns fit that board.", solved.errors.join(" "));
     return;
   }
-  detectedImg.src = photoUrl;
-  drawBoard(solvedCanvas, puzzle, solved.solution);
+  puzzle = parsed;
+  fullSolution = solved.solution;
+  hinted.clear();
+  solveButton.disabled = false;
+  solveButton.textContent = "Solve";
+  buildBoardGrid(boardGrid, parsed);
+  paintBoard(boardGrid, parsed, new Set());
+  refreshHintButton();
   setPhase("ready");
+}
+
+function revealHint(): void {
+  if (!puzzle || !fullSolution || hintButton.disabled) return;
+  outer: for (let r = 0; r < puzzle.size; r++) {
+    for (let c = 0; c < puzzle.size; c++) {
+      if (fullSolution[r][c] === "C" && puzzle.initial[r][c] !== "C" && !hinted.has(`${r},${c}`)) {
+        hinted.add(`${r},${c}`);
+        break outer;
+      }
+    }
+  }
+  paintBoard(boardGrid, puzzle, hinted);
+  refreshHintButton();
+}
+
+function revealSolution(): void {
+  if (!puzzle || !fullSolution || solveButton.disabled) return;
+  paintBoard(boardGrid, puzzle, solutionCrowns(fullSolution));
+  solveButton.disabled = true;
+  solveButton.textContent = "Solved";
+  hintButton.disabled = true;
 }
 
 async function handleFile(file: File): Promise<void> {
@@ -64,14 +115,14 @@ async function handleFile(file: File): Promise<void> {
   }
   setPhase("working");
   const extracted = await extractBoardFromFile(file);
-  if (!extracted.ok || !extracted.puzzle || !extracted.previewUrl) {
+  if (!extracted.ok || !extracted.puzzle) {
     showError(
       "The grid reader could not map that shot.",
       extracted.error ?? "Use a cropped shot of the board with clear grid lines.",
     );
     return;
   }
-  runPuzzle(extracted.puzzle, extracted.previewUrl);
+  runPuzzle(extracted.puzzle);
 }
 
 function setDragOver(on: boolean): void {
@@ -104,6 +155,8 @@ fileInput.addEventListener("change", () => {
   fileInput.value = "";
 });
 retryButton.addEventListener("click", () => fileInput.click());
+solveButton.addEventListener("click", revealSolution);
+hintButton.addEventListener("click", revealHint);
 
 // Static 9x9 loading skeleton.
 {

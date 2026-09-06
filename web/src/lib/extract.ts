@@ -9,8 +9,6 @@ export interface ExtractResult {
   lineCounts: { v: number; h: number };
   clusterCount: number;
   marks: number;
-  /** Downscaled preview data URL for display. */
-  previewUrl: string | null;
   error: string | null;
 }
 
@@ -116,7 +114,6 @@ export async function extractBoardFromFile(file: File): Promise<ExtractResult> {
     lineCounts: { v: 0, h: 0 },
     clusterCount: 0,
     marks: 0,
-    previewUrl: null,
     error,
   });
 
@@ -214,7 +211,6 @@ export async function extractBoardFromFile(file: File): Promise<ExtractResult> {
         lineCounts: { v: vlines.length, h: hlines.length },
         clusterCount: clusters.length,
         marks: cells.filter((c) => c.x).length,
-        previewUrl: canvas.toDataURL("image/png"),
         error: `found ${clusters.length} region colors but a ${n}x${n} board needs exactly ${n}. Try a sharper crop with even lighting.`,
       };
     }
@@ -254,7 +250,6 @@ export async function extractBoardFromFile(file: File): Promise<ExtractResult> {
       lineCounts: { v: vlines.length, h: hlines.length },
       clusterCount: clusters.length,
       marks: cells.filter((c) => c.x).length,
-      previewUrl: canvas.toDataURL("image/png"),
       error: null,
     };
   } catch (e) {
