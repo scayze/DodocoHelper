@@ -1,0 +1,18 @@
+{
+  "name": "dodoco-solver",
+  "version": "1.0.0",
+  "description": "Solver for the 9x9 2-crowns no-touch puzzle game",
+  "type": "module",
+  "scripts": {
+    "build": "tsc",
+    "solve": "node dist/src/cli.js",
+    "render": "node dist/src/render-cli.js",
+    "test": "npm run build && node --test dist/tests/solver.test.js dist/tests/render.test.js"
+  },
+  "engines": {
+    "node": ">=20"
+  },
+  "devDependencies": {
+    "@types/node": "^26.4.1"
+  }
+}
