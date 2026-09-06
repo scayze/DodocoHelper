@@ -8,16 +8,18 @@
     "dev": "vite",
     "build": "tsc -b && vite build",
     "preview": "vite preview",
-    "test": "tsc -p tsconfig.test.json && node --test dist/tests/solver.test.js",
+    "test": "tsc -p tsconfig.test.json && node --test dist/tests/solver.test.js dist/tests/extract.test.js",
+    "fixtures": "tsc -p tsconfig.test.json && node tests/fixtures-run.mjs",
     "typecheck": "tsc -b"
   },
   "engines": {
     "node": ">=20"
   },
-  "dependencies": {},
   "devDependencies": {
     "@tailwindcss/vite": "^4.3.3",
     "@types/node": "^26.4.1",
+    "jpeg-js": "^0.4.4",
+    "pngjs": "^7.0.0",
     "tailwindcss": "^4.3.3",
     "typescript": "~6.0.2",
     "vite": "^8.2.2"

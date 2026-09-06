@@ -141,7 +141,7 @@ async function handleFile(file: File): Promise<void> {
   if (!extracted.ok || !extracted.puzzle) {
     showError(
       "The grid reader could not map that shot.",
-      extracted.error ?? "Use a cropped shot of the board with clear grid lines.",
+      extracted.error ?? "Keep the whole board visible with the grid clearly shown.",
     );
     return;
   }
