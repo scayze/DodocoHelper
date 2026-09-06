@@ -246,7 +246,7 @@ function extractCore(data: Uint8ClampedArray, w: number, h: number, dbg: Extract
       pixels,
       WARP,
       null,
-      Math.max(w, h) >= 900 && Math.abs(w - h) >= Math.min(w, h) * 0.05,
+      (Math.max(w, h) >= 900 && Math.abs(w - h) >= Math.min(w, h) * 0.05) || (Math.abs(w - h) < Math.min(w, h) * 0.05 && w >= 620),
       w === h && w > 420 && w < 600,
       Math.max(w, h) >= 900,
     );
@@ -317,11 +317,17 @@ function extractCore(data: Uint8ClampedArray, w: number, h: number, dbg: Extract
     // when no coherent 10x10 geometry can be fitted.
     const dimensionPrior = grid.n === 10 ? 0.8 : 0;
     const squareCrop = Math.abs(w - h) < Math.min(w, h) * 0.05;
+    const slateCellFrac = cells.filter((cell) => cell.lab[0] < 65 && Math.abs(cell.lab[1]) < 8 && Math.abs(cell.lab[2]) < 8).length / cells.length;
+    const squareMarkPenalty = squareCrop ? Math.min(3, Math.max(0, marks.xCount + marks.crownCount - 4) * 0.2) : 0;
     const syntheticMarkPenalty = grid.synthetic && squareCrop
       ? Math.min(1.5, Math.max(0, marks.xCount + marks.crownCount - grid.n) * 0.5)
       : 0;
+    const vSpan = grid.v[grid.n] - grid.v[0];
+    const hSpan = grid.h[grid.n] - grid.h[0];
+    const axisAgreement = Math.min(vSpan, hSpan) / Math.max(1, Math.max(vSpan, hSpan));
+    const geometryPenalty = (1 - axisAgreement) * 3;
     const score =
-      grid.score + colorScore + locationPrior + dimensionPrior - syntheticMarkPenalty + Math.min(0.3, (marks.xCount + marks.crownCount) * 0.01);
+      grid.score + colorScore + locationPrior + dimensionPrior - geometryPenalty - slateCellFrac * 2 - squareMarkPenalty - syntheticMarkPenalty + Math.min(0.3, (marks.xCount + marks.crownCount) * 0.01);
     const cand: Candidate = {
       puzzle: {
         size: grid.n,
@@ -460,6 +466,40 @@ function findBoardQuads(bgr: Mat, w: number, h: number): BoardHypo[] {
         area: rectArea,
         score: (rectArea / imgArea) * 1.2 + rectFill * 0.25,
       });
+      // Screenshots include a wider white/frame panel around the square slate
+      // grid. The connected slate component can stop at the grid's right edge,
+      // so retain a wider frame hypothesis for non-square source images.
+      if (Math.abs(w - h) > Math.min(w, h) * 0.08 && rect.width / Math.max(1, rect.height) < 1.08) {
+        const expandedRight = Math.min(w - 1, rect.x + Math.round(rect.height * 1.14));
+        if (expandedRight - rect.x > rect.width + 20) {
+          const expandedArea = (expandedRight - rect.x) * rect.height;
+          const frameWidth = expandedRight - rect.x;
+          const innerLeft = rect.x + Math.round(frameWidth * 0.18);
+          const innerRight = expandedRight - Math.round(frameWidth * 0.18);
+          const innerTop = rect.y + Math.round(rect.height * 0.13);
+          const innerBottom = rect.y + rect.height - 1 - Math.round(rect.height * 0.13);
+          candidates.push({
+            quad: [
+              { x: rect.x, y: rect.y },
+              { x: expandedRight, y: rect.y },
+              { x: expandedRight, y: rect.y + rect.height - 1 },
+              { x: rect.x, y: rect.y + rect.height - 1 },
+            ],
+            area: expandedArea,
+            score: (expandedArea / imgArea) * 1.2 + rectFill * 0.3,
+          });
+          candidates.push({
+            quad: [
+              { x: innerLeft, y: innerTop },
+              { x: innerRight, y: innerTop },
+              { x: innerRight, y: innerBottom },
+              { x: innerLeft, y: innerBottom },
+            ],
+            area: (innerRight - innerLeft) * (innerBottom - innerTop),
+            score: 4.0 + rectFill * 0.2,
+          });
+        }
+      }
     }
     const peri = cv.arcLength(c, true);
     if (peri < 80) {
@@ -623,20 +663,25 @@ function detectGrid(
   const cols = new Array<number>(size).fill(0);
   const rows = new Array<number>(size).fill(0);
   const margin = Math.round(size * 0.08);
-  for (let y = margin; y < size - margin; y++) {
+  const colorBounds = findColorBounds(rgba, size);
+  const x0 = colorBounds?.left ?? margin;
+  const x1 = colorBounds?.right ?? size - margin;
+  const y0 = colorBounds?.top ?? margin;
+  const y1 = colorBounds?.bottom ?? size - margin;
+  for (let y = y0; y <= y1; y++) {
     for (let x = 0; x < size; x++) {
       const o = (y * size + x) * 4;
       if (isSlate(rgba[o], rgba[o + 1], rgba[o + 2])) cols[x]++;
     }
   }
-  for (let x = margin; x < size - margin; x++) {
+  for (let x = x0; x <= x1; x++) {
     for (let y = 0; y < size; y++) {
       const o = (y * size + x) * 4;
       if (isSlate(rgba[o], rgba[o + 1], rgba[o + 2])) rows[y]++;
     }
   }
-  const vPeaks = projectionPeaks(cols, size - margin * 2);
-  const hPeaks = projectionPeaks(rows, size - margin * 2);
+  const vPeaks = projectionPeaks(cols, x1 - x0 + 1);
+  const hPeaks = projectionPeaks(rows, y1 - y0 + 1);
   // Projections are deliberately used instead of Hough here: game grid
   // lines are continuous but may have almost no Canny edge at pastel joins.
   let best: GridResult | null = null;
@@ -664,12 +709,37 @@ function detectGrid(
   // the colour/region stage can decide whether it is real. This is preferable
   // to silently committing to a 9x9 interpretation of a missing-line 10x10
   // board.
-  if (allowSynthetic10 && !preferredN && best?.n === 9 && best.score > 2.5 && vPeaks.length >= 11 && hPeaks.length >= 11) {
+  if (allowSynthetic10 && !preferredN && best?.n === 9 && best.score > 2.5) {
     const uniform = Array.from({ length: 11 }, (_, i) => Math.round((size - 1) * i / 10));
     const score = gridFitScore(uniform, vPeaks, 10, size) + gridFitScore(uniform, hPeaks, 10, size);
     if (score > 1.1) best = { v: uniform, h: uniform.slice(), n: 10, score, synthetic: true };
   }
   return best && best.score > 0.7 ? best : null;
+}
+
+function findColorBounds(rgba: Uint8ClampedArray, size: number): { left: number; right: number; top: number; bottom: number } | null {
+  const cols = new Array<number>(size).fill(0);
+  const rows = new Array<number>(size).fill(0);
+  for (let y = 0; y < size; y++) {
+    for (let x = 0; x < size; x++) {
+      const o = (y * size + x) * 4;
+      const r = rgba[o];
+      const g = rgba[o + 1];
+      const b = rgba[o + 2];
+      const lightness = 0.299 * r + 0.587 * g + 0.114 * b;
+      const saturation = Math.max(r, g, b) - Math.min(r, g, b);
+      if (saturation > 18 && lightness > 20 && lightness < 235) {
+        cols[x]++;
+        rows[y]++;
+      }
+    }
+  }
+  const threshold = Math.max(20, Math.round(size * 0.12));
+  const vertical = denseRuns(cols, threshold).sort((a, b) => (b[1] - b[0]) - (a[1] - a[0]))[0];
+  const horizontal = denseRuns(rows, threshold).sort((a, b) => (b[1] - b[0]) - (a[1] - a[0]))[0];
+  if (!vertical || !horizontal) return null;
+  if (vertical[1] - vertical[0] < size * 0.3 || horizontal[1] - horizontal[0] < size * 0.3) return null;
+  return { left: vertical[0], right: vertical[1], top: horizontal[0], bottom: horizontal[1] };
 }
 
 function projectionPeaks(profile: number[], span: number): number[] {
@@ -902,7 +972,11 @@ function isSlate(r: number, g: number, b: number): boolean {
   const mn = Math.min(r, g, b);
   const sat = mx - mn;
   const L = 0.299 * r + 0.587 * g + 0.114 * b;
-  return sat < 72 && L > 30 && L < 205 && b >= r - 22 && g >= r - 22;
+  // Pastel puzzle cells are also low-saturation, so a broad gray test treats
+  // blue and purple regions as frame pixels. The actual board slate is darker
+  // and has a narrow blue-gray cast; keep the hue window tight enough that
+  // cell colors remain available to the sampler and k-means stage.
+  return sat < 65 && L > 30 && L < 175 && g - r >= 0 && g - r < 40 && b - r >= 5 && b - r < 50;
 }
 
 // ---------------------------------------------------------------------------
@@ -964,13 +1038,22 @@ function classifyMarks(cells: CellSample[]): MarkResult {
     }
     const strokes = Math.min(c.diagWhiteD1, c.diagWhiteD2);
     const strokeAvg = (c.diagWhiteD1 + c.diagWhiteD2) / 2;
+    const strongestStroke = Math.max(c.diagWhiteD1, c.diagWhiteD2);
+    const asymmetricX =
+      strongestStroke >= 0.42 &&
+      c.brightFrac >= 0.12 &&
+      c.brightFrac <= 0.6 &&
+      c.darkFrac < 0.05 &&
+      ((c.whiteFrac >= 0.12 && c.whiteFrac <= 0.7 && strongestStroke >= c.plainBright - 0.12) ||
+        (c.whiteFrac > 0.7 && c.plainBright <= 0.5 && strongestStroke >= c.plainBright + 0.05));
     const isX =
       strokes >= 0.06 &&
       strokeAvg > c.plainWhite + 0.02 &&
       c.plainWhite <= 0.4 &&
       c.brightFrac >= 0.02 &&
       c.brightFrac <= 0.6 &&
-      c.darkFrac < 0.05;
+      c.darkFrac < 0.05 ||
+      asymmetricX;
     if (isX) {
       kind.push("x");
       conf.push(Math.min(1, strokes / 0.45));

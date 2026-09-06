@@ -15,17 +15,13 @@ function unwrapModule(mod: unknown): unknown {
   if (!mod || typeof mod !== "object") return mod;
   const m = mod as Record<string, unknown>;
   if (typeof m.Mat === "function") return mod;
+  // Vite can preserve the UMD factory Promise under `default` in the browser
+  // bundle. Keep the Promise so the loader can await it before resolving CV.
+  if (m.default && typeof (m.default as { then?: unknown }).then === "function") return m.default;
   if (m.default && typeof (m.default as Record<string, unknown>).Mat === "function") return m.default;
   if (m["module.exports"] && typeof (m["module.exports"] as Record<string, unknown>).Mat === "function") return m["module.exports"];
   if (m["module.exports"] && typeof (m["module.exports"] as { then?: unknown }).then === "function") return m["module.exports"];
   return mod;
-}
-
-async function awaitIfPromise<T>(value: T | Promise<T>): Promise<T> {
-  if (value && typeof (value as { then?: unknown }).then === "function") {
-    return (value as Promise<T>).then(unwrapModule) as Promise<T>;
-  }
-  return value;
 }
 
 /**
@@ -40,9 +36,20 @@ export function loadOpenCV(): Promise<CV> {
   if (pending) return pending;
   pending = (async (): Promise<CV> => {
     const mod = await import("@techstark/opencv-js");
-    const maybe = unwrapModule(mod);
-    const awaited = await awaitIfPromise(maybe);
-    const cv = resolveCv(awaited);
+    let value: unknown = mod;
+    // The package is published as UMD/CommonJS but is consumed through ESM by
+    // Vite and Node. Walk the wrapper layers until the actual CV namespace is
+    // reached, awaiting each factory Promise along the way.
+    for (let i = 0; i < 4; i++) {
+      const unwrapped = unwrapModule(value);
+      if (unwrapped !== value) value = unwrapped;
+      if (value && typeof (value as { then?: unknown }).then === "function") {
+        value = await (value as Promise<unknown>);
+        continue;
+      }
+      break;
+    }
+    const cv = resolveCv(unwrapModule(value));
     cvRef = cv;
     return cv;
   })();
