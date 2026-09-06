@@ -105,16 +105,21 @@ body {
 .board-cell {
   position: relative;
   aspect-ratio: 1 / 1;
-  border-radius: 0.55rem;
+  border-radius: clamp(0.3rem, 1vmin, 0.45rem);
   display: grid;
   place-items: center;
   overflow: hidden;
 }
 
-.board-cell svg {
-  width: 62%;
-  height: 62%;
-  animation: crown-pop 320ms cubic-bezier(0.16, 1, 0.3, 1);
+.board-cell img.board-dodoco {
+  width: 88%;
+  height: 88%;
+  object-fit: contain;
+  animation: dodoco-pop 200ms cubic-bezier(0.16, 1, 0.3, 1);
+}
+
+.board-cell img.board-dodoco.is-given {
+  filter: drop-shadow(0 0 4px rgba(200, 160, 40, 0.95)) drop-shadow(0 0 1px rgba(200, 160, 40, 0.9));
 }
 
 .board-cell.has-x::before,
@@ -137,7 +142,7 @@ body {
   transform: translate(-50%, -50%) rotate(-45deg);
 }
 
-@keyframes crown-pop {
+@keyframes dodoco-pop {
   from {
     opacity: 0;
     transform: scale(0.6);
@@ -161,22 +166,57 @@ body {
   min-height: 0;
 }
 
-#board-grid {
-  width: min(78vw, 38dvh, 340px);
+/* Collapse the solver stage when idle so header + upload stay truly centered. */
+#solver:has(> #result-area.hidden) {
+  display: none;
+}
+
+/* Single shared stage width: dropzone, working, ready, error all align. */
+#dropzone-wrap,
+#stage-col {
+  width: min(92vw, 440px);
   margin-inline: auto;
 }
 
+/* Shrink the upload card to icon-only once a result exists so header + board fit 100dvh. */
+main.has-result #dropzone {
+  min-height: 0;
+  padding-block: 0.6rem;
+}
+main.has-result #dropzone-wrap p {
+  display: none;
+}
+
+#board-grid,
 #skeleton-grid {
-  width: min(78vw, 38dvh, 340px);
+  width: min(100%, 46dvh, 400px);
   margin-inline: auto;
+  gap: clamp(3px, 0.8vmin, 6px);
+  padding: clamp(6px, 1.2vmin, 10px);
 }
 
 #panel-ready,
 #panel-working,
 #panel-error {
-  width: fit-content;
-  max-width: min(88vw, 380px);
+  width: 100%;
   margin-inline: auto;
+}
+
+/* Avoid layout jump between working -> ready. */
+#panel-working,
+#panel-ready {
+  animation: panel-in 180ms ease-out;
+}
+
+@keyframes panel-in {
+  from {
+    opacity: 0;
+    transform: translateY(4px);
+  }
+  to {
+    opacity: 1;
+    transform: none;
+  }
 }
 
 @media (prefers-reduced-motion: reduce) {
@@ -187,7 +227,11 @@ body {
     animation: none;
     opacity: 0.5;
   }
-  .board-cell svg {
+  .board-cell img.board-dodoco {
+    animation: none;
+  }
+  #panel-working,
+  #panel-ready {
     animation: none;
   }
   *, *::before, *::after {

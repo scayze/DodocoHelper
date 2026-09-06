@@ -45,6 +45,7 @@ function setPhase(phase: Phase): void {
   for (const [name, panel] of Object.entries(panels)) {
     panel.classList.toggle("hidden", name !== phase);
   }
+  document.getElementById("top")?.classList.toggle("has-result", phase !== "idle");
   if (phase === "ready") focusPanel("panel-ready");
   if (phase === "error") focusPanel("panel-error");
 }

@@ -16,15 +16,11 @@ export const REGION_PALETTE: Array<[number, number, number]> = [
   [176, 137, 104],
 ];
 
-const CROWN_FILL = "#2f3b4c";
-const GOLD_FILL = "#c8a028";
+const DODOCO_SRC = `${import.meta.env.BASE_URL}dodoco.png`;
 
-// Crown silhouette in a 100x100 box (y down), same geometry as the game style.
-const CROWN_POINTS =
-  "22,36 30,62 40,52 50,28 60,52 70,62 78,36 70,74 30,74";
-const CROWN_CIRCLES: Array<[number, number, number]> = [
-  [22, 30, 6], [50, 22, 6], [78, 30, 6],
-];
+function dodocoImg(goldRim: boolean): string {
+  return `<img src="${DODOCO_SRC}" alt="" draggable="false" class="board-dodoco${goldRim ? " is-given" : ""}" />`;
+}
 
 export function cssFor(puzzle: NormalizedPuzzle, region: number): string {
   if (puzzle.palette && puzzle.palette.length === puzzle.regionCount) {
@@ -32,19 +28,6 @@ export function cssFor(puzzle: NormalizedPuzzle, region: number): string {
   }
   const p = REGION_PALETTE[region % REGION_PALETTE.length];
   return `rgb(${p[0]}, ${p[1]}, ${p[2]})`;
-}
-
-function circles(fill: string): string {
-  return CROWN_CIRCLES.map(
-    ([x, y, r]) => `<circle cx="${x}" cy="${y}" r="${r}" fill="${fill}"/>`,
-  ).join("");
-}
-
-function crownSvg(goldRim: boolean): string {
-  const rim = goldRim
-    ? `<g transform="translate(50,50) scale(1.1) translate(-50,-50)"><polygon points="${CROWN_POINTS}" fill="${GOLD_FILL}"/>${circles(GOLD_FILL)}</g>`
-    : "";
-  return `<svg viewBox="0 0 100 100" aria-hidden="true">${rim}<polygon points="${CROWN_POINTS}" fill="${CROWN_FILL}"/>${circles(CROWN_FILL)}</svg>`;
 }
 
 /** Build the board grid once per puzzle: one div per cell in region colors. */
@@ -94,7 +77,7 @@ export function paintBoard(
       const want = crowned ? (given ? "g" : "c") : "";
       if (cell.dataset.k !== want) {
         cell.dataset.k = want;
-        cell.innerHTML = crowned ? crownSvg(given) : "";
+        cell.innerHTML = crowned ? dodocoImg(given) : "";
       }
     }
   }
