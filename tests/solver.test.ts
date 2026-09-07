@@ -4,6 +4,7 @@ import fs from "node:fs";
 import { validatePuzzleInput, validateSolution } from "../src/core/validator.js";
 import { solveAll, solvePuzzle, testAssumption } from "../src/core/solver.js";
 import { findHints } from "../src/core/hints.js";
+import { nextMark } from "../src/core/marks.js";
 import { validatePuzzleInput as checkInput } from "../src/core/validator.js";
 import type { NormalizedPuzzle } from "../src/core/types.js";
 
@@ -280,6 +281,8 @@ describe("hints", () => {
     assert.ok(hint);
     assert.equal(hint!.decisiveCells.length, 8);
     assert.ok(hint!.cells.includes("4,4"));
+    assert.equal(hints[0].method, "adjacency");
+    assert.equal(hints[0].difficulty, 0);
   });
 
   it("finds deductions that require combining several constraints", () => {
@@ -289,8 +292,23 @@ describe("hints", () => {
     const hints = findHints(checked.puzzle!);
     const complex = hints.find((hint) => hint.scope === "analysis");
     assert.ok(complex, "expected at least one solver-backed deduction");
+    for (let i = 1; i < hints.length; i++) {
+      assert.ok(
+        hints[i - 1].difficulty < hints[i].difficulty ||
+          hints[i - 1].proofCost <= hints[i].proofCost,
+        "hints should be ordered from easier to harder",
+      );
+    }
     const [r, c] = complex!.decisiveCells[0].split(",").map(Number);
     const impossibleValue = complex!.kind === "cross" ? "C" : ".";
     assert.equal(testAssumption(checked.puzzle!, r, c, impossibleValue), "unsatisfiable");
+  });
+});
+
+describe("editable marks", () => {
+  it("cycles unmarked, cross, queen, and back to unmarked", () => {
+    assert.equal(nextMark("?"), ".");
+    assert.equal(nextMark("."), "C");
+    assert.equal(nextMark("C"), "?");
   });
 });

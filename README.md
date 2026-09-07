@@ -24,6 +24,8 @@ npm test         # solver core test suite (26 tests)
    constraint propagation — sealed units, forced placements, MRV ordering.
 4. **Hint** explains a guaranteed deduction and highlights its relevant row, column,
    region, or neighboring cells without revealing the answer; **Solve** reveals the full board.
+5. Click any board cell to cycle it through unmarked, cross, queen, and unmarked again.
+   Each edit re-solves the current board and clears any active hint.
 
 ## Layout
 

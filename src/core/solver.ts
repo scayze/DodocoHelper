@@ -240,6 +240,11 @@ interface SearchCtx {
 }
 
 export type AssumptionResult = "solved" | "unsatisfiable" | "unknown";
+export interface AssumptionDetails {
+  status: AssumptionResult;
+  /** Search nodes needed to prove the result; lower is easier to explain. */
+  nodes: number;
+}
 
 function search(st: State, ctx: SearchCtx): void {
   if (ctx.out.length >= ctx.limit || ctx.exhausted) return;
@@ -306,7 +311,7 @@ function searchPuzzle(
   puzzle: NormalizedPuzzle,
   assumption: { r: number; c: number; value: typeof EMPTY | typeof CROWN } | null,
   budget: number,
-): { found: boolean; exhausted: boolean } {
+): { found: boolean; exhausted: boolean; nodes: number } {
   const { state, tg } = buildInitialState(puzzle);
 
   // Apply forced empties first, then pre-placed crowns, matching solveAll.
@@ -318,7 +323,7 @@ function searchPuzzle(
   for (let r = 0; r < state.n; r++) {
     for (let c = 0; c < state.n; c++) {
       if (puzzle.initial[r][c] === CROWN && !tryPlaceCrown(state, tg, r, c)) {
-        return { found: false, exhausted: false };
+        return { found: false, exhausted: false, nodes: 0 };
       }
     }
   }
@@ -326,19 +331,33 @@ function searchPuzzle(
   if (assumption) {
     if (assumption.value === EMPTY) {
       const i = idx(state.n, assumption.r, assumption.c);
-      if (state.grid[i] === K) return { found: false, exhausted: false };
+      if (state.grid[i] === K) return { found: false, exhausted: false, nodes: 0 };
       if (state.grid[i] === U) state.grid[i] = E;
     } else if (!tryPlaceCrown(state, tg, assumption.r, assumption.c)) {
-      return { found: false, exhausted: false };
+      return { found: false, exhausted: false, nodes: 0 };
     }
   }
 
   const ctx: SearchCtx = { tg, nodes: 0, budget, limit: 1, out: [], exhausted: false };
   search(state, ctx);
-  return { found: ctx.out.length > 0, exhausted: ctx.exhausted };
+  return { found: ctx.out.length > 0, exhausted: ctx.exhausted, nodes: ctx.nodes };
 }
 
 /** Test a temporary queen/empty assumption without changing the puzzle. */
+export function testAssumptionDetailed(
+  puzzle: NormalizedPuzzle,
+  r: number,
+  c: number,
+  value: typeof EMPTY | typeof CROWN,
+  budget = 100_000,
+): AssumptionDetails {
+  const result = searchPuzzle(puzzle, { r, c, value }, budget);
+  return {
+    status: result.found ? "solved" : result.exhausted ? "unknown" : "unsatisfiable",
+    nodes: result.nodes,
+  };
+}
+
 export function testAssumption(
   puzzle: NormalizedPuzzle,
   r: number,
@@ -346,9 +365,7 @@ export function testAssumption(
   value: typeof EMPTY | typeof CROWN,
   budget = 100_000,
 ): AssumptionResult {
-  const result = searchPuzzle(puzzle, { r, c, value }, budget);
-  if (result.found) return "solved";
-  return result.exhausted ? "unknown" : "unsatisfiable";
+  return testAssumptionDetailed(puzzle, r, c, value, budget).status;
 }
 
 function stateToGrid(st: State): { grid: string[][]; crowns: CrownPos[] } {

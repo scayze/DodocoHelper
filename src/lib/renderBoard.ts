@@ -40,6 +40,10 @@ export function buildBoardGrid(container: HTMLElement, puzzle: NormalizedPuzzle)
     for (let c = 0; c < puzzle.size; c++) {
       const cell = document.createElement("div");
       cell.className = "board-cell";
+      cell.dataset.row = String(r);
+      cell.dataset.col = String(c);
+      cell.setAttribute("role", "gridcell");
+      cell.tabIndex = 0;
       cell.style.backgroundColor = cssFor(puzzle, puzzle.regions[r][c]);
       frag.appendChild(cell);
     }
@@ -67,20 +71,24 @@ export function paintBoard(
   puzzle: NormalizedPuzzle,
   crowns: ReadonlySet<string>,
   hint: Hint | null = null,
+  marks: ReadonlyArray<ReadonlyArray<string>> = puzzle.initial,
 ): void {
   const n = puzzle.size;
   for (let r = 0; r < n; r++) {
     for (let c = 0; c < n; c++) {
       const cell = container.children[r * n + c] as HTMLElement | undefined;
       if (!cell) continue;
-      const given = puzzle.initial[r][c] === "C";
+      const mark = marks[r][c];
+      const given = mark === "C";
       const crowned = given || crowns.has(`${r},${c}`);
       const position = `${r},${c}`;
       cell.classList.toggle("hint-context", Boolean(hint?.cells.includes(position)));
       cell.classList.toggle("hint-decisive", Boolean(hint?.decisiveCells.includes(position)));
       cell.classList.toggle("hint-cross", hint?.kind === "cross" && Boolean(hint.decisiveCells.includes(position)));
       cell.classList.toggle("hint-queen", hint?.kind === "queen" && Boolean(hint.decisiveCells.includes(position)));
-      cell.classList.toggle("has-x", !crowned && puzzle.initial[r][c] === ".");
+      cell.classList.toggle("has-x", !crowned && mark === ".");
+      const state = mark === "C" ? "queen" : mark === "." ? "cross" : "unmarked";
+      cell.setAttribute("aria-label", `Row ${r + 1}, column ${c + 1}, ${state}`);
       const want = crowned ? (given ? "g" : "c") : "";
       if (cell.dataset.k !== want) {
         cell.dataset.k = want;

@@ -110,6 +110,13 @@ body {
   display: grid;
   place-items: center;
   overflow: hidden;
+  cursor: pointer;
+  outline: none;
+}
+
+.board-cell:focus-visible {
+  z-index: 2;
+  box-shadow: inset 0 0 0 3px #2e2a24, 0 0 0 3px #faf5e6;
 }
 
 .board-cell img.board-dodoco {

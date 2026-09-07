@@ -1,8 +1,9 @@
 import type { NormalizedPuzzle } from "./types.js";
-import { testAssumption } from "./solver.js";
+import { testAssumptionDetailed } from "./solver.js";
 
 export type HintKind = "queen" | "cross";
 export type HintScope = "row" | "column" | "region" | "neighbors" | "analysis";
+export type HintMethod = "adjacency" | "unit-complete" | "unit-forced" | "contradiction";
 
 export interface Hint {
   kind: HintKind;
@@ -10,6 +11,9 @@ export interface Hint {
   text: string;
   cells: string[];
   decisiveCells: string[];
+  method: HintMethod;
+  difficulty: number;
+  proofCost: number;
 }
 
 const key = (r: number, c: number) => `${r},${c}`;
@@ -87,6 +91,9 @@ export function findHints(puzzle: NormalizedPuzzle): Hint[] {
         add({
           kind: "cross",
           scope,
+          method: "unit-complete",
+          difficulty: 1,
+          proofCost: 0,
           text: `This ${label} already has all its queens, so the highlighted cells cannot contain one.`,
           cells: unitCells(puzzle, scope, unit).filter((position) => {
             const [r, c] = position.split(",").map(Number);
@@ -98,6 +105,9 @@ export function findHints(puzzle: NormalizedPuzzle): Hint[] {
         add({
           kind: "queen",
           scope,
+          method: "unit-forced",
+          difficulty: 2,
+          proofCost: 0,
           text: `This ${label} is missing ${need === 1 ? "one queen" : `${need} queens`}, and it can only be in the highlighted cells.`,
           cells: unitCells(puzzle, scope, unit),
           decisiveCells: candidates,
@@ -124,6 +134,9 @@ export function findHints(puzzle: NormalizedPuzzle): Hint[] {
         add({
           kind: "cross",
           scope: "neighbors",
+          method: "adjacency",
+          difficulty: 0,
+          proofCost: 0,
           text: "Queens cannot touch, so the cells highlighted around this queen can be crossed out.",
           cells: [key(r, c), ...neighbors],
           decisiveCells: neighbors,
@@ -135,39 +148,43 @@ export function findHints(puzzle: NormalizedPuzzle): Hint[] {
   // Direct rules are cheap, but many deductions only appear after combining
   // row, column, region, and adjacency constraints. Prove those by testing
   // both possible values and only report assumptions that are impossible.
-  const maxHints = 24;
-  if (hints.length < maxHints) {
-    let analyzed = 0;
-    for (let r = 0; r < puzzle.size && hints.length < maxHints; r++) {
-      for (let c = 0; c < puzzle.size && hints.length < maxHints; c++) {
-        if (puzzle.initial[r][c] !== "?" || analyzed++ >= 48) continue;
+  for (let r = 0; r < puzzle.size; r++) {
+    for (let c = 0; c < puzzle.size; c++) {
+      if (puzzle.initial[r][c] !== "?") continue;
         const position = key(r, c);
         const context = analysisContext(puzzle, r, c);
-        const queen = testAssumption(puzzle, r, c, "C");
-        if (queen === "unsatisfiable") {
+        const queen = testAssumptionDetailed(puzzle, r, c, "C");
+        if (queen.status === "unsatisfiable") {
           add({
             kind: "cross",
             scope: "analysis",
+            method: "contradiction",
+            difficulty: 4,
+            proofCost: queen.nodes,
             text: "A queen cannot go in this highlighted cell: placing one here makes the highlighted constraints impossible to complete.",
             cells: context,
             decisiveCells: [position],
           });
           continue;
         }
-        if (queen === "unknown") continue;
-        const empty = testAssumption(puzzle, r, c, ".");
-        if (empty === "unsatisfiable") {
+        if (queen.status === "unknown") continue;
+        const empty = testAssumptionDetailed(puzzle, r, c, ".");
+        if (empty.status === "unsatisfiable") {
           add({
             kind: "queen",
             scope: "analysis",
+            method: "contradiction",
+            difficulty: 4,
+            proofCost: empty.nodes,
             text: "This highlighted cell must contain a queen: ruling it out makes the highlighted constraints impossible to complete.",
             cells: context,
             decisiveCells: [position],
           });
         }
-      }
     }
   }
 
-  return hints;
+  return hints
+    .sort((a, b) => a.difficulty - b.difficulty || a.proofCost - b.proofCost ||
+      a.decisiveCells.length - b.decisiveCells.length || a.cells.join(";").localeCompare(b.cells.join(";")));
 }

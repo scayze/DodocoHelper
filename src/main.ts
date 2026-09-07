@@ -6,6 +6,7 @@ import { findHints } from "./core/hints.js";
 import type { Hint } from "./core/hints.js";
 import { validatePuzzleInput } from "./core/validator.js";
 import type { NormalizedPuzzle, PuzzleInput } from "./core/types.js";
+import { nextMark } from "./core/marks.js";
 
 type Phase = "idle" | "working" | "ready" | "error";
 
@@ -63,6 +64,11 @@ function showError(title: string, hint: string): void {
 }
 
 function refreshHintButton(): void {
+  if (!fullSolution) {
+    hintLabel.textContent = "Hint";
+    hintButton.disabled = true;
+    return;
+  }
   const left = availableHints.filter((hint) => !shownHints.has(hintId(hint))).length;
   hintLabel.textContent = left > 0 ? `Hint (${left} left)` : "Hint";
   hintButton.disabled = left === 0;
@@ -76,8 +82,9 @@ function hintId(hint: Hint): string {
 }
 
 function describeBoard(): string {
-  if (!puzzle || !fullSolution) return "Puzzle board with regions, marks, and crowns";
-  const placed = fullSolution.flat().filter((v) => v === "C").length;
+  if (!puzzle) return "Puzzle board with regions, marks, and crowns";
+  const placed = fullSolution?.flat().filter((v) => v === "C").length ??
+    puzzle.initial.flat().filter((v) => v === "C").length;
   const shown = shownHints.size;
   const highlight = activeHint ? `, highlighted ${activeHint.scope}` : "";
   return `Puzzle board, ${puzzle.size} by ${puzzle.size}, ${placed} crowns total, ${shown} hints shown${highlight}`;
@@ -110,6 +117,35 @@ function runPuzzle(raw: PuzzleInput): void {
   setPhase("ready");
 }
 
+function recomputeEditedBoard(): void {
+  if (!puzzle) return;
+  const solved = solvePuzzle(puzzle);
+  fullSolution = solved.status === "solved" ? solved.solution : null;
+  availableHints = fullSolution ? findHints(puzzle) : [];
+  shownHints.clear();
+  activeHint = null;
+  paintBoard(boardGrid, puzzle, new Set(), null, puzzle.initial);
+  boardGrid.setAttribute("aria-label", describeBoard());
+  solveButton.disabled = !fullSolution;
+  solveButton.textContent = fullSolution ? "Solve" : "No solution";
+  if (fullSolution) {
+    hintMessage.textContent = "";
+  } else {
+    hintMessage.textContent = "These marks cannot all be satisfied. Change a queen or cross to continue.";
+  }
+  refreshHintButton();
+}
+
+function editCell(cell: HTMLElement): void {
+  if (!puzzle) return;
+  const r = Number(cell.dataset.row);
+  const c = Number(cell.dataset.col);
+  if (!Number.isInteger(r) || !Number.isInteger(c) || r < 0 || c < 0 || r >= puzzle.size || c >= puzzle.size) return;
+  puzzle.initial[r][c] = nextMark(puzzle.initial[r][c]);
+  recomputeEditedBoard();
+  cell.focus({ preventScroll: true });
+}
+
 function revealHint(): void {
   if (!puzzle || !fullSolution || hintButton.disabled) return;
   const next = availableHints.find((hint) => !shownHints.has(hintId(hint)));
@@ -126,7 +162,7 @@ function revealSolution(): void {
   if (!puzzle || !fullSolution || solveButton.disabled) return;
   activeHint = null;
   hintMessage.textContent = "";
-  paintBoard(boardGrid, puzzle, solutionCrowns(fullSolution), null);
+  paintBoard(boardGrid, puzzle, solutionCrowns(fullSolution), null, puzzle.initial);
   boardGrid.setAttribute("aria-label", `Solved puzzle board, ${puzzle.size} by ${puzzle.size}`);
   solveButton.disabled = true;
   solveButton.textContent = "Solved";
@@ -208,6 +244,17 @@ document.addEventListener("paste", (e) => {
 retryButton.addEventListener("click", () => fileInput.click());
 solveButton.addEventListener("click", revealSolution);
 hintButton.addEventListener("click", revealHint);
+boardGrid.addEventListener("click", (e) => {
+  const cell = (e.target as HTMLElement).closest<HTMLElement>("[data-row][data-col]");
+  if (cell && boardGrid.contains(cell)) editCell(cell);
+});
+boardGrid.addEventListener("keydown", (e) => {
+  if (e.key !== "Enter" && e.key !== " ") return;
+  const cell = (e.target as HTMLElement).closest<HTMLElement>("[data-row][data-col]");
+  if (!cell || !boardGrid.contains(cell)) return;
+  e.preventDefault();
+  editCell(cell);
+});
 
 // Static 9x9 loading skeleton.
 {
