@@ -5,19 +5,15 @@
     <link rel="icon" type="image/svg+xml" href="/favicon.svg" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <meta name="theme-color" content="#f5edd8" />
-    <meta
-      name="description"
-      content="Dodoco Solver reads a crown puzzle screenshot and returns the solved board with every crown placed."
-    />
+    <meta name="description" content="Dodoco Solver reads a crown puzzle screenshot and returns the solved board with every crown placed." />
     <title>Dodoco Solver - Crown Puzzle Companion</title>
     <link rel="preconnect" href="https://fonts.googleapis.com" />
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
-    <link
-      href="https://fonts.googleapis.com/css2?family=Cinzel:wght@600;700&family=Outfit:wght@400;500;600;700&display=swap"
-      rel="stylesheet"
-    />
+    <link href="https://fonts.googleapis.com/css2?family=Cinzel:wght@600;700&family=Outfit:wght@400;500;600;700&display=swap" rel="stylesheet" />
     <style>
-      html { background: #f5edd8; }
+      html {
+        background: #f5edd8;
+      }
     </style>
   </head>
   <body>
@@ -34,31 +30,21 @@
 
         <section id="upload" class="flex shrink-0 justify-center pb-3">
           <div class="w-full" id="dropzone-wrap">
-            <div
-              id="dropzone"
-              role="button"
-              tabindex="0"
-              aria-label="Upload a board screenshot"
-              class="grid min-h-[148px] w-full cursor-pointer place-items-center rounded-2xl border-2 border-dashed border-night-700/30 bg-white/50 px-6 py-6 text-center text-night-900 shadow-[0_16px_50px_rgba(60,45,10,0.12)] transition-colors hover:border-gold-600"
-            >
+            <div id="dropzone" role="button" tabindex="0" aria-label="Upload a board screenshot"
+              class="grid min-h-[148px] w-full cursor-pointer place-items-center rounded-2xl border-2 border-dashed border-night-700/30 bg-white/50 px-6 py-6 text-center text-night-900 shadow-[0_16px_50px_rgba(60,45,10,0.12)] transition-colors hover:border-gold-600">
               <div>
                 <svg width="32" height="32" viewBox="0 0 256 256" fill="none" stroke="currentColor" stroke-width="16" class="mx-auto text-night-700/70" aria-hidden="true">
                   <rect x="32" y="32" width="192" height="192" rx="16" />
                   <circle cx="100" cy="100" r="16" fill="currentColor" stroke="none" />
                   <path d="m32,192 60-60 40,40 32-32 60,60" stroke-linecap="round" stroke-linejoin="round" />
                 </svg>
-                <p id="dropzone-title" class="mt-2.5 font-semibold">Drag a screenshot here or click to browse</p>
+                <p id="dropzone-title" class="mt-2.5 font-semibold">Drag a screenshot, paste it (Ctrl+V), or click to browse</p>
                 <p class="mx-auto mt-1 max-w-[34ch] text-sm text-night-800/70">
-                  Phone photos and full screenshots work — just keep the whole board visible.
+                  Any screenshots work, just keep the whole board visible.
                 </p>
               </div>
             </div>
-            <input
-              id="file-input"
-              type="file"
-              accept="image/png,image/jpeg,image/webp"
-              class="sr-only"
-            />
+            <input id="file-input" type="file" accept="image/png,image/jpeg,image/webp" class="sr-only" />
           </div>
         </section>
 
@@ -83,11 +69,7 @@
                 </p>
                 <p id="error-hint" class="mt-2 text-sm leading-relaxed text-red-200/85"></p>
                 <div class="mt-4">
-                  <button
-                    id="retry-button"
-                    type="button"
-                    class="btn-gold h-11 rounded-full px-5 text-sm font-semibold"
-                  >
+                  <button id="retry-button" type="button" class="btn-gold h-11 rounded-full px-5 text-sm font-semibold">
                     Try another image
                   </button>
                 </div>
@@ -96,26 +78,13 @@
               <div id="panel-ready" class="hidden rounded-2xl border border-night-700/15 bg-white/60 p-4 text-night-900 shadow-[0_16px_50px_rgba(60,45,10,0.12)] backdrop-blur-sm" tabindex="-1">
                 <div class="flex flex-col gap-3">
                   <figure class="min-w-0 flex-1">
-                    <div
-                      id="board-grid"
-                      role="img"
-                      aria-label="Puzzle board with regions, marks, and crowns"
-                      class="grid w-full gap-1 rounded-xl bg-[rgb(95,112,128)] p-1.5"
-                    ></div>
+                    <div id="board-grid" role="img" aria-label="Puzzle board with regions, marks, and crowns" class="grid w-full gap-1 rounded-xl bg-[rgb(95,112,128)] p-1.5"></div>
                   </figure>
                   <div class="flex flex-row gap-2">
-                    <button
-                      id="solve-button"
-                      type="button"
-                      class="btn-gold h-11 flex-1 rounded-full px-5 text-sm font-semibold disabled:cursor-not-allowed disabled:opacity-50"
-                    >
+                    <button id="solve-button" type="button" class="btn-gold h-11 flex-1 rounded-full px-5 text-sm font-semibold disabled:cursor-not-allowed disabled:opacity-50">
                       Solve
                     </button>
-                    <button
-                      id="hint-button"
-                      type="button"
-                      class="btn-outline h-11 flex-1 rounded-full px-5 text-sm font-semibold disabled:cursor-not-allowed disabled:opacity-50"
-                    >
+                    <button id="hint-button" type="button" class="btn-outline h-11 flex-1 rounded-full px-5 text-sm font-semibold disabled:cursor-not-allowed disabled:opacity-50">
                       <span id="hint-label">Hint</span>
                     </button>
                   </div>

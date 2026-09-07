@@ -155,10 +155,20 @@ async function handleFile(file: File): Promise<void> {
   }
 }
 
+/** First image file on the clipboard, or null when no image was pasted. */
+function clipboardImage(e: ClipboardEvent): File | null {
+  const files = e.clipboardData?.files;
+  if (!files) return null;
+  for (const file of Array.from(files)) {
+    if (file.type.startsWith("image/")) return file;
+  }
+  return null;
+}
+
 function setDragOver(on: boolean): void {
   dropzone.classList.toggle("drop-active", on);
   dropzone.classList.toggle("border-gold-500", on);
-  dropzoneTitle.textContent = on ? "Drop it to solve" : "Drag a screenshot here or click to browse";
+  dropzoneTitle.textContent = on ? "Drop it to solve" : "Drag a screenshot, paste it, or click to browse";
 }
 
 dropzone.addEventListener("click", () => fileInput.click());
@@ -183,6 +193,13 @@ fileInput.addEventListener("change", () => {
   const file = fileInput.files?.[0];
   if (file) void handleFile(file);
   fileInput.value = "";
+});
+// Paste-to-upload: Ctrl+V anywhere on the page with an image on the clipboard.
+document.addEventListener("paste", (e) => {
+  const file = clipboardImage(e);
+  if (!file) return;
+  e.preventDefault();
+  void handleFile(file);
 });
 retryButton.addEventListener("click", () => fileInput.click());
 solveButton.addEventListener("click", revealSolution);
