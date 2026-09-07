@@ -30,6 +30,7 @@ body {
 
 body {
   font-family: var(--font-body);
+  font-size: 1.1rem;
   background: var(--color-parchment-100);
   color: #1c2440;
   -webkit-font-smoothing: antialiased;
@@ -105,7 +106,7 @@ body {
 .board-cell {
   position: relative;
   aspect-ratio: 1 / 1;
-  border-radius: clamp(0.3rem, 1vmin, 0.45rem);
+  border-radius: clamp(0.33rem, 1.1vmin, 0.5rem);
   display: grid;
   place-items: center;
   overflow: hidden;
@@ -178,14 +179,14 @@ body {
 /* Single shared stage width: dropzone, working, ready, error all align. */
 #dropzone-wrap,
 #stage-col {
-  width: min(92vw, 440px);
+  width: min(92vw, 484px);
   margin-inline: auto;
 }
 
 /* Shrink the upload card to icon-only once a result exists so header + board fit 100dvh. */
 main.has-result #dropzone {
   min-height: 0;
-  padding-block: 0.6rem;
+  padding-block: 0.66rem;
 }
 
 main.has-result #dropzone-wrap p {
@@ -194,10 +195,10 @@ main.has-result #dropzone-wrap p {
 
 #board-grid,
 #skeleton-grid {
-  width: min(100%, 46dvh, 400px);
+  width: min(100%, 50dvh, 440px);
   margin-inline: auto;
-  gap: clamp(3px, 0.8vmin, 6px);
-  padding: clamp(6px, 1.2vmin, 10px);
+  gap: clamp(3px, 0.88vmin, 7px);
+  padding: clamp(7px, 1.32vmin, 11px);
 }
 
 #panel-ready,

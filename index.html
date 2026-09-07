@@ -18,28 +18,28 @@
   </head>
   <body>
     <div class="parchment-page">
-      <main id="top" class="mx-auto flex h-full min-h-0 w-full max-w-6xl flex-1 flex-col justify-center px-4 sm:px-6">
-        <header class="shrink-0 pt-5 pb-3 text-center md:pt-6 md:pb-4">
-          <p class="text-[11px] font-semibold uppercase tracking-[0.22em] text-gold-600">
+      <main id="top" class="mx-auto flex h-full min-h-0 w-full max-w-6xl flex-1 flex-col justify-center px-[18px] sm:px-[26px]">
+        <header class="shrink-0 pt-[22px] pb-[13px] text-center md:pt-[26px] md:pb-[18px]">
+          <p class="text-xs font-semibold uppercase tracking-[0.22em] text-gold-600">
             Minigame companion for dummies like loor
           </p>
-          <h1 class="font-display mt-1.5 text-2xl leading-none tracking-tight text-balance text-night-900 md:text-[2rem]">
+          <h1 class="font-display mt-[7px] text-[26px] leading-none tracking-tight text-balance text-night-900 md:text-[2.2rem]">
             Dodoco Helper
           </h1>
         </header>
 
-        <section id="upload" class="flex shrink-0 justify-center pb-3">
+        <section id="upload" class="flex shrink-0 justify-center pb-[13px]">
           <div class="w-full" id="dropzone-wrap">
             <div id="dropzone" role="button" tabindex="0" aria-label="Upload a board screenshot"
-              class="grid min-h-[148px] w-full cursor-pointer place-items-center rounded-2xl border-2 border-dashed border-night-700/30 bg-white/50 px-6 py-6 text-center text-night-900 shadow-[0_16px_50px_rgba(60,45,10,0.12)] transition-colors hover:border-gold-600">
+              class="grid min-h-[163px] w-full cursor-pointer place-items-center rounded-2xl border-2 border-dashed border-night-700/30 bg-white/50 px-[26px] py-[26px] text-center text-night-900 shadow-[0_16px_50px_rgba(60,45,10,0.12)] transition-colors hover:border-gold-600">
               <div>
-                <svg width="32" height="32" viewBox="0 0 256 256" fill="none" stroke="currentColor" stroke-width="16" class="mx-auto text-night-700/70" aria-hidden="true">
+                <svg width="35" height="35" viewBox="0 0 256 256" fill="none" stroke="currentColor" stroke-width="16" class="mx-auto text-night-700/70" aria-hidden="true">
                   <rect x="32" y="32" width="192" height="192" rx="16" />
                   <circle cx="100" cy="100" r="16" fill="currentColor" stroke="none" />
                   <path d="m32,192 60-60 40,40 32-32 60,60" stroke-linecap="round" stroke-linejoin="round" />
                 </svg>
-                <p id="dropzone-title" class="mt-2.5 font-semibold">Paste a screenshot, or click to browse</p>
-                <p class="mx-auto mt-1 max-w-[34ch] text-sm text-night-800/70">
+                <p id="dropzone-title" class="mt-[11px] text-[15px] font-semibold">Paste a screenshot, or click to browse</p>
+                <p class="mx-auto mt-[4px] max-w-[34ch] text-[15px] text-night-800/70">
                   Any screenshots work, just keep the whole board visible.
                 </p>
               </div>
@@ -48,43 +48,43 @@
           </div>
         </section>
 
-        <section id="solver" class="grid min-h-0 w-full shrink-0 place-items-center py-2">
+        <section id="solver" class="grid min-h-0 w-full shrink-0 place-items-center py-[9px]">
           <div id="result-area" class="hidden w-full min-h-0" aria-live="polite">
             <div class="mx-auto w-full" id="stage-col">
 
               <div id="panel-working" class="hidden" tabindex="-1">
                 <div class="grid w-full grid-cols-9 rounded-2xl bg-night-800" aria-hidden="true" id="skeleton-grid"></div>
-                <p class="mt-3 flex items-center justify-center gap-2 text-sm font-semibold text-night-800/70" role="status">
-                  <span class="inline-block h-4 w-4 animate-spin rounded-full border-2 border-gold-600 border-t-transparent" aria-hidden="true"></span>
+                <p class="mt-[13px] flex items-center justify-center gap-[9px] text-[15px] font-semibold text-night-800/70" role="status">
+                  <span class="inline-block h-[18px] w-[18px] animate-spin rounded-full border-2 border-gold-600 border-t-transparent" aria-hidden="true"></span>
                   Reading grid lines and region colors...
                 </p>
               </div>
 
-              <div id="panel-error" class="hidden rounded-2xl border border-red-800/30 bg-red-950/95 p-6" role="alert" tabindex="-1">
+              <div id="panel-error" class="hidden rounded-2xl border border-red-800/30 bg-red-950/95 p-[26px]" role="alert" tabindex="-1">
                 <p class="flex items-center gap-2 font-semibold text-red-100">
-                  <svg width="20" height="20" viewBox="0 0 256 256" fill="currentColor" aria-hidden="true">
+                  <svg width="22" height="22" viewBox="0 0 256 256" fill="currentColor" aria-hidden="true">
                     <path d="M128,24A104,104,0,1,0,232,128,104.11,104.11,0,0,0,128,24Zm-8,48a8,8,0,0,1,16,0v56a8,8,0,0,1-16,0Zm8,104a16,16,0,1,1,16-16A16,16,0,0,1,128,176Z" />
                   </svg>
                   <span id="error-title">Something missed the mark.</span>
                 </p>
-                <p id="error-hint" class="mt-2 text-sm leading-relaxed text-red-200/85"></p>
-                <div class="mt-4">
-                  <button id="retry-button" type="button" class="btn-gold h-11 rounded-full px-5 text-sm font-semibold">
+                <p id="error-hint" class="mt-[9px] text-[15px] leading-relaxed text-red-200/85"></p>
+                <div class="mt-[18px]">
+                  <button id="retry-button" type="button" class="btn-gold h-[48px] rounded-full px-[22px] text-[15px] font-semibold">
                     Try another image
                   </button>
                 </div>
               </div>
 
-              <div id="panel-ready" class="hidden rounded-2xl border border-night-700/15 bg-white/60 p-4 text-night-900 shadow-[0_16px_50px_rgba(60,45,10,0.12)] backdrop-blur-sm" tabindex="-1">
-                <div class="flex flex-col gap-3">
+              <div id="panel-ready" class="hidden rounded-2xl border border-night-700/15 bg-white/60 p-[18px] text-night-900 shadow-[0_16px_50px_rgba(60,45,10,0.12)] backdrop-blur-sm" tabindex="-1">
+                <div class="flex flex-col gap-[13px]">
                   <figure class="min-w-0 flex-1">
                     <div id="board-grid" role="img" aria-label="Puzzle board with regions, marks, and crowns" class="grid w-full gap-1 rounded-xl bg-[rgb(95,112,128)] p-1.5"></div>
                   </figure>
-                  <div class="flex flex-row gap-2">
-                    <button id="solve-button" type="button" class="btn-gold h-11 flex-1 rounded-full px-5 text-sm font-semibold disabled:cursor-not-allowed disabled:opacity-50">
+                  <div class="flex flex-row gap-[9px]">
+                    <button id="solve-button" type="button" class="btn-gold h-[48px] flex-1 rounded-full px-[22px] text-[15px] font-semibold disabled:cursor-not-allowed disabled:opacity-50">
                       Solve
                     </button>
-                    <button id="hint-button" type="button" class="btn-outline h-11 flex-1 rounded-full px-5 text-sm font-semibold disabled:cursor-not-allowed disabled:opacity-50">
+                    <button id="hint-button" type="button" class="btn-outline h-[48px] flex-1 rounded-full px-[22px] text-[15px] font-semibold disabled:cursor-not-allowed disabled:opacity-50">
                       <span id="hint-label">Hint</span>
                     </button>
                   </div>
