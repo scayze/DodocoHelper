@@ -17,10 +17,9 @@ npm test         # solver core test suite (26 tests)
 ## How it works
 
 1. **Upload** a cropped screenshot of the board (PNG/JPEG/WebP).
-2. The app loads bundled OpenCV.js, rectifies the board, detects its grid,
-   clusters region colors, and spots X marks (`src/lib/extract.ts` and
-   `src/lib/opencv.ts`). OpenCV is initialized on the first upload and is
-   bundled locally rather than loaded from a CDN.
+2. The app detects the board's grid with a lightweight pure-TypeScript
+   pipeline (`src/lib/extract.ts`): it classifies region colors, projects
+   them onto both axes to find cell centers, and spots crowns / X marks.
 3. The backtracking solver (`src/core/solver.ts`) places crowns with
    constraint propagation — sealed units, forced placements, MRV ordering.
 4. **Hint** reveals crowns one at a time; **Solve** reveals the full board.

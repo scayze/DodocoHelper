@@ -1,5 +1,4 @@
 import type { PuzzleInput } from "../core/types.js";
-import { loadOpenCV, getOpenCV, newMatFromBGR } from "./opencv.js";
 
 export interface ExtractResult {
   ok: boolean;
@@ -384,36 +383,66 @@ function canonicalize(regions: number[][], N: number): { regions: number[][]; pa
 // Public API
 // ---------------------------------------------------------------------------
 
+// ---------------------------------------------------------------------------
+// Downscaling (area-average box filter for large images)
+// ---------------------------------------------------------------------------
+
+interface ScaledImage {
+  data: Uint8ClampedArray;
+  w: number;
+  h: number;
+}
+
+/** Downscale RGBA pixels with an area-average box filter so the longest side fits within `max`. */
+function downscaleBox(data: Uint8ClampedArray, w: number, h: number, max: number): ScaledImage {
+  const w2 = Math.max(1, Math.round((w * max) / Math.max(w, h)));
+  const h2 = Math.max(1, Math.round((h * max) / Math.max(w, h)));
+  const out = new Uint8ClampedArray(w2 * h2 * 4);
+  const sx = w / w2;
+  const sy = h / h2;
+  for (let y = 0; y < h2; y++) {
+    const y0 = Math.floor(y * sy);
+    const y1 = Math.max(y0 + 1, Math.min(h, Math.ceil((y + 1) * sy)));
+    for (let x = 0; x < w2; x++) {
+      const x0 = Math.floor(x * sx);
+      const x1 = Math.max(x0 + 1, Math.min(w, Math.ceil((x + 1) * sx)));
+      let r = 0;
+      let g = 0;
+      let b = 0;
+      let a = 0;
+      let n = 0;
+      for (let yy = y0; yy < y1; yy++) {
+        for (let xx = x0; xx < x1; xx++) {
+          const o = (yy * w + xx) * 4;
+          r += data[o];
+          g += data[o + 1];
+          b += data[o + 2];
+          a += data[o + 3];
+          n++;
+        }
+      }
+      const o2 = (y * w2 + x) * 4;
+      out[o2] = Math.round(r / n);
+      out[o2 + 1] = Math.round(g / n);
+      out[o2 + 2] = Math.round(b / n);
+      out[o2 + 3] = Math.round(a / n);
+    }
+  }
+  return { data: out, w: w2, h: h2 };
+}
+
 /**
  * Extract a puzzle board from raw RGBA pixels. Shared by the browser and the
- * Node test harness so both exercise the exact same OpenCV pipeline.
+ * Node test harness so both exercise the exact same pipeline.
  */
 export async function extractBoardFromRGBA(data: Uint8ClampedArray, w: number, h: number): Promise<PuzzleInput | null> {
-  await loadOpenCV();
   const MAX = 1600;
   if (Math.max(w, h) <= MAX) {
     return analyze(data, w, h);
   }
-  // Downscale large images via OpenCV. Copy bytes out before the Mats (which
-  // alias the shared wasm heap) are freed.
-  const cv = getOpenCV();
-  const src = newMatFromBGR(data, w, h);
-  try {
-    const scale = MAX / Math.max(w, h);
-    const small = new cv.Mat();
-    cv.resize(src, small, new cv.Size(Math.round(w * scale), Math.round(h * scale)), 0, 0, cv.INTER_AREA);
-    const w2 = small.cols;
-    const h2 = small.rows;
-    const rgba = new cv.Mat();
-    cv.cvtColor(small, rgba, cv.COLOR_BGR2RGBA);
-    const copy = new Uint8ClampedArray(rgba.rows * rgba.cols * 4);
-    copy.set(new Uint8ClampedArray(rgba.data.buffer, rgba.data.byteOffset, rgba.cols * rgba.rows * 4));
-    rgba.delete();
-    small.delete();
-    return analyze(copy, w2, h2);
-  } finally {
-    src.delete();
-  }
+  // Downscale large images before analysis.
+  const small = downscaleBox(data, w, h, MAX);
+  return analyze(small.data, small.w, small.h);
 }
 
 /** Pure analysis on RGBA pixels (already scaled). Returns PuzzleInput or null. */
@@ -609,11 +638,6 @@ export async function extractBoardFromFile(file: File): Promise<ExtractResult> {
       puzzle: null,
     };
   }
-}
-
-/** Ensure the OpenCV runtime is initialised. Safe to call multiple times. */
-export async function ensureOpenCV(): Promise<void> {
-  await loadOpenCV();
 }
 
 /**

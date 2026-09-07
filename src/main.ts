@@ -1,5 +1,5 @@
 import "./index.css";
-import { ensureOpenCV, extractBoardFromFile } from "./lib/extract";
+import { extractBoardFromFile } from "./lib/extract";
 import { buildBoardGrid, paintBoard, solutionCrowns } from "./lib/renderBoard";
 import { solvePuzzle } from "./core/solver.js";
 import { validatePuzzleInput } from "./core/validator.js";
@@ -33,7 +33,6 @@ const hintLabel = el("hint-label");
 let puzzle: NormalizedPuzzle | null = null;
 let fullSolution: string[][] | null = null;
 let isWorking = false;
-let openCVReady: Promise<void> | null = null;
 const hinted = new Set<string>();
 
 function focusPanel(id: string): void {
@@ -139,8 +138,6 @@ async function handleFile(file: File): Promise<void> {
   setPhase("working");
   isWorking = true;
   try {
-    if (!openCVReady) openCVReady = ensureOpenCV();
-    await openCVReady;
     const extracted = await extractBoardFromFile(file);
     if (!extracted.ok || !extracted.puzzle) {
       showError(
@@ -152,8 +149,8 @@ async function handleFile(file: File): Promise<void> {
     runPuzzle(extracted.puzzle);
   } catch (e) {
     showError(
-      "OpenCV runtime failed to load.",
-      e instanceof Error ? `${e.message}. Please reload the page.` : "Please reload the page.",
+      "That image could not be read.",
+      e instanceof Error ? e.message : "Please try a different file.",
     );
   }
 }

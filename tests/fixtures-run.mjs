@@ -1,5 +1,5 @@
 #!/usr/bin/env node
-// Iterates every fixture, runs the full OpenCV extraction, and reports how the
+// Iterates every fixture, runs the full board extraction, and reports how the
 // extracted board compares to the fixture's .expected.json.
 //
 // Usage:
