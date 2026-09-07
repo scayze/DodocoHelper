@@ -239,6 +239,8 @@ interface SearchCtx {
   exhausted: boolean;
 }
 
+export type AssumptionResult = "solved" | "unsatisfiable" | "unknown";
+
 function search(st: State, ctx: SearchCtx): void {
   if (ctx.out.length >= ctx.limit || ctx.exhausted) return;
   if (++ctx.nodes > ctx.budget) {
@@ -298,6 +300,55 @@ function buildInitialState(puzzle: NormalizedPuzzle): { state: State; tg: Target
     reg: puzzle.crownsPerRegion,
   };
   return { state, tg };
+}
+
+function searchPuzzle(
+  puzzle: NormalizedPuzzle,
+  assumption: { r: number; c: number; value: typeof EMPTY | typeof CROWN } | null,
+  budget: number,
+): { found: boolean; exhausted: boolean } {
+  const { state, tg } = buildInitialState(puzzle);
+
+  // Apply forced empties first, then pre-placed crowns, matching solveAll.
+  for (let r = 0; r < state.n; r++) {
+    for (let c = 0; c < state.n; c++) {
+      if (puzzle.initial[r][c] === EMPTY) state.grid[idx(state.n, r, c)] = E;
+    }
+  }
+  for (let r = 0; r < state.n; r++) {
+    for (let c = 0; c < state.n; c++) {
+      if (puzzle.initial[r][c] === CROWN && !tryPlaceCrown(state, tg, r, c)) {
+        return { found: false, exhausted: false };
+      }
+    }
+  }
+
+  if (assumption) {
+    if (assumption.value === EMPTY) {
+      const i = idx(state.n, assumption.r, assumption.c);
+      if (state.grid[i] === K) return { found: false, exhausted: false };
+      if (state.grid[i] === U) state.grid[i] = E;
+    } else if (!tryPlaceCrown(state, tg, assumption.r, assumption.c)) {
+      return { found: false, exhausted: false };
+    }
+  }
+
+  const ctx: SearchCtx = { tg, nodes: 0, budget, limit: 1, out: [], exhausted: false };
+  search(state, ctx);
+  return { found: ctx.out.length > 0, exhausted: ctx.exhausted };
+}
+
+/** Test a temporary queen/empty assumption without changing the puzzle. */
+export function testAssumption(
+  puzzle: NormalizedPuzzle,
+  r: number,
+  c: number,
+  value: typeof EMPTY | typeof CROWN,
+  budget = 100_000,
+): AssumptionResult {
+  const result = searchPuzzle(puzzle, { r, c, value }, budget);
+  if (result.found) return "solved";
+  return result.exhausted ? "unknown" : "unsatisfiable";
 }
 
 function stateToGrid(st: State): { grid: string[][]; crowns: CrownPos[] } {

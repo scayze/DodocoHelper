@@ -22,7 +22,8 @@ npm test         # solver core test suite (26 tests)
    them onto both axes to find cell centers, and spots crowns / X marks.
 3. The backtracking solver (`src/core/solver.ts`) places crowns with
    constraint propagation — sealed units, forced placements, MRV ordering.
-4. **Hint** reveals crowns one at a time; **Solve** reveals the full board.
+4. **Hint** explains a guaranteed deduction and highlights its relevant row, column,
+   region, or neighboring cells without revealing the answer; **Solve** reveals the full board.
 
 ## Layout
 

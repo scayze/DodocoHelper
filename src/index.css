@@ -139,6 +139,25 @@ body {
   transform: translate(-50%, -50%) rotate(-45deg);
 }
 
+.board-cell.hint-context {
+  box-shadow: inset 0 0 0 3px rgba(255, 255, 255, 0.72);
+}
+
+.board-cell.hint-decisive {
+  z-index: 1;
+  box-shadow: inset 0 0 0 3px #2e2a24, 0 0 0 3px rgba(255, 255, 255, 0.9);
+  animation: hint-pulse 900ms ease-in-out infinite alternate;
+}
+
+.board-cell.hint-cross.hint-decisive {
+  box-shadow: inset 0 0 0 3px #8b3f35, 0 0 0 3px rgba(255, 255, 255, 0.9);
+}
+
+@keyframes hint-pulse {
+  from { filter: brightness(1); }
+  to { filter: brightness(1.18); }
+}
+
 @keyframes dodoco-pop {
   from {
     opacity: 0;
@@ -237,6 +256,10 @@ main.has-result #dropzone-wrap p {
   }
 
   .board-cell img.board-dodoco {
+    animation: none;
+  }
+
+  .board-cell.hint-decisive {
     animation: none;
   }
 

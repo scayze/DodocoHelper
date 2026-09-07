@@ -1,4 +1,5 @@
 import type { NormalizedPuzzle } from "../core/types.js";
+import type { Hint } from "../core/hints.js";
 
 /** Default region colors sampled from the original game screenshot. */
 export const REGION_PALETTE: Array<[number, number, number]> = [
@@ -65,6 +66,7 @@ export function paintBoard(
   container: HTMLElement,
   puzzle: NormalizedPuzzle,
   crowns: ReadonlySet<string>,
+  hint: Hint | null = null,
 ): void {
   const n = puzzle.size;
   for (let r = 0; r < n; r++) {
@@ -73,6 +75,11 @@ export function paintBoard(
       if (!cell) continue;
       const given = puzzle.initial[r][c] === "C";
       const crowned = given || crowns.has(`${r},${c}`);
+      const position = `${r},${c}`;
+      cell.classList.toggle("hint-context", Boolean(hint?.cells.includes(position)));
+      cell.classList.toggle("hint-decisive", Boolean(hint?.decisiveCells.includes(position)));
+      cell.classList.toggle("hint-cross", hint?.kind === "cross" && Boolean(hint.decisiveCells.includes(position)));
+      cell.classList.toggle("hint-queen", hint?.kind === "queen" && Boolean(hint.decisiveCells.includes(position)));
       cell.classList.toggle("has-x", !crowned && puzzle.initial[r][c] === ".");
       const want = crowned ? (given ? "g" : "c") : "";
       if (cell.dataset.k !== want) {

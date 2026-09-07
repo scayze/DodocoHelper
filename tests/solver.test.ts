@@ -1,7 +1,9 @@
 import { describe, it } from "node:test";
 import assert from "node:assert/strict";
+import fs from "node:fs";
 import { validatePuzzleInput, validateSolution } from "../src/core/validator.js";
-import { solveAll, solvePuzzle } from "../src/core/solver.js";
+import { solveAll, solvePuzzle, testAssumption } from "../src/core/solver.js";
+import { findHints } from "../src/core/hints.js";
 import { validatePuzzleInput as checkInput } from "../src/core/validator.js";
 import type { NormalizedPuzzle } from "../src/core/types.js";
 
@@ -255,5 +257,40 @@ describe("solver", () => {
     const one = solveAll(p, { limit: 1 });
     assert.equal(one.length, 1);
     assert.deepEqual(validateSolution(p, one[0].grid), []);
+  });
+});
+
+describe("hints", () => {
+  it("highlights a whole column and its only remaining queen candidate", () => {
+    const initial = blankInitial();
+    initial[0][0] = "C";
+    for (let r = 1; r < 8; r++) initial[r][0] = ".";
+    const hints = findHints(normalized({ ...baseInput(), initial }));
+    const hint = hints.find((h) => h.kind === "queen" && h.scope === "column");
+    assert.ok(hint);
+    assert.equal(hint!.cells.length, 9);
+    assert.deepEqual(hint!.decisiveCells, ["8,0"]);
+  });
+
+  it("highlights multiple cells ruled out by an existing queen", () => {
+    const initial = blankInitial();
+    initial[4][4] = "C";
+    const hints = findHints(normalized({ ...baseInput(), initial }));
+    const hint = hints.find((h) => h.scope === "neighbors" && h.kind === "cross");
+    assert.ok(hint);
+    assert.equal(hint!.decisiveCells.length, 8);
+    assert.ok(hint!.cells.includes("4,4"));
+  });
+
+  it("finds deductions that require combining several constraints", () => {
+    const raw = JSON.parse(fs.readFileSync("public/examples/image-puzzle.json", "utf8")) as unknown;
+    const checked = validatePuzzleInput(raw);
+    assert.ok(checked.puzzle);
+    const hints = findHints(checked.puzzle!);
+    const complex = hints.find((hint) => hint.scope === "analysis");
+    assert.ok(complex, "expected at least one solver-backed deduction");
+    const [r, c] = complex!.decisiveCells[0].split(",").map(Number);
+    const impossibleValue = complex!.kind === "cross" ? "C" : ".";
+    assert.equal(testAssumption(checked.puzzle!, r, c, impossibleValue), "unsatisfiable");
   });
 });

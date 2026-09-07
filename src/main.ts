@@ -2,6 +2,8 @@ import "./index.css";
 import { extractBoardFromFile } from "./lib/extract";
 import { buildBoardGrid, paintBoard, solutionCrowns } from "./lib/renderBoard";
 import { solvePuzzle } from "./core/solver.js";
+import { findHints } from "./core/hints.js";
+import type { Hint } from "./core/hints.js";
 import { validatePuzzleInput } from "./core/validator.js";
 import type { NormalizedPuzzle, PuzzleInput } from "./core/types.js";
 
@@ -29,11 +31,14 @@ const boardGrid = el("board-grid");
 const solveButton = el<HTMLButtonElement>("solve-button");
 const hintButton = el<HTMLButtonElement>("hint-button");
 const hintLabel = el("hint-label");
+const hintMessage = el<HTMLParagraphElement>("hint-message");
 
 let puzzle: NormalizedPuzzle | null = null;
 let fullSolution: string[][] | null = null;
 let isWorking = false;
-const hinted = new Set<string>();
+let availableHints: Hint[] = [];
+const shownHints = new Set<string>();
+let activeHint: Hint | null = null;
 
 function focusPanel(id: string): void {
   const node = document.getElementById(id);
@@ -57,28 +62,25 @@ function showError(title: string, hint: string): void {
   setPhase("error");
 }
 
-function hintedCount(p: NormalizedPuzzle, solution: string[][]): number {
-  let n = 0;
-  for (let r = 0; r < p.size; r++) {
-    for (let c = 0; c < p.size; c++) {
-      if (solution[r][c] === "C" && p.initial[r][c] !== "C" && !hinted.has(`${r},${c}`)) n++;
-    }
-  }
-  return n;
-}
-
 function refreshHintButton(): void {
-  if (!puzzle || !fullSolution) return;
-  const left = hintedCount(puzzle, fullSolution);
+  const left = availableHints.filter((hint) => !shownHints.has(hintId(hint))).length;
   hintLabel.textContent = left > 0 ? `Hint (${left} left)` : "Hint";
   hintButton.disabled = left === 0;
+  if (left === 0 && shownHints.size === 0 && availableHints.length === 0) {
+    hintMessage.textContent = "No guaranteed deduction is available from the current board.";
+  }
+}
+
+function hintId(hint: Hint): string {
+  return `${hint.kind}:${hint.scope}:${hint.cells.join(";")}:${hint.decisiveCells.join(";")}`;
 }
 
 function describeBoard(): string {
   if (!puzzle || !fullSolution) return "Puzzle board with regions, marks, and crowns";
   const placed = fullSolution.flat().filter((v) => v === "C").length;
-  const shown = hinted.size;
-  return `Puzzle board, ${puzzle.size} by ${puzzle.size}, ${placed} crowns total, ${shown} hints shown`;
+  const shown = shownHints.size;
+  const highlight = activeHint ? `, highlighted ${activeHint.scope}` : "";
+  return `Puzzle board, ${puzzle.size} by ${puzzle.size}, ${placed} crowns total, ${shown} hints shown${highlight}`;
 }
 
 function runPuzzle(raw: PuzzleInput): void {
@@ -94,11 +96,14 @@ function runPuzzle(raw: PuzzleInput): void {
   }
   puzzle = parsed;
   fullSolution = solved.solution;
-  hinted.clear();
+  availableHints = findHints(parsed);
+  shownHints.clear();
+  activeHint = null;
+  hintMessage.textContent = "";
   solveButton.disabled = false;
   solveButton.textContent = "Solve";
   buildBoardGrid(boardGrid, parsed);
-  paintBoard(boardGrid, parsed, new Set());
+  paintBoard(boardGrid, parsed, new Set(), null);
   boardGrid.setAttribute("aria-label", describeBoard());
   refreshHintButton();
   isWorking = false;
@@ -107,22 +112,21 @@ function runPuzzle(raw: PuzzleInput): void {
 
 function revealHint(): void {
   if (!puzzle || !fullSolution || hintButton.disabled) return;
-  outer: for (let r = 0; r < puzzle.size; r++) {
-    for (let c = 0; c < puzzle.size; c++) {
-      if (fullSolution[r][c] === "C" && puzzle.initial[r][c] !== "C" && !hinted.has(`${r},${c}`)) {
-        hinted.add(`${r},${c}`);
-        break outer;
-      }
-    }
-  }
-  paintBoard(boardGrid, puzzle, hinted);
+  const next = availableHints.find((hint) => !shownHints.has(hintId(hint)));
+  if (!next) return;
+  activeHint = next;
+  shownHints.add(hintId(next));
+  hintMessage.textContent = next.text;
+  paintBoard(boardGrid, puzzle, new Set(), activeHint);
   boardGrid.setAttribute("aria-label", describeBoard());
   refreshHintButton();
 }
 
 function revealSolution(): void {
   if (!puzzle || !fullSolution || solveButton.disabled) return;
-  paintBoard(boardGrid, puzzle, solutionCrowns(fullSolution));
+  activeHint = null;
+  hintMessage.textContent = "";
+  paintBoard(boardGrid, puzzle, solutionCrowns(fullSolution), null);
   boardGrid.setAttribute("aria-label", `Solved puzzle board, ${puzzle.size} by ${puzzle.size}`);
   solveButton.disabled = true;
   solveButton.textContent = "Solved";
