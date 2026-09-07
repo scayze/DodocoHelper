@@ -18,8 +18,8 @@ export const REGION_PALETTE: Array<[number, number, number]> = [
 
 const DODOCO_SRC = `${import.meta.env.BASE_URL}dodoco.png`;
 
-function dodocoImg(goldRim: boolean): string {
-  return `<img src="${DODOCO_SRC}" alt="" draggable="false" class="board-dodoco${goldRim ? " is-given" : ""}" />`;
+function dodocoImg(): string {
+  return `<img src="${DODOCO_SRC}" alt="" draggable="false" class="board-dodoco" />`;
 }
 
 export function cssFor(puzzle: NormalizedPuzzle, region: number): string {
@@ -77,7 +77,7 @@ export function paintBoard(
       const want = crowned ? (given ? "g" : "c") : "";
       if (cell.dataset.k !== want) {
         cell.dataset.k = want;
-        cell.innerHTML = crowned ? dodocoImg(given) : "";
+        cell.innerHTML = crowned ? dodocoImg() : "";
       }
     }
   }
