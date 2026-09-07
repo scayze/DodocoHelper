@@ -33,6 +33,7 @@ const solveButton = el<HTMLButtonElement>("solve-button");
 const hintButton = el<HTMLButtonElement>("hint-button");
 const hintLabel = el("hint-label");
 const hintMessage = el<HTMLParagraphElement>("hint-message");
+const hintLevel = el<HTMLParagraphElement>("hint-level");
 
 let puzzle: NormalizedPuzzle | null = null;
 let fullSolution: string[][] | null = null;
@@ -107,6 +108,7 @@ function runPuzzle(raw: PuzzleInput): void {
   shownHints.clear();
   activeHint = null;
   hintMessage.textContent = "";
+  hintLevel.textContent = "";
   solveButton.disabled = false;
   solveButton.textContent = "Solve";
   buildBoardGrid(boardGrid, parsed);
@@ -130,8 +132,10 @@ function recomputeEditedBoard(): void {
   solveButton.textContent = fullSolution ? "Solve" : "No solution";
   if (fullSolution) {
     hintMessage.textContent = "";
+    hintLevel.textContent = "";
   } else {
     hintMessage.textContent = "These marks cannot all be satisfied. Change a queen or cross to continue.";
+    hintLevel.textContent = "";
   }
   refreshHintButton();
 }
@@ -153,6 +157,7 @@ function revealHint(): void {
   activeHint = next;
   shownHints.add(hintId(next));
   hintMessage.textContent = next.text;
+  hintLevel.textContent = next.difficultyLabel === "Advanced" ? "" : `${next.difficultyLabel} hint`;
   paintBoard(boardGrid, puzzle, new Set(), activeHint);
   boardGrid.setAttribute("aria-label", describeBoard());
   refreshHintButton();
@@ -162,6 +167,7 @@ function revealSolution(): void {
   if (!puzzle || !fullSolution || solveButton.disabled) return;
   activeHint = null;
   hintMessage.textContent = "";
+  hintLevel.textContent = "";
   paintBoard(boardGrid, puzzle, solutionCrowns(fullSolution), null, puzzle.initial);
   boardGrid.setAttribute("aria-label", `Solved puzzle board, ${puzzle.size} by ${puzzle.size}`);
   solveButton.disabled = true;
@@ -208,7 +214,7 @@ function clipboardImage(e: ClipboardEvent): File | null {
 function setDragOver(on: boolean): void {
   dropzone.classList.toggle("drop-active", on);
   dropzone.classList.toggle("border-gold-500", on);
-  dropzoneTitle.textContent = on ? "Drop it to solve" : "Drag a screenshot, paste it, or click to browse";
+  dropzoneTitle.textContent = on ? "Drop it" : "Drag a screenshot, paste it, or click to browse";
 }
 
 dropzone.addEventListener("click", () => fileInput.click());

@@ -22,6 +22,18 @@ interface State {
 }
 
 const idx = (n: number, r: number, c: number) => r * n + c;
+const pos = (r: number, c: number) => `${r},${c}`;
+
+function allUnitPositions(st: State, scope: "row" | "column" | "region", unit: number): string[] {
+  const out: string[] = [];
+  for (let r = 0; r < st.n; r++) {
+    for (let c = 0; c < st.n; c++) {
+      if ((scope === "row" && r === unit) || (scope === "column" && c === unit) ||
+        (scope === "region" && st.regionOf[idx(st.n, r, c)] === unit)) out.push(pos(r, c));
+    }
+  }
+  return out;
+}
 
 function cloneState(st: State): State {
   return {
@@ -66,7 +78,7 @@ function tryPlaceCrown(st: State, tg: Targets, r: number, c: number): boolean {
  * Constraint propagation. Maintains the invariant that no unknown cell is
  * adjacent to a crown. Returns false when a contradiction is found.
  */
-function propagate(st: State, tg: Targets): boolean {
+function propagate(st: State, tg: Targets): ContradictionWitness | null {
   const n = st.n;
   let changed = true;
   while (changed) {
@@ -83,7 +95,9 @@ function propagate(st: State, tg: Targets): boolean {
             const nc = c + dc;
             if (nr < 0 || nr >= n || nc < 0 || nc >= n) continue;
             const j = idx(n, nr, nc);
-            if (st.grid[j] === K) return false;
+            if (st.grid[j] === K) {
+              return { kind: "adjacency", scope: "neighbors", cells: [pos(r, c), pos(nr, nc)] };
+            }
             if (st.grid[j] === U) {
               st.grid[j] = E;
               changed = true;
@@ -109,16 +123,16 @@ function propagate(st: State, tg: Targets): boolean {
 
     // 2. overfull / capacity checks
     for (let r = 0; r < n; r++) {
-      if (st.rowPlaced[r] > tg.row) return false;
-      if (st.rowPlaced[r] + rowUnk[r] < tg.row) return false;
+      if (st.rowPlaced[r] > tg.row) return { kind: "overfull", scope: "row", unit: r, cells: allUnitPositions(st, "row", r), placed: st.rowPlaced[r], needed: tg.row };
+      if (st.rowPlaced[r] + rowUnk[r] < tg.row) return { kind: "starved", scope: "row", unit: r, cells: allUnitPositions(st, "row", r), placed: st.rowPlaced[r], needed: tg.row, available: rowUnk[r] };
     }
     for (let c = 0; c < n; c++) {
-      if (st.colPlaced[c] > tg.col) return false;
-      if (st.colPlaced[c] + colUnk[c] < tg.col) return false;
+      if (st.colPlaced[c] > tg.col) return { kind: "overfull", scope: "column", unit: c, cells: allUnitPositions(st, "column", c), placed: st.colPlaced[c], needed: tg.col };
+      if (st.colPlaced[c] + colUnk[c] < tg.col) return { kind: "starved", scope: "column", unit: c, cells: allUnitPositions(st, "column", c), placed: st.colPlaced[c], needed: tg.col, available: colUnk[c] };
     }
     for (let g = 0; g < st.regPlaced.length; g++) {
-      if (st.regPlaced[g] > tg.reg) return false;
-      if (st.regPlaced[g] + regUnk[g] < tg.reg) return false;
+      if (st.regPlaced[g] > tg.reg) return { kind: "overfull", scope: "region", unit: g, cells: allUnitPositions(st, "region", g), placed: st.regPlaced[g], needed: tg.reg };
+      if (st.regPlaced[g] + regUnk[g] < tg.reg) return { kind: "starved", scope: "region", unit: g, cells: allUnitPositions(st, "region", g), placed: st.regPlaced[g], needed: tg.reg, available: regUnk[g] };
     }
 
     // 3. seal completed units: remaining unknowns must be empty
@@ -173,7 +187,7 @@ function propagate(st: State, tg: Targets): boolean {
       if (need > 0) {
         const cells: number[] = [];
         for (let c = 0; c < n; c++) cells.push(idx(n, r, c));
-        if (!forceUnit(need, cells)) return false;
+        if (!forceUnit(need, cells)) return { kind: "no-placement", scope: "row", unit: r, cells: allUnitPositions(st, "row", r), needed: need };
       }
     }
     for (let c = 0; c < n; c++) {
@@ -181,7 +195,7 @@ function propagate(st: State, tg: Targets): boolean {
       if (need > 0) {
         const cells: number[] = [];
         for (let r = 0; r < n; r++) cells.push(idx(n, r, c));
-        if (!forceUnit(need, cells)) return false;
+        if (!forceUnit(need, cells)) return { kind: "no-placement", scope: "column", unit: c, cells: allUnitPositions(st, "column", c), needed: need };
       }
     }
     for (let g = 0; g < st.regPlaced.length; g++) {
@@ -189,11 +203,11 @@ function propagate(st: State, tg: Targets): boolean {
       if (need > 0) {
         const cells: number[] = [];
         for (let j = 0; j < n * n; j++) if (st.regionOf[j] === g) cells.push(j);
-        if (!forceUnit(need, cells)) return false;
+        if (!forceUnit(need, cells)) return { kind: "no-placement", scope: "region", unit: g, cells: allUnitPositions(st, "region", g), needed: need };
       }
     }
   }
-  return true;
+  return null;
 }
 
 /** All legal crown pairs for row r (cells must be unknown here). */
@@ -237,13 +251,25 @@ interface SearchCtx {
   limit: number;
   out: State[];
   exhausted: boolean;
+  failure: ContradictionWitness | null;
 }
 
 export type AssumptionResult = "solved" | "unsatisfiable" | "unknown";
+export interface ContradictionWitness {
+  kind: "adjacency" | "overfull" | "starved" | "no-placement" | "search";
+  scope: "row" | "column" | "region" | "neighbors" | "search";
+  unit?: number;
+  cells: string[];
+  placed?: number;
+  needed?: number;
+  available?: number;
+}
+
 export interface AssumptionDetails {
   status: AssumptionResult;
   /** Search nodes needed to prove the result; lower is easier to explain. */
   nodes: number;
+  witness: ContradictionWitness | null;
 }
 
 function search(st: State, ctx: SearchCtx): void {
@@ -252,7 +278,11 @@ function search(st: State, ctx: SearchCtx): void {
     ctx.exhausted = true;
     return;
   }
-  if (!propagate(st, ctx.tg)) return;
+  const contradiction = propagate(st, ctx.tg);
+  if (contradiction) {
+    if (!ctx.failure) ctx.failure = contradiction;
+    return;
+  }
 
   const n = st.n;
   // MRV: unfinished row with fewest legal pairs
@@ -261,7 +291,10 @@ function search(st: State, ctx: SearchCtx): void {
   for (let r = 0; r < n; r++) {
     if (st.rowPlaced[r] === ctx.tg.row) continue;
     const pairs = legalPairsForRow(st, ctx.tg, r);
-    if (pairs.length === 0) return; // dead end
+    if (pairs.length === 0) {
+      if (!ctx.failure) ctx.failure = { kind: "no-placement", scope: "row", unit: r, cells: allUnitPositions(st, "row", r), needed: ctx.tg.row - st.rowPlaced[r] };
+      return;
+    }
     if (bestPairs === null || pairs.length < bestPairs.length) {
       bestPairs = pairs;
       bestRow = r;
@@ -311,7 +344,7 @@ function searchPuzzle(
   puzzle: NormalizedPuzzle,
   assumption: { r: number; c: number; value: typeof EMPTY | typeof CROWN } | null,
   budget: number,
-): { found: boolean; exhausted: boolean; nodes: number } {
+): { found: boolean; exhausted: boolean; nodes: number; witness: ContradictionWitness | null } {
   const { state, tg } = buildInitialState(puzzle);
 
   // Apply forced empties first, then pre-placed crowns, matching solveAll.
@@ -323,7 +356,7 @@ function searchPuzzle(
   for (let r = 0; r < state.n; r++) {
     for (let c = 0; c < state.n; c++) {
       if (puzzle.initial[r][c] === CROWN && !tryPlaceCrown(state, tg, r, c)) {
-        return { found: false, exhausted: false, nodes: 0 };
+        return { found: false, exhausted: false, nodes: 0, witness: null };
       }
     }
   }
@@ -331,16 +364,22 @@ function searchPuzzle(
   if (assumption) {
     if (assumption.value === EMPTY) {
       const i = idx(state.n, assumption.r, assumption.c);
-      if (state.grid[i] === K) return { found: false, exhausted: false, nodes: 0 };
+      if (state.grid[i] === K) return { found: false, exhausted: false, nodes: 0, witness: null };
       if (state.grid[i] === U) state.grid[i] = E;
     } else if (!tryPlaceCrown(state, tg, assumption.r, assumption.c)) {
-      return { found: false, exhausted: false, nodes: 0 };
+      const cells = [pos(assumption.r, assumption.c)];
+      for (let dr = -1; dr <= 1; dr++) for (let dc = -1; dc <= 1; dc++) {
+        const nr = assumption.r + dr;
+        const nc = assumption.c + dc;
+        if ((dr !== 0 || dc !== 0) && nr >= 0 && nr < state.n && nc >= 0 && nc < state.n && state.grid[idx(state.n, nr, nc)] === K) cells.push(pos(nr, nc));
+      }
+      return { found: false, exhausted: false, nodes: 0, witness: { kind: "adjacency", scope: "neighbors", cells } };
     }
   }
 
-  const ctx: SearchCtx = { tg, nodes: 0, budget, limit: 1, out: [], exhausted: false };
+  const ctx: SearchCtx = { tg, nodes: 0, budget, limit: 1, out: [], exhausted: false, failure: null };
   search(state, ctx);
-  return { found: ctx.out.length > 0, exhausted: ctx.exhausted, nodes: ctx.nodes };
+  return { found: ctx.out.length > 0, exhausted: ctx.exhausted, nodes: ctx.nodes, witness: ctx.failure };
 }
 
 /** Test a temporary queen/empty assumption without changing the puzzle. */
@@ -355,6 +394,7 @@ export function testAssumptionDetailed(
   return {
     status: result.found ? "solved" : result.exhausted ? "unknown" : "unsatisfiable",
     nodes: result.nodes,
+    witness: result.witness,
   };
 }
 
@@ -405,7 +445,7 @@ export function solveAll(
       }
     }
   }
-  const ctx: SearchCtx = { tg, nodes: 0, budget, limit, out: [], exhausted: false };
+  const ctx: SearchCtx = { tg, nodes: 0, budget, limit, out: [], exhausted: false, failure: null };
   search(state, ctx);
   return ctx.out.map(stateToGrid);
 }

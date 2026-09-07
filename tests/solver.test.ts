@@ -2,7 +2,7 @@ import { describe, it } from "node:test";
 import assert from "node:assert/strict";
 import fs from "node:fs";
 import { validatePuzzleInput, validateSolution } from "../src/core/validator.js";
-import { solveAll, solvePuzzle, testAssumption } from "../src/core/solver.js";
+import { solveAll, solvePuzzle, testAssumption, testAssumptionDetailed } from "../src/core/solver.js";
 import { findHints } from "../src/core/hints.js";
 import { nextMark } from "../src/core/marks.js";
 import { validatePuzzleInput as checkInput } from "../src/core/validator.js";
@@ -283,6 +283,7 @@ describe("hints", () => {
     assert.ok(hint!.cells.includes("4,4"));
     assert.equal(hints[0].method, "adjacency");
     assert.equal(hints[0].difficulty, 0);
+    assert.match(hints[0].text, /R5C5/);
   });
 
   it("finds deductions that require combining several constraints", () => {
@@ -292,6 +293,8 @@ describe("hints", () => {
     const hints = findHints(checked.puzzle!);
     const complex = hints.find((hint) => hint.scope === "analysis");
     assert.ok(complex, "expected at least one solver-backed deduction");
+    assert.doesNotMatch(complex!.text, /Advanced deduction/);
+    assert.match(complex!.text, /no valid option|touch the queen/);
     for (let i = 1; i < hints.length; i++) {
       assert.ok(
         hints[i - 1].difficulty < hints[i].difficulty ||
@@ -302,6 +305,9 @@ describe("hints", () => {
     const [r, c] = complex!.decisiveCells[0].split(",").map(Number);
     const impossibleValue = complex!.kind === "cross" ? "C" : ".";
     assert.equal(testAssumption(checked.puzzle!, r, c, impossibleValue), "unsatisfiable");
+    const proof = testAssumptionDetailed(checked.puzzle!, r, c, impossibleValue);
+    assert.ok(proof.witness, "solver-backed hints should expose a contradiction witness");
+    assert.ok(proof.witness!.cells.length > 0);
   });
 });
 
