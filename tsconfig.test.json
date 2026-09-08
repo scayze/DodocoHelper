@@ -10,5 +10,5 @@
     "declaration": false,
     "sourceMap": false
   },
-  "include": ["src/core", "src/lib/extract.ts", "tests"]
+  "include": ["src/core", "src/lib/extract.ts", "src/games/minesweeper/logic.ts", "tests"]
 }

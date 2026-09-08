@@ -99,9 +99,14 @@ body {
   color: #0f1930;
 }
 
+/* Game tabs live in the old gold kicker slot: hover stays in the gold family. */
+nav[aria-label="Minigames"] .mode-btn:hover {
+  color: #7c6115;
+}
+
 .btn-gold:focus-visible,
 .btn-outline:focus-visible,
-#dropzone:focus-visible,
+.upload-card:focus-visible,
 #retry-button:focus-visible {
   outline: 2px solid #0f1930;
   outline-offset: 2px;
@@ -169,6 +174,44 @@ body {
   box-shadow: inset 0 0 0 3px #8b3f35, 0 0 0 3px rgba(255, 255, 255, 0.9);
 }
 
+/* Minesweeper owns its own grid (#mines-grid) and cells (.mine-cell built on
+   .board-cell). Creamy raised tiles on the slate frame; revealed cells sink
+   to the deeper parchment tone so numbers read clearly. */
+.mine-cell {
+  background: #faf5e6;
+  border: 1px solid rgba(163, 127, 28, 0.35);
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.6);
+  font-weight: 700;
+  font-size: clamp(0.85rem, 2.4vmin, 1.1rem);
+  line-height: 1;
+  color: #223154;
+  touch-action: manipulation;
+  user-select: none;
+  -webkit-user-select: none;
+  -webkit-touch-callout: none;
+}
+
+.mine-cell:hover {
+  background: #e9dcbd;
+}
+
+.mine-cell.is-revealed {
+  background: #e9dcbd;
+  border-color: transparent;
+  box-shadow: none;
+  cursor: default;
+}
+
+.mine-cell.is-flagged {
+  background: #e9dcbd;
+  color: #7c6115;
+}
+
+.mine-cell.is-mine {
+  background: rgba(139, 63, 53, 0.25);
+  color: #8b3f35;
+}
+
 @keyframes hint-pulse {
   from { filter: brightness(1); }
   to { filter: brightness(1.18); }
@@ -211,29 +254,36 @@ body {
   display: none;
 }
 
-/* Single shared stage width: dropzone, working, ready, error all align. */
-#dropzone-wrap,
-#stage-col {
+/* Shared stage width: upload actions, crowns stage, and every per-game stage align. */
+#upload-actions,
+#stage-col,
+#mines-col {
   width: min(92vw, 484px);
   margin-inline: auto;
 }
 
-/* Shrink the upload card to icon-only once a result exists so header + board fit 100dvh. */
-main.has-result #dropzone {
+/* Shrink both entry cards to icon-only once a result exists so header + board fit 100dvh. */
+main.has-result #upload-actions .upload-card {
   min-height: 0;
   padding-block: 0.66rem;
 }
 
-main.has-result #dropzone-wrap p {
+main.has-result #upload-actions .upload-card .upload-card-text {
   display: none;
 }
 
 #board-grid,
-#skeleton-grid {
+#skeleton-grid,
+#mines-grid {
   width: min(100%, 50dvh, 440px);
   margin-inline: auto;
   gap: clamp(3px, 0.88vmin, 7px);
   padding: clamp(7px, 1.32vmin, 11px);
+}
+
+#mines-grid {
+  border-radius: clamp(0.33rem, 1.1vmin, 0.5rem);
+  background: rgb(95, 112, 128);
 }
 
 #panel-ready,
@@ -245,7 +295,8 @@ main.has-result #dropzone-wrap p {
 
 /* Avoid layout jump between working -> ready. */
 #panel-working,
-#panel-ready {
+#panel-ready,
+#mines-panel {
   animation: panel-in 180ms ease-out;
 }
 

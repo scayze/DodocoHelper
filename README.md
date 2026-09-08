@@ -16,7 +16,8 @@ npm test         # solver core test suite (26 tests)
 
 ## How it works
 
-1. **Upload** a cropped screenshot of the board (PNG/JPEG/WebP).
+1. **Start** from a screenshot of the board (PNG/JPEG/WebP), paste/drag it,
+   or generate a fresh level with one click.
 2. The app detects the board's grid with a lightweight pure-TypeScript
    pipeline (`src/lib/extract.ts`): it classifies region colors, projects
    them onto both axes to find cell centers, and spots crowns / X marks.

@@ -20,34 +20,54 @@
     <div class="parchment-page">
       <main id="top" class="mx-auto flex h-full min-h-0 w-full max-w-6xl flex-1 flex-col justify-center px-[18px] sm:px-[26px]">
         <header class="shrink-0 pt-[22px] pb-[13px] text-center md:pt-[26px] md:pb-[18px]">
-          <p class="text-xs font-semibold uppercase tracking-[0.22em] text-gold-600">
-            Minigame companion for dummies like loor
-          </p>
+          <nav aria-label="Minigames" class="text-xs font-semibold uppercase tracking-[0.22em] text-gold-600">
+            <button id="game-crowns" type="button" class="mode-btn font-semibold text-gold-600">Crowns</button>
+            <span class="text-gold-600/50 select-none"> | </span>
+            <button id="game-minesweeper" type="button" class="mode-btn text-gold-600/50">Minesweeper</button>
+          </nav>
           <h1 class="font-display mt-[7px] text-[26px] leading-none tracking-tight text-balance text-night-900 md:text-[2.2rem]">
             Dodoco Helper
           </h1>
-          <div class="mt-[9px] inline-flex items-center gap-[6px] text-[13px]">
-            <button id="mode-solver" type="button" class="mode-btn font-semibold text-night-900">Solver</button>
-            <span class="text-night-700/40 select-none">|</span>
-            <button id="mode-play" type="button" class="mode-btn text-night-700/50">Play</button>
-          </div>
         </header>
 
         <section id="upload" class="flex shrink-0 justify-center pb-[13px]">
-          <div class="w-full" id="dropzone-wrap">
-            <div id="dropzone" role="button" tabindex="0" aria-label="Upload a board screenshot"
-              class="grid min-h-[163px] w-full cursor-pointer place-items-center rounded-2xl border-2 border-dashed border-night-700/30 bg-white/50 px-[26px] py-[26px] text-center text-night-900 shadow-[0_16px_50px_rgba(60,45,10,0.12)] transition-colors hover:border-gold-600">
-              <div>
-                <svg width="35" height="35" viewBox="0 0 256 256" fill="none" stroke="currentColor" stroke-width="16" class="mx-auto text-night-700/70" aria-hidden="true">
-                  <rect x="32" y="32" width="192" height="192" rx="16" />
-                  <circle cx="100" cy="100" r="16" fill="currentColor" stroke="none" />
-                  <path d="m32,192 60-60 40,40 32-32 60,60" stroke-linecap="round" stroke-linejoin="round" />
-                </svg>
-                <p id="dropzone-title" class="mt-[11px] text-[15px] font-semibold">Paste a screenshot, or click to browse</p>
-                <p class="mx-auto mt-[4px] max-w-[34ch] text-[15px] text-night-800/70">
-                  Any screenshots work, just keep the whole board visible.
-                </p>
-              </div>
+          <div class="w-full" id="upload-actions">
+            <div class="flex flex-row items-stretch gap-[9px]">
+              <button id="screenshot-button" type="button" aria-label="Start from a screenshot"
+                class="upload-card grid min-h-[163px] flex-1 cursor-pointer place-items-center rounded-2xl border-2 border-dashed border-night-700/30 bg-white/50 px-[18px] py-[26px] text-center text-night-900 shadow-[0_16px_50px_rgba(60,45,10,0.12)] transition-colors hover:border-gold-600">
+                <span>
+                  <svg width="35" height="35" viewBox="0 0 256 256" fill="none" stroke="currentColor" stroke-width="16" class="mx-auto text-night-700/70" aria-hidden="true">
+                    <rect x="32" y="32" width="192" height="192" rx="16" />
+                    <circle cx="100" cy="100" r="16" fill="currentColor" stroke="none" />
+                    <path d="m32,192 60-60 40,40 32-32 60,60" stroke-linecap="round" stroke-linejoin="round" />
+                  </svg>
+                  <span class="upload-card-text block">
+                    <span class="mt-[11px] block text-[15px] font-semibold">Start from a screenshot</span>
+                    <span class="mx-auto mt-[4px] block max-w-[34ch] text-[15px] text-night-800/70">
+                      Paste, drag, or click to browse.
+                    </span>
+                  </span>
+                </span>
+              </button>
+              <button id="generate-button" type="button" aria-label="Generate a level for me"
+                class="upload-card grid min-h-[163px] flex-1 cursor-pointer place-items-center rounded-2xl border-2 border-dashed border-night-700/30 bg-white/50 px-[18px] py-[26px] text-center text-night-900 shadow-[0_16px_50px_rgba(60,45,10,0.12)] transition-colors hover:border-gold-600">
+                <span>
+                  <svg width="35" height="35" viewBox="0 0 256 256" fill="none" stroke="currentColor" stroke-width="16" class="mx-auto text-night-700/70" aria-hidden="true">
+                    <rect x="32" y="32" width="192" height="192" rx="48" />
+                    <circle cx="88" cy="88" r="16" fill="currentColor" stroke="none" />
+                    <circle cx="168" cy="88" r="16" fill="currentColor" stroke="none" />
+                    <circle cx="128" cy="128" r="16" fill="currentColor" stroke="none" />
+                    <circle cx="88" cy="168" r="16" fill="currentColor" stroke="none" />
+                    <circle cx="168" cy="168" r="16" fill="currentColor" stroke="none" />
+                  </svg>
+                  <span class="upload-card-text block">
+                    <span class="mt-[11px] block text-[15px] font-semibold">Generate a level for me</span>
+                    <span class="mx-auto mt-[4px] block max-w-[34ch] text-[15px] text-night-800/70">
+                      A fresh random board, ready to play.
+                    </span>
+                  </span>
+                </span>
+              </button>
             </div>
             <input id="file-input" type="file" accept="image/png,image/jpeg,image/webp" class="sr-only" />
           </div>
@@ -95,6 +115,24 @@
                       <span id="hint-label">Hint</span>
                     </button>
                   </div>
+                </div>
+              </div>
+            </div>
+          </div>
+        </section>
+        <section id="mines" class="hidden grid min-h-0 w-full shrink-0 place-items-center py-[9px]">
+          <div class="mx-auto w-full" id="mines-col">
+            <div id="mines-panel" class="rounded-2xl border border-night-700/15 bg-white/60 p-[18px] text-night-900 shadow-[0_16px_50px_rgba(60,45,10,0.12)] backdrop-blur-sm" tabindex="-1">
+              <div class="flex flex-col gap-[13px]">
+                <figure class="min-w-0 flex-1">
+                  <div id="mines-grid" role="grid" aria-label="Minesweeper board" class="grid w-full"></div>
+                </figure>
+                <p id="mines-level" class="text-center text-[11px] font-bold uppercase tracking-[0.18em] text-gold-600" aria-hidden="true"></p>
+                <p id="mines-message" class="min-h-[24px] whitespace-pre-line text-center text-[15px] font-semibold leading-relaxed text-night-800/80" role="status" aria-live="polite"></p>
+                <div class="flex flex-row gap-[9px]">
+                  <button id="mines-new-button" type="button" class="btn-outline h-[48px] flex-1 rounded-full px-[22px] text-[15px] font-semibold">
+                    New
+                  </button>
                 </div>
               </div>
             </div>
