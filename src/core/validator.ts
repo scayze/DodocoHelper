@@ -129,9 +129,10 @@ export function validatePuzzleInput(raw: unknown): InputCheck {
     return { errors, puzzle: null };
   }
 
-  // palette: optional array of n "#RRGGBB"/"#RGB" strings (rendering only)
+  // palette: optional array of n "#RRGGBB"/"#RGB" strings (rendering only).
+  // Treat null the same as absent so a NormalizedPuzzle round-trips cleanly.
   let palette: string[] | null = null;
-  if (o.palette !== undefined) {
+  if (o.palette !== undefined && o.palette !== null) {
     if (!Array.isArray(o.palette) || (o.palette as unknown[]).length !== n) {
       errors.push(`"palette" must be an array of ${n} color strings when present`);
       return { errors, puzzle: null };

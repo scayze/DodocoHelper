@@ -90,6 +90,15 @@ body {
   transform: translateY(1px);
 }
 
+.mode-btn {
+  cursor: pointer;
+  transition: color 150ms ease;
+}
+
+.mode-btn:hover {
+  color: #0f1930;
+}
+
 .btn-gold:focus-visible,
 .btn-outline:focus-visible,
 #dropzone:focus-visible,

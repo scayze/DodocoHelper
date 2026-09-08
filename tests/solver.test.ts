@@ -6,6 +6,7 @@ import { solveAll, solvePuzzle, testAssumption, testAssumptionDetailed } from ".
 import { findHints } from "../src/core/hints.js";
 import { nextMark } from "../src/core/marks.js";
 import { validatePuzzleInput as checkInput } from "../src/core/validator.js";
+import { generatePuzzle } from "../src/core/generate.js";
 import type { NormalizedPuzzle } from "../src/core/types.js";
 
 // ---------------------------------------------------------------------------
@@ -316,5 +317,55 @@ describe("editable marks", () => {
     assert.equal(nextMark("?"), ".");
     assert.equal(nextMark("."), "C");
     assert.equal(nextMark("C"), "?");
+  });
+});
+
+// ---------------------------------------------------------------------------
+// Puzzle generation
+// ---------------------------------------------------------------------------
+
+describe("generatePuzzle", () => {
+  it("produces a valid solvable 9x9 puzzle", () => {
+    const puzzle = generatePuzzle(9, 2);
+    assert.equal(puzzle.size, 9);
+    assert.equal(puzzle.regions.length, 9);
+    assert.equal(puzzle.regions[0].length, 9);
+    assert.equal(puzzle.crownsPerRow, 2);
+    assert.equal(puzzle.initial.flat().every((c) => c === "?"), true);
+
+    const solutions = solveAll(puzzle, { limit: 1 });
+    assert.equal(solutions.length, 1);
+    assert.deepEqual(validateSolution(puzzle, solutions[0].grid), []);
+  });
+
+  it("generates different region layouts across calls", () => {
+    const results = new Set<string>();
+    // Run several times; at least 2 out of 10 should be unique
+    for (let i = 0; i < 10; i++) {
+      results.add(JSON.stringify(generatePuzzle(9, 2).regions));
+    }
+    assert.ok(results.size > 1, "should produce different layouts across calls");
+  });
+
+  it("round-trips through solvePuzzle (null palette is accepted)", () => {
+    const puzzle = generatePuzzle(9, 2);
+    assert.equal(puzzle.palette, null);
+    const result = solvePuzzle(puzzle);
+    assert.equal(result.status, "solved");
+    assert.ok(result.solution);
+  });
+
+  it("produces exactly N regions of size N", () => {
+    const puzzle = generatePuzzle(9, 2);
+    const counts = new Map<number, number>();
+    for (const row of puzzle.regions) {
+      for (const id of row) {
+        counts.set(id, (counts.get(id) ?? 0) + 1);
+      }
+    }
+    assert.equal(counts.size, 9);
+    for (const [, count] of counts) {
+      assert.equal(count, 9);
+    }
   });
 });

@@ -1,14 +1,16 @@
 import "./index.css";
 import { extractBoardFromFile } from "./lib/extract";
-import { buildBoardGrid, paintBoard, solutionCrowns } from "./lib/renderBoard";
+import { buildBoardGrid, paintBoard } from "./lib/renderBoard";
 import { solvePuzzle } from "./core/solver.js";
 import { findHints } from "./core/hints.js";
 import type { Hint } from "./core/hints.js";
 import { validatePuzzleInput } from "./core/validator.js";
 import type { NormalizedPuzzle, PuzzleInput } from "./core/types.js";
 import { nextMark } from "./core/marks.js";
+import { generatePuzzle } from "./core/generate.js";
 
 type Phase = "idle" | "working" | "ready" | "error";
+type AppMode = "solver" | "play";
 
 function el<T extends HTMLElement>(id: string): T {
   const node = document.getElementById(id);
@@ -29,11 +31,14 @@ const errorTitle = el("error-title");
 const errorHint = el("error-hint");
 const retryButton = el<HTMLButtonElement>("retry-button");
 const boardGrid = el("board-grid");
-const solveButton = el<HTMLButtonElement>("solve-button");
 const hintButton = el<HTMLButtonElement>("hint-button");
 const hintLabel = el("hint-label");
 const hintMessage = el<HTMLParagraphElement>("hint-message");
 const hintLevel = el<HTMLParagraphElement>("hint-level");
+const dropzoneWrap = el("dropzone-wrap");
+const undoButton = el<HTMLButtonElement>("undo-button");
+const modeSolver = el<HTMLButtonElement>("mode-solver");
+const modePlay = el<HTMLButtonElement>("mode-play");
 
 let puzzle: NormalizedPuzzle | null = null;
 let fullSolution: string[][] | null = null;
@@ -41,6 +46,15 @@ let isWorking = false;
 let availableHints: Hint[] = [];
 const shownHints = new Set<string>();
 let activeHint: Hint | null = null;
+let appMode: AppMode = "solver";
+let undoStack: Array<{ r: number; c: number; prev: string }> = [];
+let puzzleSolved = false;
+/**
+ * Whether availableHints holds fresh results for the current board.
+ * Hints are computed lazily on Hint click (findHints runs a solver search
+ * per unknown cell, far too slow to redo on every cell edit).
+ */
+let hintsComputed = false;
 
 function focusPanel(id: string): void {
   const node = document.getElementById(id);
@@ -57,6 +71,73 @@ function setPhase(phase: Phase): void {
   if (phase === "error") focusPanel("panel-error");
 }
 
+function setMode(mode: AppMode): void {
+  if (appMode === mode) return;
+  appMode = mode;
+  modeSolver.classList.toggle("font-semibold", mode === "solver");
+  modeSolver.classList.toggle("text-night-900", mode === "solver");
+  modeSolver.classList.toggle("text-night-700/50", mode !== "solver");
+  modePlay.classList.toggle("font-semibold", mode === "play");
+  modePlay.classList.toggle("text-night-900", mode === "play");
+  modePlay.classList.toggle("text-night-700/50", mode !== "play");
+
+  const isPlay = mode === "play";
+  dropzoneWrap.classList.toggle("hidden", isPlay);
+
+  if (isPlay) {
+    handleNewPuzzle();
+  } else {
+    resetToIdle();
+  }
+}
+
+function resetToIdle(): void {
+  puzzle = null;
+  fullSolution = null;
+  isWorking = false;
+  availableHints = [];
+  hintsComputed = false;
+  shownHints.clear();
+  activeHint = null;
+  undoStack = [];
+  puzzleSolved = false;
+  hintMessage.textContent = "";
+  hintLevel.textContent = "";
+  setPhase("idle");
+}
+
+function handleNewPuzzle(): void {
+  if (isWorking) return;
+  setPhase("working");
+  isWorking = true;
+  try {
+    const generated = generatePuzzle();
+    const solved = solvePuzzle(generated);
+    if (solved.status !== "solved" || !solved.solution) {
+      showError("Could not generate a puzzle.", solved.errors.join(" "));
+      return;
+    }
+    puzzle = generated;
+    fullSolution = solved.solution;
+    availableHints = [];
+    hintsComputed = false;
+    shownHints.clear();
+    activeHint = null;
+    undoStack = [];
+    puzzleSolved = false;
+    hintMessage.textContent = "";
+    hintLevel.textContent = "";
+    buildBoardGrid(boardGrid, generated);
+    paintBoard(boardGrid, generated, new Set(), null);
+    boardGrid.setAttribute("aria-label", describeBoard());
+    refreshHintButton();
+    isWorking = false;
+    setPhase("ready");
+  } catch (e) {
+    showError("Could not generate a puzzle.", e instanceof Error ? e.message : "Try again.");
+  }
+}
+
 function showError(title: string, hint: string): void {
   errorTitle.textContent = title;
   errorHint.textContent = hint;
@@ -65,17 +146,57 @@ function showError(title: string, hint: string): void {
 }
 
 function refreshHintButton(): void {
+  // In play mode, a solved puzzle turns the Hint button into a New puzzle button.
+  if (appMode === "play" && puzzleSolved) {
+    hintLabel.textContent = "New puzzle";
+    hintButton.disabled = false;
+    undoButton.disabled = true;
+    return;
+  }
+  hintLabel.textContent = "Hint";
   if (!fullSolution) {
-    hintLabel.textContent = "Hint";
     hintButton.disabled = true;
+    undoButton.disabled = undoStack.length === 0;
+    return;
+  }
+  // Hints are computed lazily: assume hints may exist until proven otherwise.
+  if (!hintsComputed) {
+    hintButton.disabled = false;
+    undoButton.disabled = undoStack.length === 0;
     return;
   }
   const left = availableHints.filter((hint) => !shownHints.has(hintId(hint))).length;
-  hintLabel.textContent = left > 0 ? `Hint (${left} left)` : "Hint";
   hintButton.disabled = left === 0;
+  undoButton.disabled = undoStack.length === 0;
   if (left === 0 && shownHints.size === 0 && availableHints.length === 0) {
     hintMessage.textContent = "No guaranteed deduction is available from the current board.";
   }
+}
+
+/** In play mode, check whether the player's crowns match the solution. */
+function checkPlaySolved(): void {
+  if (appMode !== "play" || !puzzle || !fullSolution || puzzleSolved) return;
+  for (let r = 0; r < puzzle.size; r++) {
+    for (let c = 0; c < puzzle.size; c++) {
+      const isCrown = fullSolution[r][c] === "C";
+      if (isCrown && puzzle.initial[r][c] !== "C") return;
+      if (!isCrown && puzzle.initial[r][c] === "C") return;
+    }
+  }
+  puzzleSolved = true;
+  activeHint = null;
+  hintMessage.textContent = "Solved.";
+  hintLevel.textContent = "";
+  paintBoard(boardGrid, puzzle, new Set(), null, puzzle.initial);
+  boardGrid.setAttribute("aria-label", describeBoard());
+  refreshHintButton();
+}
+
+function undo(): void {
+  if (!puzzle || undoStack.length === 0 || undoButton.disabled) return;
+  const last = undoStack.pop()!;
+  puzzle.initial[last.r][last.c] = last.prev;
+  recomputeEditedBoard();
 }
 
 function hintId(hint: Hint): string {
@@ -104,13 +225,14 @@ function runPuzzle(raw: PuzzleInput): void {
   }
   puzzle = parsed;
   fullSolution = solved.solution;
-  availableHints = findHints(parsed);
+  availableHints = [];
+  hintsComputed = false;
   shownHints.clear();
   activeHint = null;
+  undoStack = [];
+  puzzleSolved = false;
   hintMessage.textContent = "";
   hintLevel.textContent = "";
-  solveButton.disabled = false;
-  solveButton.textContent = "Solve";
   buildBoardGrid(boardGrid, parsed);
   paintBoard(boardGrid, parsed, new Set(), null);
   boardGrid.setAttribute("aria-label", describeBoard());
@@ -123,13 +245,14 @@ function recomputeEditedBoard(): void {
   if (!puzzle) return;
   const solved = solvePuzzle(puzzle);
   fullSolution = solved.status === "solved" ? solved.solution : null;
-  availableHints = fullSolution ? findHints(puzzle) : [];
+  // Invalidate the hint cache; hints are recomputed lazily on Hint click
+  // because findHints runs a solver search per unknown cell.
+  availableHints = [];
+  hintsComputed = false;
   shownHints.clear();
   activeHint = null;
   paintBoard(boardGrid, puzzle, new Set(), null, puzzle.initial);
   boardGrid.setAttribute("aria-label", describeBoard());
-  solveButton.disabled = !fullSolution;
-  solveButton.textContent = fullSolution ? "Solve" : "No solution";
   if (fullSolution) {
     hintMessage.textContent = "";
     hintLevel.textContent = "";
@@ -142,18 +265,51 @@ function recomputeEditedBoard(): void {
 
 function editCell(cell: HTMLElement): void {
   if (!puzzle) return;
+  if (appMode === "play" && puzzleSolved) return;
   const r = Number(cell.dataset.row);
   const c = Number(cell.dataset.col);
   if (!Number.isInteger(r) || !Number.isInteger(c) || r < 0 || c < 0 || r >= puzzle.size || c >= puzzle.size) return;
+  undoStack.push({ r, c, prev: puzzle.initial[r][c] });
   puzzle.initial[r][c] = nextMark(puzzle.initial[r][c]);
   recomputeEditedBoard();
+  checkPlaySolved();
   cell.focus({ preventScroll: true });
 }
 
-function revealHint(): void {
+async function onHintButton(): Promise<void> {
+  if (appMode === "play" && puzzleSolved) {
+    handleNewPuzzle();
+    return;
+  }
+  await revealHint();
+}
+
+async function revealHint(): Promise<void> {
   if (!puzzle || !fullSolution || hintButton.disabled) return;
+  if (!hintsComputed) {
+    hintButton.disabled = true;
+    hintMessage.textContent = "Thinking…";
+    // Yield so the message paints before the blocking search runs.
+    await new Promise((resolve) => setTimeout(resolve, 0));
+    // The board may have changed while yielding (mode switch, new puzzle).
+    if (!puzzle || !fullSolution) {
+      refreshHintButton();
+      return;
+    }
+    availableHints = findHints(puzzle);
+    hintsComputed = true;
+    if (availableHints.length === 0) {
+      hintMessage.textContent = "No guaranteed deduction is available from the current board.";
+      refreshHintButton();
+      return;
+    }
+    hintMessage.textContent = "";
+  }
   const next = availableHints.find((hint) => !shownHints.has(hintId(hint)));
-  if (!next) return;
+  if (!next) {
+    refreshHintButton();
+    return;
+  }
   activeHint = next;
   shownHints.add(hintId(next));
   hintMessage.textContent = next.text;
@@ -161,18 +317,6 @@ function revealHint(): void {
   paintBoard(boardGrid, puzzle, new Set(), activeHint);
   boardGrid.setAttribute("aria-label", describeBoard());
   refreshHintButton();
-}
-
-function revealSolution(): void {
-  if (!puzzle || !fullSolution || solveButton.disabled) return;
-  activeHint = null;
-  hintMessage.textContent = "";
-  hintLevel.textContent = "";
-  paintBoard(boardGrid, puzzle, solutionCrowns(fullSolution), null, puzzle.initial);
-  boardGrid.setAttribute("aria-label", `Solved puzzle board, ${puzzle.size} by ${puzzle.size}`);
-  solveButton.disabled = true;
-  solveButton.textContent = "Solved";
-  hintButton.disabled = true;
 }
 
 async function handleFile(file: File): Promise<void> {
@@ -248,8 +392,10 @@ document.addEventListener("paste", (e) => {
   void handleFile(file);
 });
 retryButton.addEventListener("click", () => fileInput.click());
-solveButton.addEventListener("click", revealSolution);
-hintButton.addEventListener("click", revealHint);
+hintButton.addEventListener("click", onHintButton);
+undoButton.addEventListener("click", undo);
+modeSolver.addEventListener("click", () => setMode("solver"));
+modePlay.addEventListener("click", () => setMode("play"));
 boardGrid.addEventListener("click", (e) => {
   const cell = (e.target as HTMLElement).closest<HTMLElement>("[data-row][data-col]");
   if (cell && boardGrid.contains(cell)) editCell(cell);

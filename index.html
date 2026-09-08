@@ -26,6 +26,11 @@
           <h1 class="font-display mt-[7px] text-[26px] leading-none tracking-tight text-balance text-night-900 md:text-[2.2rem]">
             Dodoco Helper
           </h1>
+          <div class="mt-[9px] inline-flex items-center gap-[6px] text-[13px]">
+            <button id="mode-solver" type="button" class="mode-btn font-semibold text-night-900">Solver</button>
+            <span class="text-night-700/40 select-none">|</span>
+            <button id="mode-play" type="button" class="mode-btn text-night-700/50">Play</button>
+          </div>
         </header>
 
         <section id="upload" class="flex shrink-0 justify-center pb-[13px]">
@@ -83,8 +88,8 @@
                   <p id="hint-level" class="text-center text-[11px] font-bold uppercase tracking-[0.18em] text-gold-600" aria-hidden="true"></p>
                   <p id="hint-message" class="min-h-[24px] whitespace-pre-line text-center text-[15px] font-semibold leading-relaxed text-night-800/80" role="status" aria-live="polite"></p>
                   <div class="flex flex-row gap-[9px]">
-                    <button id="solve-button" type="button" class="btn-gold h-[48px] flex-1 rounded-full px-[22px] text-[15px] font-semibold disabled:cursor-not-allowed disabled:opacity-50">
-                      Solve
+                    <button id="undo-button" type="button" class="btn-outline h-[48px] flex-1 rounded-full px-[22px] text-[15px] font-semibold disabled:cursor-not-allowed disabled:opacity-50" disabled>
+                      Undo
                     </button>
                     <button id="hint-button" type="button" class="btn-outline h-[48px] flex-1 rounded-full px-[22px] text-[15px] font-semibold disabled:cursor-not-allowed disabled:opacity-50">
                       <span id="hint-label">Hint</span>
