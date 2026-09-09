@@ -99,19 +99,19 @@ body {
   color: #0f1930;
 }
 
-/* Game tabs live in the old gold kicker slot: hover stays in the gold family. */
-nav[aria-label="Minigames"] .mode-btn:hover {
+/* Home + game tabs live in the old gold kicker slot: hover stays in the gold family. */
+nav[aria-label="Primary"] .mode-btn:hover {
   color: #7c6115;
 }
 
-/* Icon-only game tabs: normalize Lucide (24-grid, stroke) and Phosphor (256-grid, fill) to one visual size. */
-nav[aria-label="Minigames"] .mode-btn {
+/* Icon-only tabs: normalize Lucide (24-grid, stroke) and Phosphor (256-grid, fill) to one visual size. */
+nav[aria-label="Primary"] .mode-btn {
   padding: 4px;
   border-radius: 9999px;
   line-height: 0;
 }
 
-nav[aria-label="Minigames"] .mode-btn svg {
+nav[aria-label="Primary"] .mode-btn svg {
   width: 22px;
   height: 22px;
   display: block;
@@ -296,9 +296,10 @@ nav[aria-label="Minigames"] .mode-btn svg {
   display: none;
 }
 
-/* Shared stage width: upload actions, crowns stage, and every per-game stage align. */
+/* Shared stage width: upload actions, crowns stage, home, and every per-game stage align. */
 #upload-actions,
 #stage-col,
+#home-col,
 #mines-col,
 #seasons-col,
 #tents-col {

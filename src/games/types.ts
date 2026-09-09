@@ -2,6 +2,9 @@
 
 export type GameId = "crowns" | "minesweeper" | "seasons" | "tents";
 
+/** Every top-level view the shell can show: the Home landing view plus each minigame. */
+export type ViewId = "home" | GameId;
+
 /**
  * Each game owns its own DOM subtree (own grid/container, own status and
  * buttons). Games must never reach into another game's elements; the shell
