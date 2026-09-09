@@ -22,7 +22,7 @@ const GAME_TITLES: Record<GameId, string> = {
   crowns: "Crowns",
   minesweeper: "Minesweeper",
   seasons: "Seasons",
-  tents: "Tents",
+  tents: "Tents & Trees",
 };
 
 const gameTitle = el<HTMLElement>("game-title");
