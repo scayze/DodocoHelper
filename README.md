@@ -37,12 +37,12 @@ src/main.ts                 # shell tab-router (tabs driven by games/registry.ts
 src/index.css               # Tailwind v4 theme
 src/games/                  # one folder per minigame: logic + solver + generator + controller
 src/games/crowns/           # solver/validator/hints/generator + extract (screenshot) + view + controller
+src/games/crowns/fixtures/  # ScreenshotFixtures (gating) + PhoneFixtures (best-effort)
 src/games/minesweeper/      # logic + controller
 src/games/seasons/          # logic + solver + generator + icons + controller
 src/games/tents/            # logic + solver + generator + controller
 src/games/registry.ts       # minigame list consumed by the shell
 tests/                      # node:test suite (mirrors src/games/*)
-test_fixtures/              # ScreenshotFixtures (gating) + PhoneFixtures (best-effort)
 ```
 
 ## Puzzle JSON schema
@@ -62,4 +62,4 @@ test_fixtures/              # ScreenshotFixtures (gating) + PhoneFixtures (best-
 - `regions`: N×N ids `0..N-1`, exactly N distinct regions (any shape).
 - `initial`: `"?"` unknown, `"C"` crown, `"."`/`"X"` forced empty.
 - `palette`: optional per-region render colors.
-- Sample boards live in `test_fixtures/`.
+- Sample boards live in `src/games/crowns/fixtures/`.

@@ -14,7 +14,7 @@ import { extractBoardFromRGBA, relabelMatch } from "../dist-test/src/games/crown
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const ROOT = path.resolve(__dirname, "..");
-const FIXTURES = path.join(ROOT, "test_fixtures");
+const FIXTURES = path.join(ROOT, "src", "games", "crowns", "fixtures");
 
 function decodeImage(p) {
   const ext = path.extname(p).toLowerCase();

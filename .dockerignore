@@ -8,7 +8,7 @@ build/
 
 # Tests / fixtures
 tests/
-test_fixtures/
+src/games/crowns/fixtures/
 
 # Logs
 logs/

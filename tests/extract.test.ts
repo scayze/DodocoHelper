@@ -37,7 +37,7 @@ const FIXTURES = {
 describe("extractBoardFromRGBA", () => {
   for (const name of FIXTURES.screenshot) {
     it(`extracts the correct region partition from screenshot ${name}`, async () => {
-      const p = path.join("test_fixtures", "ScreenshotFixtures", name);
+      const p = path.join("src", "games", "crowns", "fixtures", "ScreenshotFixtures", name);
       const img = decodeImage(p);
       const expected = JSON.parse(fs.readFileSync(expectedPath(p), "utf8")) as {
         size: number;
@@ -55,7 +55,7 @@ describe("extractBoardFromRGBA", () => {
   }
 
   it("produces a canonically-labeled valid region grid for a screenshot", async () => {
-    const p = path.join("test_fixtures", "ScreenshotFixtures", "image.png");
+    const p = path.join("src", "games", "crowns", "fixtures", "ScreenshotFixtures", "image.png");
     const img = decodeImage(p);
     const puzzle = await extractBoardFromRGBA(img.data, img.w, img.h);
     assert.ok(puzzle);
