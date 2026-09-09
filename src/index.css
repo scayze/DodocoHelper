@@ -133,15 +133,28 @@ nav[aria-label="Minigames"] .mode-btn:hover {
   box-shadow: inset 0 0 0 3px #2e2a24, 0 0 0 3px #faf5e6;
 }
 
-.board-cell img.board-dodoco {
+/* Crowns slots stay transparent; the region color lives on .crown-chip so the
+   slot box never changes. Radius inherits the original .board-cell rounding,
+   so tiles keep their exact pre-gapless shape and size. */
+.crown-chip {
+  position: relative;
+  width: 100%;
+  height: 100%;
+  display: grid;
+  place-items: center;
+  overflow: hidden;
+  border-radius: inherit;
+}
+
+.crown-chip img.board-dodoco {
   width: 88%;
   height: 88%;
   object-fit: contain;
   animation: dodoco-pop 200ms cubic-bezier(0.16, 1, 0.3, 1);
 }
 
-.board-cell.has-x::before,
-.board-cell.has-x::after {
+.board-cell.has-x .crown-chip::before,
+.board-cell.has-x .crown-chip::after {
   content: "";
   position: absolute;
   left: 50%;
@@ -152,32 +165,48 @@ nav[aria-label="Minigames"] .mode-btn:hover {
   background: rgba(255, 255, 255, 0.92);
 }
 
-.board-cell.has-x::before {
+.board-cell.has-x .crown-chip::before {
   transform: translate(-50%, -50%) rotate(45deg);
 }
 
-.board-cell.has-x::after {
+.board-cell.has-x .crown-chip::after {
   transform: translate(-50%, -50%) rotate(-45deg);
 }
 
-.board-cell.hint-context {
+.board-cell.hint-context .crown-chip {
   box-shadow: inset 0 0 0 3px rgba(255, 255, 255, 0.72);
 }
 
-.board-cell.hint-decisive {
-  z-index: 1;
+.board-cell.hint-decisive .crown-chip {
   box-shadow: inset 0 0 0 3px #2e2a24, 0 0 0 3px rgba(255, 255, 255, 0.9);
   animation: hint-pulse 900ms ease-in-out infinite alternate;
 }
 
-.board-cell.hint-cross.hint-decisive {
+.board-cell.hint-cross.hint-decisive .crown-chip {
   box-shadow: inset 0 0 0 3px #8b3f35, 0 0 0 3px rgba(255, 255, 255, 0.9);
 }
 
 /* Minesweeper owns its own grid (#mines-grid) and cells (.mine-cell built on
-   .board-cell). Creamy raised tiles on the slate frame; revealed cells sink
-   to the deeper parchment tone so numbers read clearly. */
+   .board-cell). The button is a transparent slot (never changes, so marks
+   can't resize it); the creamy raised tile lives on .mine-chip. Revealed
+   cells sink to the deeper parchment tone so numbers read clearly. */
 .mine-cell {
+  background: transparent;
+  border: 0;
+  padding: clamp(1.5px, 0.44vmin, 3.5px);
+  touch-action: manipulation;
+  user-select: none;
+  -webkit-user-select: none;
+  -webkit-touch-callout: none;
+}
+
+.mine-chip {
+  width: 100%;
+  height: 100%;
+  display: grid;
+  place-items: center;
+  overflow: hidden;
+  border-radius: inherit;
   background: #faf5e6;
   border: 1px solid rgba(163, 127, 28, 0.35);
   box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.6);
@@ -185,29 +214,28 @@ nav[aria-label="Minigames"] .mode-btn:hover {
   font-size: clamp(0.85rem, 2.4vmin, 1.1rem);
   line-height: 1;
   color: #223154;
-  touch-action: manipulation;
-  user-select: none;
-  -webkit-user-select: none;
-  -webkit-touch-callout: none;
 }
 
-.mine-cell:hover {
+.mine-cell:hover .mine-chip {
   background: #e9dcbd;
 }
 
 .mine-cell.is-revealed {
-  background: #e9dcbd;
-  border-color: transparent;
-  box-shadow: none;
   cursor: default;
 }
 
-.mine-cell.is-flagged {
+.mine-cell.is-revealed .mine-chip {
+  background: #e9dcbd;
+  border-color: transparent;
+  box-shadow: none;
+}
+
+.mine-cell.is-flagged .mine-chip {
   background: #e9dcbd;
   color: #7c6115;
 }
 
-.mine-cell.is-mine {
+.mine-cell.is-mine .mine-chip {
   background: rgba(139, 63, 53, 0.25);
   color: #8b3f35;
 }
@@ -274,15 +302,30 @@ main.has-result #upload-actions .upload-card .upload-card-text {
   display: none;
 }
 
-#board-grid,
-#skeleton-grid,
-#mines-grid,
-#wardrobe-grid,
-#tents-grid {
+#skeleton-grid {
   width: min(100%, 50dvh, 440px);
   margin-inline: auto;
   gap: clamp(3px, 0.88vmin, 7px);
   padding: clamp(7px, 1.32vmin, 11px);
+}
+
+/* Gapless boards (Crowns, Minesweeper, Tents): same treatment as Wardrobe.
+   Cells cover the grid edge-to-edge so gutters never swallow hover/clicks;
+   the visual gutters are transparent cell padding showing this background.
+   Half-gutter padding keeps tile and gutter sizes identical to a gap layout:
+   tile = track - g, gutter = g/2 + g/2, outer frame = p - g/2 + g/2. */
+#board-grid,
+#mines-grid,
+#tents-grid {
+  width: min(100%, 50dvh, 440px);
+  margin-inline: auto;
+  gap: 0;
+  padding: calc(clamp(7px, 1.32vmin, 11px) - clamp(1.5px, 0.44vmin, 3.5px));
+}
+
+#board-grid {
+  border-radius: clamp(0.33rem, 1.1vmin, 0.5rem);
+  background: rgb(95, 112, 128);
 }
 
 #mines-grid {
@@ -295,33 +338,58 @@ main.has-result #upload-actions .upload-card .upload-card-text {
   background: rgb(95, 112, 128);
 }
 
+/* Crowns slots stay transparent with half-gutter padding (Wardrobe pattern):
+   cells cover the grid edge-to-edge while the slate background shows through
+   as gutters; the region tile lives on .crown-chip. */
+#board-grid .board-cell {
+  background: transparent;
+  border: 0;
+  padding: clamp(1.5px, 0.44vmin, 3.5px);
+}
+
 /* Tents and Trees owns its own grid (#tents-grid). Body cells build on
-   .board-cell; the first row/column are count headers, not buttons. */
+   .board-cell; the first row/column are count headers, not buttons. Buttons
+   are transparent slots; tiles live on .tent-chip so marks never resize them. */
 .tent-cell {
-  background: #faf5e6;
-  border: 1px solid rgba(163, 127, 28, 0.35);
-  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.6);
-  font-size: clamp(1rem, 3vmin, 1.4rem);
-  line-height: 1;
+  background: transparent;
+  border: 0;
+  padding: clamp(1.5px, 0.44vmin, 3.5px);
   touch-action: manipulation;
   user-select: none;
   -webkit-user-select: none;
 }
 
-.tent-cell:hover {
+.tent-chip {
+  width: 100%;
+  height: 100%;
+  display: grid;
+  place-items: center;
+  overflow: hidden;
+  border-radius: inherit;
+  background: #faf5e6;
+  border: 1px solid rgba(163, 127, 28, 0.35);
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.6);
+  font-size: clamp(1rem, 3vmin, 1.4rem);
+  line-height: 1;
+}
+
+.tent-cell:hover .tent-chip {
   background: #e9dcbd;
 }
 
 .tent-cell.is-tree {
-  background: #cfe0c3;
   cursor: default;
 }
 
-.tent-cell.is-tent {
+.tent-cell.is-tree .tent-chip {
+  background: #cfe0c3;
+}
+
+.tent-cell.is-tent .tent-chip {
   background: #f0dfae;
 }
 
-.tent-cell.is-grass {
+.tent-cell.is-grass .tent-chip {
   background: #e9dcbd;
   opacity: 0.55;
 }
@@ -335,10 +403,18 @@ main.has-result #upload-actions .upload-card .upload-card-text {
   color: #faf5e6;
   user-select: none;
   -webkit-user-select: none;
+  /* Headers share the gutter so the whole tents grid stays gapless. */
+  background: transparent;
+  border: 0;
+  padding: clamp(1.5px, 0.44vmin, 3.5px);
 }
 
 /* Count headers sit in their own darker squares fitting the slate frame. */
-.count-head:not(.is-corner) {
+.count-head:not(.is-corner) .count-chip {
+  width: 100%;
+  height: 100%;
+  display: grid;
+  place-items: center;
   border-radius: clamp(0.33rem, 1.1vmin, 0.5rem);
   background: rgba(15, 25, 48, 0.4);
 }
@@ -467,11 +543,11 @@ main.has-result #upload-actions .upload-card .upload-card-text {
     opacity: 0.5;
   }
 
-  .board-cell img.board-dodoco {
+  .crown-chip img.board-dodoco {
     animation: none;
   }
 
-  .board-cell.hint-decisive {
+  .board-cell.hint-decisive .crown-chip {
     animation: none;
   }
 

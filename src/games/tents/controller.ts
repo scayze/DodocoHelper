@@ -33,19 +33,20 @@ export function createTentsGame(): GameInstance {
     for (let r = -1; r < n; r++) {
       for (let c = -1; c < n; c++) {
         const node = grid.children[(r + 1) * (n + 1) + (c + 1)] as HTMLElement | undefined;
-        if (!node) continue;
+        const chip = node?.firstElementChild as HTMLElement | null;
+        if (!node || !chip) continue;
         if (r === -1 && c === -1) continue;
         if (r === -1) {
           // Countdown of tents still to place; negative means overfilled.
           const left = board.colCounts[c] - tentsInCol(board, c);
-          node.textContent = String(left);
+          chip.textContent = String(left);
           node.classList.toggle("is-ok", left === 0);
           node.classList.toggle("is-over", left < 0);
           continue;
         }
         if (c === -1) {
           const left = board.rowCounts[r] - tentsInRow(board, r);
-          node.textContent = String(left);
+          chip.textContent = String(left);
           node.classList.toggle("is-ok", left === 0);
           node.classList.toggle("is-over", left < 0);
           continue;
@@ -55,7 +56,7 @@ export function createTentsGame(): GameInstance {
         node.classList.toggle("is-tree", isTree);
         node.classList.toggle("is-tent", !isTree && mark === "tent");
         node.classList.toggle("is-grass", !isTree && mark === "grass");
-        node.textContent = isTree ? "🌲" : mark === "tent" ? "⛺" : "";
+        chip.textContent = isTree ? "🌲" : mark === "tent" ? "⛺" : "";
         node.setAttribute(
           "aria-label",
           `Row ${r + 1}, column ${c + 1}, ${isTree ? "tree" : mark}`,
@@ -86,6 +87,9 @@ export function createTentsGame(): GameInstance {
           const head = document.createElement("div");
           head.className = "count-head" + (r === -1 && c === -1 ? " is-corner" : "");
           head.setAttribute("aria-hidden", "true");
+          const chip = document.createElement("div");
+          chip.className = "count-chip";
+          head.appendChild(chip);
           frag.appendChild(head);
         } else {
           const cell = document.createElement("button");
@@ -94,6 +98,10 @@ export function createTentsGame(): GameInstance {
           cell.dataset.row = String(r);
           cell.dataset.col = String(c);
           cell.setAttribute("role", "gridcell");
+          const chip = document.createElement("div");
+          chip.className = "tent-chip";
+          chip.setAttribute("aria-hidden", "true");
+          cell.appendChild(chip);
           frag.appendChild(cell);
         }
       }

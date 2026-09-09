@@ -31,7 +31,9 @@ export function cssFor(puzzle: NormalizedPuzzle, region: number): string {
   return `rgb(${p[0]}, ${p[1]}, ${p[2]})`;
 }
 
-/** Build the board grid once per puzzle: one div per cell in region colors. */
+/** Build the board grid once per puzzle: one transparent slot per cell with the
+ * region color carried by an inner chip, so gutter clicks still hit the cell
+ * while tiles keep their exact shape and size. */
 export function buildBoardGrid(container: HTMLElement, puzzle: NormalizedPuzzle): void {
   container.style.gridTemplateColumns = `repeat(${puzzle.size}, minmax(0, 1fr))`;
   container.replaceChildren();
@@ -44,7 +46,10 @@ export function buildBoardGrid(container: HTMLElement, puzzle: NormalizedPuzzle)
       cell.dataset.col = String(c);
       cell.setAttribute("role", "gridcell");
       cell.tabIndex = 0;
-      cell.style.backgroundColor = cssFor(puzzle, puzzle.regions[r][c]);
+      const chip = document.createElement("div");
+      chip.className = "crown-chip";
+      chip.style.backgroundColor = cssFor(puzzle, puzzle.regions[r][c]);
+      cell.appendChild(chip);
       frag.appendChild(cell);
     }
   }
@@ -77,7 +82,8 @@ export function paintBoard(
   for (let r = 0; r < n; r++) {
     for (let c = 0; c < n; c++) {
       const cell = container.children[r * n + c] as HTMLElement | undefined;
-      if (!cell) continue;
+      const chip = cell?.firstElementChild as HTMLElement | null;
+      if (!cell || !chip) continue;
       const mark = marks[r][c];
       const given = mark === "C";
       const crowned = given || crowns.has(`${r},${c}`);
@@ -92,7 +98,7 @@ export function paintBoard(
       const want = crowned ? (given ? "g" : "c") : "";
       if (cell.dataset.k !== want) {
         cell.dataset.k = want;
-        cell.innerHTML = crowned ? dodocoImg() : "";
+        chip.innerHTML = crowned ? dodocoImg() : "";
       }
     }
   }

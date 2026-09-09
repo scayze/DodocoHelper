@@ -61,7 +61,8 @@ export function createMinesweeperGame(): GameInstance {
     for (let r = 0; r < n; r++) {
       for (let c = 0; c < n; c++) {
         const cell = grid.children[r * n + c] as HTMLElement | undefined;
-        if (!cell) continue;
+        const chip = cell?.firstElementChild as HTMLElement | null;
+        if (!cell || !chip) continue;
         const st = board.state[r][c];
         const isMine = board.mines[r][c];
         const revealed = st === "revealed";
@@ -78,17 +79,17 @@ export function createMinesweeperGame(): GameInstance {
           }`,
         );
         if (revealed && !isMine && count > 0) {
-          cell.textContent = String(count);
-          cell.style.color = NUMBER_COLORS[count] ?? "#223154";
+          chip.textContent = String(count);
+          chip.style.color = NUMBER_COLORS[count] ?? "#223154";
         } else if (revealed && isMine) {
-          cell.textContent = "✸";
-          cell.style.color = "";
+          chip.textContent = "✸";
+          chip.style.color = "";
         } else if (flagged) {
-          cell.textContent = "⚑";
-          cell.style.color = "";
+          chip.textContent = "⚑";
+          chip.style.color = "";
         } else {
-          cell.textContent = "";
-          cell.style.color = "";
+          chip.textContent = "";
+          chip.style.color = "";
         }
       }
     }
@@ -123,6 +124,10 @@ export function createMinesweeperGame(): GameInstance {
         cell.dataset.row = String(r);
         cell.dataset.col = String(c);
         cell.setAttribute("role", "gridcell");
+        const chip = document.createElement("div");
+        chip.className = "mine-chip";
+        chip.setAttribute("aria-hidden", "true");
+        cell.appendChild(chip);
         frag.appendChild(cell);
       }
     }
