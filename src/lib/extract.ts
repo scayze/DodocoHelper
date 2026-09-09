@@ -6,7 +6,7 @@ export interface ExtractResult {
   puzzle: PuzzleInput | null;
 }
 
-/** The 10 game region colors as [r,g,b]. */
+/** The 11 game region colors as [r,g,b]. */
 const PALETTE_RGB: Array<[number, number, number]> = [
   [116, 198, 196],
   [135, 161, 199],
@@ -18,6 +18,7 @@ const PALETTE_RGB: Array<[number, number, number]> = [
   [233, 203, 115],
   [141, 204, 236],
   [254, 190, 144],
+  [254, 183, 241],
 ];
 
 // ---------------------------------------------------------------------------
@@ -469,10 +470,10 @@ export function analyze(data: Uint8ClampedArray, w: number, h: number): PuzzleIn
     // the same N/pitch with a density-maximizing lattice (robust to
     // header/footer contamination like image56).
     const P = Math.max(20, cols.step);
-    if (cols.centers.length >= 7 && cols.centers.length <= 10) {
+    if (cols.centers.length >= 7 && cols.centers.length <= 11) {
       rows = latticeOffset(rp, cols.centers.length, P);
       didRefit = true;
-    } else if (rows.centers.length >= 7 && rows.centers.length <= 10) {
+    } else if (rows.centers.length >= 7 && rows.centers.length <= 11) {
       cols = latticeOffset(cp, rows.centers.length, P);
       didRefit = true;
     }
