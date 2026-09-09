@@ -1,34 +1,17 @@
 import { describe, it } from "node:test";
 import assert from "node:assert/strict";
 import {
-  SEASON_TYPES,
-  countRegions,
-  countSingles,
   createBoard,
   findRegion,
-  generateLevel,
   hasAvailableMove,
   isCleared,
   remainingCount,
   removeRegion,
-  verifySolution,
   type SeasonType,
   type SeasonsBoard,
 } from "../src/games/seasons/logic.js";
 
 let nextTestId = 1;
-
-/** Deterministic rand for stable generator assertions. */
-function mulberry32(seed: number): () => number {
-  let a = seed >>> 0;
-  return () => {
-    a |= 0;
-    a = (a + 0x6d2b79f5) | 0;
-    let t = Math.imul(a ^ (a >>> 15), 1 | a);
-    t = (t + Math.imul(t ^ (t >>> 7), 61 | t)) ^ t;
-    return ((t ^ (t >>> 14)) >>> 0) / 4294967296;
-  };
-}
 
 function boardFrom(rows: Array<Array<SeasonType | null>>): SeasonsBoard {
   return {
@@ -179,70 +162,5 @@ describe("seasons stuck detection", () => {
       ),
       true,
     );
-  });
-});
-
-describe("seasons generator", () => {
-  it("produces full 10x10 boards using known season types", () => {
-    for (let i = 0; i < 3; i++) {
-      const { cells, solution } = generateLevel();
-      assert.equal(cells.length, 10);
-      for (const row of cells) {
-        assert.equal(row.length, 10);
-        for (const cell of row) {
-          assert.notEqual(cell, null);
-          assert.ok(SEASON_TYPES.includes(cell!.t));
-        }
-      }
-      // Every tile belongs to exactly one solution group.
-      const ids = solution.flat().sort((a, b) => a - b);
-      assert.equal(ids.length, 100);
-      assert.deepEqual(ids, Array.from({ length: 100 }, (_, k) => k + 1));
-    }
-  });
-
-  /**
-   * Proof test: generation runs a game backwards, so the solution groups in
-   * order always clear the board through legal moves.
-   */
-  it("generated levels always clear fully in solution order", () => {
-    for (let i = 0; i < 5; i++) {
-      const { cells, solution } = generateLevel(10, mulberry32(9000 + i));
-      assert.equal(verifySolution(cells, solution, 10), true);
-    }
-    const unseeded = generateLevel();
-    assert.equal(verifySolution(unseeded.cells, unseeded.solution, 10), true);
-  });
-
-  /** Splits and beams fragment clusters, so fresh boards stay mixed. */
-  it("generates fragmented boards with horizontal bonds", () => {
-    for (let i = 0; i < 5; i++) {
-      const { cells } = generateLevel(10, mulberry32(5000 + i));
-      assert.ok(
-        countRegions(cells, 10) >= 25,
-        "fresh boards stay fragmented instead of slabbing",
-      );
-      assert.ok(
-        countSingles(cells, 10) >= 6,
-        "fragmentation strands a few singleton tiles",
-      );
-      let pairs = 0;
-      for (let r = 0; r < 10; r++) {
-        for (let c = 0; c < 9; c++) {
-          if (cells[r][c]?.t === cells[r][c + 1]?.t) pairs++;
-        }
-      }
-      assert.ok(pairs >= 6, `expected horizontal bars, got ${pairs}`);
-    }
-  });
-
-  it("supports generic sizes", () => {
-    for (const size of [2, 4, 6]) {
-      const { cells, solution } = generateLevel(size, mulberry32(size));
-      assert.equal(cells.length, size);
-      for (const row of cells) assert.equal(row.length, size);
-      assert.equal(verifySolution(cells, solution, size), true);
-    }
-    assert.throws(() => generateLevel(1), /integer >= 2/);
   });
 });

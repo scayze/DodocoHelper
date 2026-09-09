@@ -3,11 +3,11 @@ import { SEASON_ICONS } from "./icons.js";
 import {
   createBoard,
   findRegion,
-  generateLevel,
   remainingCount,
   removeRegion,
   type SeasonsBoard,
 } from "./logic.js";
+import { generateRandomLevel, type RandomLevel } from "./randomLevel.js";
 
 function el<T extends HTMLElement>(id: string): T {
   const node = document.getElementById(id);
@@ -38,6 +38,12 @@ export function createSeasonsGame(): GameInstance {
   let animating = false;
   /** Bumps on every grid rebuild/unmount so stale flights can't repaint. */
   let moveEpoch = 0;
+  /** Next puzzle, generated while idle so starting a game never waits. */
+  let nextLevel: RandomLevel | null = null;
+  /** True while a background generation callback is pending. */
+  let prefetchScheduled = false;
+  /** Handle of the pending background callback, for cancellation. */
+  let prefetchHandle: number | null = null;
   /** Animations of the current flight; cancelled + cleared on teardown. */
   let flightAnims: Animation[] = [];
 
@@ -119,13 +125,79 @@ export function createSeasonsGame(): GameInstance {
   }
 
   function newGame(): void {
-    const levelData = generateLevel(board.size);
+    let levelData: RandomLevel;
+    if (nextLevel !== null) {
+      levelData = nextLevel;
+      nextLevel = null;
+    } else {
+      // Buffer empty (first load, or clicks outrunning the prefetch):
+      // deal synchronously (~10ms typical). Retried once; on total
+      // failure keep the current board instead of crashing.
+      let dealt: RandomLevel | null = null;
+      for (let attempt = 0; attempt < 2 && dealt === null; attempt++) {
+        try {
+          dealt = generateRandomLevel(board.size);
+        } catch {
+          dealt = null;
+        }
+      }
+      if (dealt === null) {
+        message.textContent = "Could not deal a new puzzle — try again.";
+        schedulePrefetch();
+        return;
+      }
+      levelData = dealt;
+    }
     board = createBoard(board.size);
     board.cells = levelData.cells;
     started = true;
     buildGrid();
     paint();
     setStatus();
+    schedulePrefetch();
+  }
+
+  /**
+   * Deal the following puzzle while the browser is idle. Failures leave the
+   * buffer empty so newGame() falls back to a synchronous attempt.
+   */
+  function schedulePrefetch(): void {
+    if (nextLevel !== null || prefetchScheduled) return;
+    prefetchScheduled = true;
+    const run = (): void => {
+      prefetchHandle = null;
+      prefetchScheduled = false;
+      try {
+        if (nextLevel === null) nextLevel = generateRandomLevel(board.size);
+      } catch {
+        nextLevel = null;
+      }
+    };
+    // requestIdleCallback is absent in some browsers (Safari): fall back to
+    // a plain macrotask. Either way this never runs during gameplay input.
+    const w = window as Window & {
+      requestIdleCallback?: (cb: () => void, opts?: { timeout: number }) => number;
+      cancelIdleCallback?: (handle: number) => void;
+    };
+    if (typeof w.requestIdleCallback === "function") {
+      prefetchHandle = w.requestIdleCallback(run, { timeout: 2000 });
+    } else {
+      prefetchHandle = window.setTimeout(run, 0);
+    }
+  }
+
+  function cancelPrefetch(): void {
+    if (prefetchHandle === null) return;
+    const w = window as Window & {
+      cancelIdleCallback?: (handle: number) => void;
+    };
+    if (typeof w.cancelIdleCallback === "function") {
+      w.cancelIdleCallback(prefetchHandle);
+    } else {
+      window.clearTimeout(prefetchHandle);
+    }
+    prefetchHandle = null;
+    prefetchScheduled = false;
   }
 
   function snapshotChips(): Map<number, DOMRect> {
@@ -299,12 +371,14 @@ export function createSeasonsGame(): GameInstance {
         clearPreview();
         paint();
         setStatus();
+        schedulePrefetch();
       }
     },
     unmount(): void {
       moveEpoch++;
       clearPreview();
       teardownMove();
+      cancelPrefetch();
       root.classList.add("hidden");
     },
   };
