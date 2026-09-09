@@ -1,4 +1,5 @@
 import type { GameInstance } from "../types.js";
+import { announceWin, createRunTimer } from "../../leaderboard/report.js";
 import {
   checkWin,
   createBoard,
@@ -26,6 +27,9 @@ export function createTentsGame(): GameInstance {
 
   let board: TentsBoard | null = null;
   let started = false;
+  const runTimer = createRunTimer();
+  let moveCount = 0;
+  let winReported = false;
 
   function paint(): void {
     if (!board) return;
@@ -112,6 +116,9 @@ export function createTentsGame(): GameInstance {
   function newGame(): void {
     board = createBoard(generateLevel());
     started = true;
+    moveCount = 0;
+    winReported = false;
+    runTimer.start();
     buildGrid();
     paint();
     setStatus();
@@ -124,8 +131,13 @@ export function createTentsGame(): GameInstance {
     if (!Number.isInteger(r) || !Number.isInteger(c)) return;
     if (!toggleMark(board, r, c)) return;
     checkWin(board);
+    moveCount++;
     paint();
     setStatus();
+    if (board.over && board.won && !winReported) {
+      winReported = true;
+      announceWin({ game: "tents", durationMs: runTimer.elapsed(), moves: moveCount });
+    }
     cell.focus({ preventScroll: true });
   }
 

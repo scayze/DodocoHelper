@@ -1,0 +1,28 @@
+# ---- Build stage ----
+FROM node:24-alpine AS build
+WORKDIR /app
+
+COPY package.json package-lock.json ./
+RUN npm ci
+
+COPY tsconfig.json tsconfig.server.json ./
+COPY server ./server
+COPY src/leaderboard ./src/leaderboard
+
+RUN npm run build:server
+
+# ---- Runtime stage ----
+FROM node:24-alpine
+WORKDIR /app
+ENV NODE_ENV=production
+
+COPY package.json package-lock.json ./
+RUN npm ci --omit=dev
+
+COPY --from=build /app/dist-server ./dist-server
+
+ENV PORT=3001
+ENV DB_PATH=/data/leaderboard.db
+VOLUME /data
+EXPOSE 3001
+CMD ["node", "dist-server/server/index.js"]

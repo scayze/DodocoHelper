@@ -10,13 +10,15 @@
     "declaration": false,
     "sourceMap": false
   },
-  "include": ["src/**/*", "tests"],
+  "include": ["src/**/*", "server/**/*", "tests"],
   "exclude": [
     "src/main.ts",
     "src/games/registry.ts",
     "src/**/controller.ts",
     "src/**/view.ts",
     "src/**/icons.ts",
+    "src/leaderboard/view.ts",
+    "server/index.ts",
     "vite.config.ts"
   ]
 }

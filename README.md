@@ -8,11 +8,29 @@ not even diagonally.
 
 ```sh
 npm install
-npm run dev      # local dev server
+npm run dev      # local dev server (proxies /api/* to localhost:3001)
+npm run dev:api  # leaderboard API with file SQLite (DB_PATH, default ./data/leaderboard.db)
 npm run build    # typecheck + production build
 npm run preview  # serve the production build
 npm test         # full test suite (unit + screenshot fixtures)
 ```
+
+## Leaderboard (daily best time, same deploy)
+
+Each game reports wins to a daily per-game best-time board. The day key is
+UTC (`YYYY-MM-DD`) assigned server-side; players are `nickname + anonymous
+UUID` (stored in `localStorage`, no login). One row per
+`(day, game, clientId)` — only a faster time replaces the stored row.
+
+```sh
+docker compose up --build   # :8080 serves the game; Caddy proxies /api/* to the api service
+```
+
+- `GET  /api/healthz`
+- `GET  /api/leaderboard?game=crowns&day=2026-09-09&limit=20` (day defaults to today UTC)
+- `POST /api/scores` `{game, displayName (2–20 chars), clientId (UUID), durationMs, moves?, hintsUsed?}`
+- SQLite lives in the `leaderboard-data` volume (`DB_PATH=/data/leaderboard.db`); back it up by copying that file.
+- Abuse controls are best-effort v1: strict validation + per-IP/per-player rate limits. Times are client-reported, so treat the board as friendly rather than authoritative.
 
 ## How it works
 

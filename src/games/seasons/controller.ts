@@ -1,4 +1,5 @@
 import type { GameInstance } from "../types.js";
+import { announceWin, createRunTimer } from "../../leaderboard/report.js";
 import { SEASON_ICONS } from "./icons.js";
 import {
   createBoard,
@@ -27,6 +28,9 @@ export function createSeasonsGame(): GameInstance {
 
   let board: SeasonsBoard = createBoard();
   let started = false;
+  const runTimer = createRunTimer();
+  let moveCount = 0;
+  let winReported = false;
   /**
    * Tile id -> chip element. Slots (grid buttons) stay put and keep focus;
    * chips move between slots so falls and slides can animate via FLIP.
@@ -151,6 +155,9 @@ export function createSeasonsGame(): GameInstance {
     board = createBoard(board.size);
     board.cells = levelData.cells;
     started = true;
+    moveCount = 0;
+    winReported = false;
+    runTimer.start();
     buildGrid();
     paint();
     setStatus();
@@ -273,8 +280,13 @@ export function createSeasonsGame(): GameInstance {
     clearPreview();
     const first = snapshotChips();
     removeRegion(board, region);
+    moveCount++;
     paint();
     setStatus();
+    if (board.over && board.won && !winReported) {
+      winReported = true;
+      announceWin({ game: "seasons", durationMs: runTimer.elapsed(), moves: moveCount });
+    }
     cell.focus({ preventScroll: true });
     animating = true;
     const epoch = moveEpoch;

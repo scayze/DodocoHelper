@@ -67,28 +67,28 @@
               <div class="flex flex-col gap-[13px]">
                 <h2 class="text-center text-[15px] font-bold uppercase tracking-[0.18em] text-gold-600">Leaderboard</h2>
                 <p class="text-center text-[15px] font-semibold leading-relaxed text-night-800/80">
-                  Season 1 is coming soon. Dummy standings below.
+                  Daily best time · <span id="lb-day">today</span>
                 </p>
-                <ol class="flex flex-col gap-[9px]">
+                <div id="lb-tabs" class="flex flex-wrap justify-center gap-[9px]" role="tablist" aria-label="Leaderboard game">
+                  <button type="button" data-game="crowns" role="tab" class="btn-outline h-[36px] rounded-full px-[18px] text-[15px] font-semibold">Crowns</button>
+                  <button type="button" data-game="minesweeper" role="tab" class="btn-outline h-[36px] rounded-full px-[18px] text-[15px] font-semibold">Minesweeper</button>
+                  <button type="button" data-game="seasons" role="tab" class="btn-outline h-[36px] rounded-full px-[18px] text-[15px] font-semibold">Seasons</button>
+                  <button type="button" data-game="tents" role="tab" class="btn-outline h-[36px] rounded-full px-[18px] text-[15px] font-semibold">Tents</button>
+                </div>
+                <div id="lb-pending" class="hidden flex-col gap-[9px] rounded-xl bg-gold-600/10 px-[18px] py-[13px] text-center"></div>
+                <ol id="lb-list" class="flex flex-col gap-[9px]">
                   <li class="flex items-center gap-[13px] rounded-xl bg-white/70 px-[18px] py-[13px] shadow-sm">
-                    <span class="w-[28px] shrink-0 text-center text-[15px] font-bold text-gold-600">1</span>
-                    <span class="h-[32px] w-[32px] shrink-0 rounded-full bg-gold-600/20" aria-hidden="true"></span>
-                    <span class="min-w-0 flex-1 truncate text-[15px] font-semibold">Dodoco</span>
-                    <span class="shrink-0 text-[15px] font-bold tabular-nums">1,250</span>
-                  </li>
-                  <li class="flex items-center gap-[13px] rounded-xl bg-white/70 px-[18px] py-[13px] shadow-sm">
-                    <span class="w-[28px] shrink-0 text-center text-[15px] font-bold text-gold-600">2</span>
-                    <span class="h-[32px] w-[32px] shrink-0 rounded-full bg-gold-600/20" aria-hidden="true"></span>
-                    <span class="min-w-0 flex-1 truncate text-[15px] font-semibold">Paimon</span>
-                    <span class="shrink-0 text-[15px] font-bold tabular-nums">1,100</span>
-                  </li>
-                  <li class="flex items-center gap-[13px] rounded-xl bg-white/70 px-[18px] py-[13px] shadow-sm">
-                    <span class="w-[28px] shrink-0 text-center text-[15px] font-bold text-gold-600">3</span>
-                    <span class="h-[32px] w-[32px] shrink-0 rounded-full bg-gold-600/20" aria-hidden="true"></span>
-                    <span class="min-w-0 flex-1 truncate text-[15px] font-semibold">Traveler</span>
-                    <span class="shrink-0 text-[15px] font-bold tabular-nums">980</span>
+                    <span class="min-w-0 flex-1 truncate text-[15px] font-semibold text-night-800/70">Loading today&apos;s board…</span>
                   </li>
                 </ol>
+                <p id="lb-status" class="min-h-[24px] text-center text-[15px] font-semibold leading-relaxed text-night-800/70" role="status" aria-live="polite"></p>
+                <div class="flex flex-row gap-[9px]">
+                  <input id="lb-name" type="text" maxlength="20" autocomplete="nickname" placeholder="Your nickname"
+                    class="h-[48px] min-w-0 flex-1 rounded-full border border-night-700/30 bg-white/70 px-[22px] text-[15px] font-semibold text-night-900 placeholder:text-night-800/50" />
+                  <button id="lb-submit" type="button" class="btn-outline h-[48px] shrink-0 rounded-full px-[22px] text-[15px] font-semibold disabled:cursor-not-allowed disabled:opacity-50" disabled>
+                    Submit win
+                  </button>
+                </div>
               </div>
             </div>
           </div>

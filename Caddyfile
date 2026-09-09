@@ -1,6 +1,9 @@
 :80 {
 	encode zstd gzip
 	root * /srv
+	handle /api/* {
+		reverse_proxy api:3001
+	}
 	handle {
 		@healthz {
 			path /healthz

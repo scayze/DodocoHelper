@@ -1,4 +1,5 @@
 import type { GameInstance } from "../types.js";
+import { announceWin, createRunTimer } from "../../leaderboard/report.js";
 import {
   chord,
   createBoard,
@@ -38,6 +39,8 @@ export function createMinesweeperGame(): GameInstance {
 
   let board: MineBoard = createBoard();
   let started = false;
+  const runTimer = createRunTimer();
+  let winReported = false;
   let pressTimer: number | null = null;
   let pressCell: HTMLElement | null = null;
   /** Pointer type of the last press; right-click (mouse) never suppresses clicks. */
@@ -105,6 +108,10 @@ export function createMinesweeperGame(): GameInstance {
     level.textContent = `${board.mineCount} mines · ${left} left`;
     if (board.over && board.won) {
       message.textContent = "Solved.";
+      if (!winReported) {
+        winReported = true;
+        announceWin({ game: "minesweeper", durationMs: runTimer.elapsed(), moves: board.revealedCount });
+      }
     } else if (board.over) {
       message.textContent = "Boom — that one had a mine. Try a new board.";
     } else {
@@ -137,6 +144,8 @@ export function createMinesweeperGame(): GameInstance {
   function newGame(): void {
     board = createBoard();
     started = true;
+    winReported = false;
+    runTimer.start();
     clearPress();
     buildGrid();
     paint();

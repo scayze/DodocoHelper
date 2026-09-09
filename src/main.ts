@@ -1,6 +1,9 @@
 import "./index.css";
 import { GAMES } from "./games/registry.js";
 import type { GameId, GameInstance, ViewId } from "./games/types.js";
+import { initLeaderboard } from "./leaderboard/view.js";
+
+initLeaderboard();
 
 function el<T extends HTMLElement>(id: string): T {
   const node = document.getElementById(id);

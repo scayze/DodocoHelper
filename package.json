@@ -6,7 +6,9 @@
   "type": "module",
   "scripts": {
     "dev": "vite",
+    "dev:api": "npm run build:server && node --watch dist-server/server/index.js",
     "build": "tsc -b && vite build",
+    "build:server": "tsc -p tsconfig.server.json",
     "preview": "vite preview",
     "test": "tsc -p tsconfig.test.json && node --test dist-test/tests/*.test.js && npm run test:fixtures",
     "test:fixtures": "node tests/fixtures-run.mjs --check",

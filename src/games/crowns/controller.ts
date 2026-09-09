@@ -9,6 +9,7 @@ import type { NormalizedPuzzle, PuzzleInput } from "./types.js";
 import { nextMark } from "./marks.js";
 import { generatePuzzle } from "./generator.js";
 import type { GameInstance } from "../types.js";
+import { announceWin, createRunTimer } from "../../leaderboard/report.js";
 
 type Phase = "idle" | "working" | "ready" | "error";
 
@@ -54,6 +55,7 @@ const shownHints = new Set<string>();
 let activeHint: Hint | null = null;
 let undoStack: Array<{ r: number; c: number; prev: string }> = [];
 let puzzleSolved = false;
+const runTimer = createRunTimer();
 /**
  * Whether availableHints holds fresh results for the current board.
  * Hints are computed lazily on Hint click (findHints runs a solver search
@@ -97,6 +99,7 @@ function handleNewPuzzle(): void {
     puzzleSolved = false;
     hintMessage.textContent = "";
     hintLevel.textContent = "";
+    runTimer.start();
     buildBoardGrid(boardGrid, generated);
     paintBoard(boardGrid, generated, new Set(), null);
     boardGrid.setAttribute("aria-label", describeBoard());
@@ -157,8 +160,13 @@ function checkPlaySolved(): void {
   activeHint = null;
   hintMessage.textContent = "Solved.";
   hintLevel.textContent = "";
-  paintBoard(boardGrid, puzzle, new Set(), null, puzzle.initial);
-  boardGrid.setAttribute("aria-label", describeBoard());
+  announceWin({
+    game: "crowns",
+    durationMs: runTimer.elapsed(),
+    moves: undoStack.length,
+    hintsUsed: shownHints.size,
+  });
+  paintBoard(boardGrid, puzzle, new Set(), null, puzzle.initial);  boardGrid.setAttribute("aria-label", describeBoard());
   refreshHintButton();
 }
 
@@ -203,6 +211,7 @@ function runPuzzle(raw: PuzzleInput): void {
   puzzleSolved = false;
   hintMessage.textContent = "";
   hintLevel.textContent = "";
+  runTimer.start();
   buildBoardGrid(boardGrid, parsed);
   paintBoard(boardGrid, parsed, new Set(), null);
   boardGrid.setAttribute("aria-label", describeBoard());
