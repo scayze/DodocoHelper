@@ -291,6 +291,12 @@ main.has-result #upload-actions .upload-card .upload-card-text {
 #wardrobe-grid {
   border-radius: clamp(0.33rem, 1.1vmin, 0.5rem);
   background: rgb(95, 112, 128);
+  /* Gapless board: cells cover the grid edge-to-edge so gutters never swallow
+     hover/clicks; the visual gutters are cell padding showing this background.
+     Half-gutter padding keeps tile and gutter sizes identical to a gap layout:
+     chip = track - g, gutter = g/2 + g/2, outer frame = p - g/2 + g/2. */
+  gap: 0;
+  padding: calc(clamp(7px, 1.32vmin, 11px) - clamp(1.5px, 0.44vmin, 3.5px));
 }
 
 /* During the post-clear flight the destination slots must not clip the
@@ -310,6 +316,8 @@ main.has-result #upload-actions .upload-card .upload-card-text {
   touch-action: manipulation;
   user-select: none;
   -webkit-user-select: none;
+  padding: clamp(1.5px, 0.44vmin, 3.5px);
+  background: transparent;
 }
 
 .cloth-cell.is-empty {
