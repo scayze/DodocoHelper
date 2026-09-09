@@ -104,9 +104,23 @@ nav[aria-label="Minigames"] .mode-btn:hover {
   color: #7c6115;
 }
 
+/* Icon-only game tabs: normalize Lucide (24-grid, stroke) and Phosphor (256-grid, fill) to one visual size. */
+nav[aria-label="Minigames"] .mode-btn {
+  padding: 4px;
+  border-radius: 9999px;
+  line-height: 0;
+}
+
+nav[aria-label="Minigames"] .mode-btn svg {
+  width: 22px;
+  height: 22px;
+  display: block;
+}
+
 .btn-gold:focus-visible,
 .btn-outline:focus-visible,
 .upload-card:focus-visible,
+.mode-btn:focus-visible,
 #retry-button:focus-visible {
   outline: 2px solid #0f1930;
   outline-offset: 2px;
@@ -478,10 +492,10 @@ main.has-result #upload-actions .upload-card .upload-card-text {
   transition: filter 120ms ease, box-shadow 120ms ease, border-color 120ms ease;
 }
 
-.season-summer { background: #F6D365; }
-.season-autumn { background: #E07864; }
-.season-spring { background: #9CCB8F; }
-.season-winter { background: #9CC3E5; }
+.season-summer { background: #f0dfae; }
+.season-autumn { background: #dfa06f; }
+.season-spring { background: #cfe0c3; }
+.season-winter { background: #c3d9e8; }
 
 /* Region preview: hovering / focusing a tile highlights the whole removable
    region that a click would clear. Singletons never get .is-preview. */
@@ -500,8 +514,8 @@ main.has-result #upload-actions .upload-card .upload-card-text {
 }
 
 .tile-chip svg {
-  width: 68%;
-  height: 68%;
+  width: 60%;
+  height: 60%;
   color: #16223d;
 }
 

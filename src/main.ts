@@ -18,6 +18,15 @@ const tabButtons: Record<GameId, HTMLButtonElement> = {
   tents: el<HTMLButtonElement>("game-tents"),
 };
 
+const GAME_TITLES: Record<GameId, string> = {
+  crowns: "Crowns",
+  minesweeper: "Minesweeper",
+  seasons: "Seasons",
+  tents: "Tents",
+};
+
+const gameTitle = el<HTMLElement>("game-title");
+
 const games: Record<GameId, GameInstance> = {
   crowns: createCrownsGame(),
   minesweeper: createMinesweeperGame(),
@@ -34,6 +43,8 @@ function paintTabs(): void {
     btn.classList.toggle("text-gold-600", active);
     btn.classList.toggle("text-gold-600/50", !active);
   }
+  gameTitle.textContent = GAME_TITLES[activeGame];
+  document.title = `${GAME_TITLES[activeGame]} - Dodoco Helper`;
 }
 
 function setGame(id: GameId): void {
