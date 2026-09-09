@@ -1,6 +1,6 @@
 /** Shared contract for every minigame plugged into the shell. */
 
-export type GameId = "crowns" | "minesweeper";
+export type GameId = "crowns" | "minesweeper" | "wardrobe";
 
 /**
  * Each game owns its own DOM subtree (own grid/container, own status and

@@ -1,6 +1,7 @@
 import "./index.css";
 import { createCrownsGame } from "./games/crowns/controller.js";
 import { createMinesweeperGame } from "./games/minesweeper/controller.js";
+import { createWardrobeGame } from "./games/wardrobe/controller.js";
 import type { GameId, GameInstance } from "./games/types.js";
 
 function el<T extends HTMLElement>(id: string): T {
@@ -12,11 +13,13 @@ function el<T extends HTMLElement>(id: string): T {
 const tabButtons: Record<GameId, HTMLButtonElement> = {
   crowns: el<HTMLButtonElement>("game-crowns"),
   minesweeper: el<HTMLButtonElement>("game-minesweeper"),
+  wardrobe: el<HTMLButtonElement>("game-wardrobe"),
 };
 
 const games: Record<GameId, GameInstance> = {
   crowns: createCrownsGame(),
   minesweeper: createMinesweeperGame(),
+  wardrobe: createWardrobeGame(),
 };
 
 let activeGame: GameId = "crowns";
@@ -34,7 +37,7 @@ function setGame(id: GameId): void {
   if (activeGame === id) return;
   games[activeGame].unmount();
   // Each game owns its sections: crowns owns the upload actions + solver
-  // stage, minesweeper owns its own board container.
+  // stage, minesweeper and wardrobe own their own board containers.
   document.getElementById("top")?.classList.remove("has-result");
   activeGame = id;
   games[activeGame].mount();
@@ -43,8 +46,10 @@ function setGame(id: GameId): void {
 
 tabButtons.crowns.addEventListener("click", () => setGame("crowns"));
 tabButtons.minesweeper.addEventListener("click", () => setGame("minesweeper"));
+tabButtons.wardrobe.addEventListener("click", () => setGame("wardrobe"));
 
-// Initial state: crowns visible, mines hidden.
+// Initial state: crowns visible, other games hidden.
 games.minesweeper.unmount();
+games.wardrobe.unmount();
 games.crowns.mount();
 paintTabs();

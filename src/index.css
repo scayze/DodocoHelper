@@ -257,7 +257,8 @@ nav[aria-label="Minigames"] .mode-btn:hover {
 /* Shared stage width: upload actions, crowns stage, and every per-game stage align. */
 #upload-actions,
 #stage-col,
-#mines-col {
+#mines-col,
+#wardrobe-col {
   width: min(92vw, 484px);
   margin-inline: auto;
 }
@@ -274,7 +275,8 @@ main.has-result #upload-actions .upload-card .upload-card-text {
 
 #board-grid,
 #skeleton-grid,
-#mines-grid {
+#mines-grid,
+#wardrobe-grid {
   width: min(100%, 50dvh, 440px);
   margin-inline: auto;
   gap: clamp(3px, 0.88vmin, 7px);
@@ -284,6 +286,74 @@ main.has-result #upload-actions .upload-card .upload-card-text {
 #mines-grid {
   border-radius: clamp(0.33rem, 1.1vmin, 0.5rem);
   background: rgb(95, 112, 128);
+}
+
+#wardrobe-grid {
+  border-radius: clamp(0.33rem, 1.1vmin, 0.5rem);
+  background: rgb(95, 112, 128);
+}
+
+/* During the post-clear flight the destination slots must not clip the
+   sliding chips, or the FLIP translate is invisible and tiles jump. */
+#wardrobe-grid.is-animating .board-cell {
+  overflow: visible;
+}
+
+#wardrobe-grid.is-animating .tile-chip.is-moving {
+  position: relative;
+  z-index: 2;
+}
+
+/* Wardrobe owns its own grid (#wardrobe-grid). Slots stay put (focus, aria);
+   tile chips move between slots so falls and slides animate via FLIP. */
+.cloth-cell {
+  touch-action: manipulation;
+  user-select: none;
+  -webkit-user-select: none;
+}
+
+.cloth-cell.is-empty {
+  cursor: default;
+}
+
+.tile-chip {
+  width: 100%;
+  height: 100%;
+  display: grid;
+  place-items: center;
+  overflow: hidden;
+  border-radius: inherit;
+  border: 1px solid rgba(34, 49, 84, 0.18);
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.5);
+  will-change: transform;
+  transition: filter 120ms ease, box-shadow 120ms ease, border-color 120ms ease;
+}
+
+.cloth-shirt { background: #f2cfc9; }
+.cloth-shoe { background: #c3d9e8; }
+.cloth-pant { background: #cfe0c3; }
+.cloth-bag { background: #f0dfae; }
+
+/* Region preview: hovering / focusing a tile highlights the whole removable
+   region that a click would clear. Singletons never get .is-preview. */
+.cloth-cell:not(.is-empty):hover .tile-chip {
+  filter: brightness(1.05);
+}
+
+.cloth-cell.is-preview {
+  z-index: 1;
+}
+
+.cloth-cell.is-preview .tile-chip {
+  filter: brightness(1.1) saturate(1.08);
+  border-color: rgba(46, 42, 36, 0.55);
+  box-shadow: inset 0 0 0 2px rgba(46, 42, 36, 0.55), inset 0 1px 0 rgba(255, 255, 255, 0.5);
+}
+
+.tile-chip svg {
+  width: 68%;
+  height: 68%;
+  color: #16223d;
 }
 
 #panel-ready,
@@ -296,7 +366,8 @@ main.has-result #upload-actions .upload-card .upload-card-text {
 /* Avoid layout jump between working -> ready. */
 #panel-working,
 #panel-ready,
-#mines-panel {
+#mines-panel,
+#wardrobe-panel {
   animation: panel-in 180ms ease-out;
 }
 
@@ -340,5 +411,14 @@ main.has-result #upload-actions .upload-card .upload-card-text {
   *::after {
     transition-duration: 0.01ms;
     animation-duration: 0.01ms;
+  }
+
+  /* Wardrobe motion intentionally ignores reduced-motion: the slide/fade is
+     gameplay feedback. WAAPI durations are JS-driven and unaffected by the
+     rule above; re-assert the chip highlight transition explicitly. */
+  #wardrobe-grid .tile-chip,
+  #wardrobe-grid .tile-chip::before,
+  #wardrobe-grid .tile-chip::after {
+    transition-duration: 120ms;
   }
 }
