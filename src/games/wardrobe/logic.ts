@@ -204,6 +204,28 @@ export function countRegions(cells: WardrobeCell[][], size: number): number {
   return regions;
 }
 
+/** Count singleton tiles (no equal orthogonal neighbor). */
+export function countSingles(cells: WardrobeCell[][], size: number): number {
+  let singles = 0;
+  for (let r = 0; r < size; r++) {
+    for (let c = 0; c < size; c++) {
+      const t = cells[r][c]?.t;
+      if (t === undefined) continue;
+      let single = true;
+      for (const [dr, dc] of DIRS) {
+        const nr = r + dr;
+        const nc = c + dc;
+        if (inBounds(size, nr, nc) && cells[nr][nc]?.t === t) {
+          single = false;
+          break;
+        }
+      }
+      if (single) singles++;
+    }
+  }
+  return singles;
+}
+
 /**
  * Replay a generated solution: for each group in clear order, remove the
  * region around the first tile of that group still on the board (groups
@@ -498,7 +520,8 @@ function stackStep(
   for (let attempt = 0; attempt < 30 && feasible.length > 0; attempt++) {
     const c = feasible[randInt(rand, feasible.length)];
     const h = columnHeight(cells, size, c);
-    const lens = fitLens(size - h, 4);
+    // Capped at 3 (not 4) so stacks stay small and boundaries multiply.
+    const lens = fitLens(size - h, 2);
     if (lens.length === 0) continue;
     // Level the skyline: matching a neighbor's height creates the
     // equal-height pairs lintels and beams build on.
@@ -596,7 +619,8 @@ function newColumnStep(
   const used = columnsUsed(builder.cells, size);
   if (used >= size) return false;
   const c = size - used - 1;
-  const lens = fitLens(size, 4);
+  // Capped at 3 (not 4) so fresh columns stay small and boundaries multiply.
+  const lens = fitLens(size, 2);
   // Open at the right neighbor's height when possible: a level skyline
   // grows more lintel pairs and beam spans.
   const rightH = columnHeight(builder.cells, size, c + 1);
@@ -683,7 +707,7 @@ function tryReverseBuild(
     const roll = rand();
     // Early splits fragment pair blocks into singletons (gracefully: pairs
     // survive below each cut), so keep their share up while growing.
-    const pSplit = 0.35 - 0.1 * fill;
+    const pSplit = 5.8 - 0.1 * fill;
     const late = fill >= 0.5;
     const beamLate = (): boolean => beamStep(builder, size, rand, 0.5);
     const ok = late

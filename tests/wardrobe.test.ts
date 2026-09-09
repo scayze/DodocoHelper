@@ -3,6 +3,7 @@ import assert from "node:assert/strict";
 import {
   CLOTH_TYPES,
   countRegions,
+  countSingles,
   createBoard,
   findRegion,
   generateLevel,
@@ -220,6 +221,10 @@ describe("wardrobe generator", () => {
       assert.ok(
         countRegions(cells, 10) >= 25,
         "fresh boards stay fragmented instead of slabbing",
+      );
+      assert.ok(
+        countSingles(cells, 10) >= 6,
+        "fragmentation strands a few singleton tiles",
       );
       let pairs = 0;
       for (let r = 0; r < 10; r++) {

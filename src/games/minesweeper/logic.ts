@@ -1,7 +1,7 @@
 /** Framework-free Minesweeper core: board model + reveal/flag/win logic. No DOM. */
 
 export const MINES_SIZE = 9;
-export const MINES_COUNT = 10;
+export const MINES_COUNT = 15;
 
 export type MineCellState = "hidden" | "revealed" | "flagged";
 
