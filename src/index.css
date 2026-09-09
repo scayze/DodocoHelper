@@ -258,7 +258,8 @@ nav[aria-label="Minigames"] .mode-btn:hover {
 #upload-actions,
 #stage-col,
 #mines-col,
-#wardrobe-col {
+#wardrobe-col,
+#tents-col {
   width: min(92vw, 484px);
   margin-inline: auto;
 }
@@ -276,7 +277,8 @@ main.has-result #upload-actions .upload-card .upload-card-text {
 #board-grid,
 #skeleton-grid,
 #mines-grid,
-#wardrobe-grid {
+#wardrobe-grid,
+#tents-grid {
   width: min(100%, 50dvh, 440px);
   margin-inline: auto;
   gap: clamp(3px, 0.88vmin, 7px);
@@ -286,6 +288,69 @@ main.has-result #upload-actions .upload-card .upload-card-text {
 #mines-grid {
   border-radius: clamp(0.33rem, 1.1vmin, 0.5rem);
   background: rgb(95, 112, 128);
+}
+
+#tents-grid {
+  border-radius: clamp(0.33rem, 1.1vmin, 0.5rem);
+  background: rgb(95, 112, 128);
+}
+
+/* Tents and Trees owns its own grid (#tents-grid). Body cells build on
+   .board-cell; the first row/column are count headers, not buttons. */
+.tent-cell {
+  background: #faf5e6;
+  border: 1px solid rgba(163, 127, 28, 0.35);
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.6);
+  font-size: clamp(1rem, 3vmin, 1.4rem);
+  line-height: 1;
+  touch-action: manipulation;
+  user-select: none;
+  -webkit-user-select: none;
+}
+
+.tent-cell:hover {
+  background: #e9dcbd;
+}
+
+.tent-cell.is-tree {
+  background: #cfe0c3;
+  cursor: default;
+}
+
+.tent-cell.is-tent {
+  background: #f0dfae;
+}
+
+.tent-cell.is-grass {
+  background: #e9dcbd;
+  opacity: 0.55;
+}
+
+.count-head {
+  aspect-ratio: 1 / 1;
+  display: grid;
+  place-items: center;
+  font-weight: 700;
+  font-size: clamp(0.75rem, 2.2vmin, 1rem);
+  color: #faf5e6;
+  user-select: none;
+  -webkit-user-select: none;
+}
+
+/* Count headers sit in their own darker squares fitting the slate frame. */
+.count-head:not(.is-corner) {
+  border-radius: clamp(0.33rem, 1.1vmin, 0.5rem);
+  background: rgba(15, 25, 48, 0.4);
+}
+
+/* Satisfied (zero left): same grayed tone as a grassed-out field. */
+.count-head.is-ok {
+  color: #e9dcbd;
+  opacity: 0.55;
+}
+
+.count-head.is-over {
+  color: #f08d82;
 }
 
 #wardrobe-grid {
@@ -375,7 +440,8 @@ main.has-result #upload-actions .upload-card .upload-card-text {
 #panel-working,
 #panel-ready,
 #mines-panel,
-#wardrobe-panel {
+#wardrobe-panel,
+#tents-panel {
   animation: panel-in 180ms ease-out;
 }
 

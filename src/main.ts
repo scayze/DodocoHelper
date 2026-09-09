@@ -2,6 +2,7 @@ import "./index.css";
 import { createCrownsGame } from "./games/crowns/controller.js";
 import { createMinesweeperGame } from "./games/minesweeper/controller.js";
 import { createWardrobeGame } from "./games/wardrobe/controller.js";
+import { createTentsGame } from "./games/tents/controller.js";
 import type { GameId, GameInstance } from "./games/types.js";
 
 function el<T extends HTMLElement>(id: string): T {
@@ -14,12 +15,14 @@ const tabButtons: Record<GameId, HTMLButtonElement> = {
   crowns: el<HTMLButtonElement>("game-crowns"),
   minesweeper: el<HTMLButtonElement>("game-minesweeper"),
   wardrobe: el<HTMLButtonElement>("game-wardrobe"),
+  tents: el<HTMLButtonElement>("game-tents"),
 };
 
 const games: Record<GameId, GameInstance> = {
   crowns: createCrownsGame(),
   minesweeper: createMinesweeperGame(),
   wardrobe: createWardrobeGame(),
+  tents: createTentsGame(),
 };
 
 let activeGame: GameId = "crowns";
@@ -47,9 +50,11 @@ function setGame(id: GameId): void {
 tabButtons.crowns.addEventListener("click", () => setGame("crowns"));
 tabButtons.minesweeper.addEventListener("click", () => setGame("minesweeper"));
 tabButtons.wardrobe.addEventListener("click", () => setGame("wardrobe"));
+tabButtons.tents.addEventListener("click", () => setGame("tents"));
 
 // Initial state: crowns visible, other games hidden.
 games.minesweeper.unmount();
 games.wardrobe.unmount();
+games.tents.unmount();
 games.crowns.mount();
 paintTabs();

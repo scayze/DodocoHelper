@@ -5,4 +5,5 @@ export const GAMES: GameDef[] = [
   { id: "crowns", label: "Crowns" },
   { id: "minesweeper", label: "Minesweeper" },
   { id: "wardrobe", label: "Wardrobe" },
+  { id: "tents", label: "Tents" },
 ];
