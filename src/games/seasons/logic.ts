@@ -1,30 +1,30 @@
-/** Framework-free Wardrobe core: SameGame-style collapse puzzler. No DOM. */
+/** Framework-free Seasons core: SameGame-style collapse puzzler. No DOM. */
 
-export const WARDROBE_SIZE = 10;
+export const SEASONS_SIZE = 10;
 
-export const CLOTH_TYPES = ["shirt", "shoe", "pant", "bag"] as const;
-export type ClothType = (typeof CLOTH_TYPES)[number];
+export const SEASON_TYPES = ["summer", "autumn", "spring", "winter"] as const;
+export type SeasonType = (typeof SEASON_TYPES)[number];
 
 /** A tile carries identity so the UI can animate it across moves. */
 export interface Tile {
-  t: ClothType;
+  t: SeasonType;
   id: number;
 }
 
-export type WardrobeCell = Tile | null;
+export type SeasonsCell = Tile | null;
 
-export interface WardrobeBoard {
+export interface SeasonsBoard {
   size: number;
   /** Rows top to bottom; null is an empty slot. Columns stay bottom-justified. */
-  cells: WardrobeCell[][];
+  cells: SeasonsCell[][];
   over: boolean;
   won: boolean;
 }
 
-export function createBoard(size = WARDROBE_SIZE): WardrobeBoard {
+export function createBoard(size = SEASONS_SIZE): SeasonsBoard {
   return {
     size,
-    cells: Array.from({ length: size }, () => Array<WardrobeCell>(size).fill(null)),
+    cells: Array.from({ length: size }, () => Array<SeasonsCell>(size).fill(null)),
     over: false,
     won: false,
   };
@@ -41,9 +41,9 @@ function inBounds(size: number, r: number, c: number): boolean {
   return r >= 0 && r < size && c >= 0 && c < size;
 }
 
-/** 4-directional flood fill of the clicked cell's clothing type. Empty cells yield []. */
+/** 4-directional flood fill of the clicked cell's season type. Empty cells yield []. */
 export function findRegion(
-  board: WardrobeBoard,
+  board: SeasonsBoard,
   r: number,
   c: number,
 ): Array<[number, number]> {
@@ -75,7 +75,7 @@ export function findRegion(
  * above fall down and collapse emptied columns to the right.
  */
 export function removeRegion(
-  board: WardrobeBoard,
+  board: SeasonsBoard,
   region: Array<[number, number]>,
 ): boolean {
   if (board.over || region.length < 2) return false;
@@ -94,7 +94,7 @@ export function removeRegion(
 }
 
 /** True when at least one clickable group (region of size >= 2) exists. */
-export function hasAvailableMove(board: WardrobeBoard): boolean {
+export function hasAvailableMove(board: SeasonsBoard): boolean {
   const { size, cells } = board;
   for (let r = 0; r < size; r++) {
     for (let c = 0; c < size; c++) {
@@ -109,7 +109,7 @@ export function hasAvailableMove(board: WardrobeBoard): boolean {
 }
 
 /** Bottom-justify every column in place. */
-function applyGravity(board: WardrobeBoard): void {
+function applyGravity(board: SeasonsBoard): void {
   const { size, cells } = board;
   for (let c = 0; c < size; c++) {
     let write = size - 1;
@@ -125,9 +125,9 @@ function applyGravity(board: WardrobeBoard): void {
 }
 
 /** Slide surviving columns right (order preserved); empties pad the left. */
-function collapseColumns(board: WardrobeBoard): void {
+function collapseColumns(board: SeasonsBoard): void {
   const { size, cells } = board;
-  const kept: WardrobeCell[][] = [];
+  const kept: SeasonsCell[][] = [];
   for (let c = 0; c < size; c++) {
     let empty = true;
     for (let r = 0; r < size; r++) {
@@ -146,7 +146,7 @@ function collapseColumns(board: WardrobeBoard): void {
   }
 }
 
-export function remainingCount(board: WardrobeBoard): number {
+export function remainingCount(board: SeasonsBoard): number {
   let n = 0;
   for (const row of board.cells) {
     for (const cell of row) {
@@ -156,7 +156,7 @@ export function remainingCount(board: WardrobeBoard): number {
   return n;
 }
 
-export function isCleared(board: WardrobeBoard): boolean {
+export function isCleared(board: SeasonsBoard): boolean {
   return remainingCount(board) === 0;
 }
 
@@ -167,7 +167,7 @@ export function isCleared(board: WardrobeBoard): boolean {
 // ---------------------------------------------------------------------------
 
 export interface GeneratedLevel {
-  cells: WardrobeCell[][];
+  cells: SeasonsCell[][];
   /**
    * Tile ids per inserted cluster in clear order: removing each group's
    * region in order empties the board. Exposed for tests.
@@ -176,7 +176,7 @@ export interface GeneratedLevel {
 }
 
 /** Count same-type connected regions (4-directional). */
-export function countRegions(cells: WardrobeCell[][], size: number): number {
+export function countRegions(cells: SeasonsCell[][], size: number): number {
   const seen = new Set<number>();
   let regions = 0;
   for (let r = 0; r < size; r++) {
@@ -205,7 +205,7 @@ export function countRegions(cells: WardrobeCell[][], size: number): number {
 }
 
 /** Count singleton tiles (no equal orthogonal neighbor). */
-export function countSingles(cells: WardrobeCell[][], size: number): number {
+export function countSingles(cells: SeasonsCell[][], size: number): number {
   let singles = 0;
   for (let r = 0; r < size; r++) {
     for (let c = 0; c < size; c++) {
@@ -233,11 +233,11 @@ export function countSingles(cells: WardrobeCell[][], size: number): number {
  * true only for a full clear through legal moves.
  */
 export function verifySolution(
-  cells: WardrobeCell[][],
+  cells: SeasonsCell[][],
   solution: number[][],
   size: number,
 ): boolean {
-  const board: WardrobeBoard = {
+  const board: SeasonsBoard = {
     size,
     cells: cells.map((row) => [...row]),
     over: false,
@@ -272,17 +272,17 @@ function randInt(rand: () => number, n: number): number {
 
 /** Random type outside the ban set; null when every type is banned. */
 function pickFreshType(
-  banned: Set<ClothType>,
+  banned: Set<SeasonType>,
   rand: () => number,
-): ClothType | null {
-  const free = CLOTH_TYPES.filter((t) => !banned.has(t));
+): SeasonType | null {
+  const free = SEASON_TYPES.filter((t) => !banned.has(t));
   if (free.length === 0) return null;
   return free[randInt(rand, free.length)];
 }
 
 /** Column height; columns stay bottom-justified, so counting up suffices. */
 function columnHeight(
-  cells: WardrobeCell[][],
+  cells: SeasonsCell[][],
   size: number,
   c: number,
 ): number {
@@ -295,13 +295,13 @@ function columnHeight(
  * Occupied column count; the board stays right-justified, so these are the
  * rightmost columns and every one of them is bottom-justified.
  */
-function columnsUsed(cells: WardrobeCell[][], size: number): number {
+function columnsUsed(cells: SeasonsCell[][], size: number): number {
   let used = 0;
   for (let c = size - 1; c >= 0 && cells[size - 1][c] !== null; c--) used++;
   return used;
 }
 
-function isFull(cells: WardrobeCell[][], size: number): boolean {
+function isFull(cells: SeasonsCell[][], size: number): boolean {
   for (let r = 0; r < size; r++) {
     for (let c = 0; c < size; c++) {
       if (cells[r][c] === null) return false;
@@ -311,7 +311,7 @@ function isFull(cells: WardrobeCell[][], size: number): boolean {
 }
 
 interface ReverseBuilder {
-  cells: WardrobeCell[][];
+  cells: SeasonsCell[][];
   /** Tile ids per insertion, oldest first; reversed at the end for clear order. */
   groups: number[][];
   nextId: number;
@@ -321,7 +321,7 @@ interface ReverseBuilder {
 function stamp(
   builder: ReverseBuilder,
   shape: Array<[number, number]>,
-  type: ClothType,
+  type: SeasonType,
 ): void {
   const ids: number[] = [];
   for (const [r, c] of shape) {
@@ -338,7 +338,7 @@ function banSides(
   size: number,
   r: number,
   c: number,
-  banned: Set<ClothType>,
+  banned: Set<SeasonType>,
 ): void {
   const left = c > 0 ? builder.cells[r][c - 1]?.t : undefined;
   const right = c + 1 < size ? builder.cells[r][c + 1]?.t : undefined;
@@ -388,7 +388,7 @@ function splitStep(
     const gaps = fitLens(size - h, 3);
     if (gaps.length === 0) continue;
     const gap = gaps[randInt(rand, gaps.length)];
-    const banned = new Set<ClothType>([cells[r][c]!.t, cells[r + 1][c]!.t]);
+    const banned = new Set<SeasonType>([cells[r][c]!.t, cells[r + 1][c]!.t]);
     for (let g = r - gap + 1; g <= r; g++) banSides(builder, size, g, c, banned);
     const type = pickFreshType(banned, rand);
     if (type === null) continue;
@@ -465,12 +465,12 @@ function beamStep(
     const pool = runCuts.length > 0 ? runCuts : cuts;
     // Sample a few (cut, gap) combos and keep the one banning the fewest
     // types; striped neighbors often cover everything, so blind picks fail.
-    let pick: { r: number; gap: number; banned: Set<ClothType> } | null = null;
+    let pick: { r: number; gap: number; banned: Set<SeasonType> } | null = null;
     for (let s = 0; s < 6; s++) {
       const r = pool[randInt(rand, pool.length)];
       const gap = gaps[randInt(rand, gaps.length)];
       if (r - gap + 1 < lo) continue;
-      const banned = new Set<ClothType>();
+      const banned = new Set<SeasonType>();
       for (let c = c0; c < c0 + w; c++) {
         banned.add(cells[r][c]!.t);
         banned.add(cells[r + 1][c]!.t);
@@ -534,7 +534,7 @@ function stackStep(
     const pool = level.length > 0 && rand() < 0.5 ? level : lens;
     const len = pool[randInt(rand, pool.length)];
     const top = size - h - len;
-    const banned = new Set<ClothType>([cells[size - h][c]!.t]);
+    const banned = new Set<SeasonType>([cells[size - h][c]!.t]);
     for (let r = top; r < size - h; r++) banSides(builder, size, r, c, banned);
     const type = pickFreshType(banned, rand);
     if (type === null) continue;
@@ -568,7 +568,7 @@ function lintelStep(
     const c = pairs[randInt(rand, pairs.length)];
     const h = columnHeight(cells, size, c);
     const r = size - h - 1;
-    const banned = new Set<ClothType>([cells[r + 1][c]!.t, cells[r + 1][c + 1]!.t]);
+    const banned = new Set<SeasonType>([cells[r + 1][c]!.t, cells[r + 1][c + 1]!.t]);
     banSides(builder, size, r, c, banned);
     banSides(builder, size, r, c + 1, banned);
     const type = pickFreshType(banned, rand);
@@ -598,7 +598,7 @@ function pairColumnStep(
     const len = lens[randInt(rand, lens.length)];
     // Left of the pair is empty and nothing sits above or below; only the
     // occupied right neighbor constrains the type.
-    const banned = new Set<ClothType>();
+    const banned = new Set<SeasonType>();
     for (let r = size - len; r < size; r++) banSides(builder, size, r, c + 1, banned);
     const type = pickFreshType(banned, rand);
     if (type === null) continue;
@@ -628,7 +628,7 @@ function newColumnStep(
   for (let attempt = 0; attempt < 8 && lens.length > 0; attempt++) {
     const pool = match.length > 0 && rand() < 0.5 ? match : lens;
     const len = pool[randInt(rand, pool.length)];
-    const banned = new Set<ClothType>();
+    const banned = new Set<SeasonType>();
     for (let r = size - len; r < size; r++) banSides(builder, size, r, c, banned);
     const type = pickFreshType(banned, rand);
     if (type === null) continue;
@@ -678,8 +678,8 @@ function tryReverseBuild(
   size: number,
   rand: () => number,
 ): GeneratedLevel | null {
-  const cells: WardrobeCell[][] = Array.from({ length: size }, () =>
-    Array<WardrobeCell>(size).fill(null),
+  const cells: SeasonsCell[][] = Array.from({ length: size }, () =>
+    Array<SeasonsCell>(size).fill(null),
   );
   const builder: ReverseBuilder = { cells, groups: [], nextId: 1 };
   // Seed: a single cluster in the bottom-right corner. Everything grows here.
@@ -687,7 +687,7 @@ function tryReverseBuild(
   const seedLen = seedOptions[randInt(rand, seedOptions.length)];
   const seedShape: Array<[number, number]> = [];
   for (let r = size - seedLen; r < size; r++) seedShape.push([r, size - 1]);
-  stamp(builder, seedShape, CLOTH_TYPES[randInt(rand, CLOTH_TYPES.length)]);
+  stamp(builder, seedShape, SEASON_TYPES[randInt(rand, SEASON_TYPES.length)]);
   // Every step fills at least 2 empty slots and never empties one, so this
   // always terminates; a null return just retries the whole build.
   const total = size * size;
@@ -745,15 +745,15 @@ function tryReverseBuild(
  * boards mix bars in both directions instead of striping vertically.
  */
 export function generateLevel(
-  size = WARDROBE_SIZE,
+  size = SEASONS_SIZE,
   rand: () => number = Math.random,
 ): GeneratedLevel {
   if (!Number.isInteger(size) || size < 2) {
-    throw new Error(`Wardrobe board size must be an integer >= 2, got ${size}`);
+    throw new Error(`Seasons board size must be an integer >= 2, got ${size}`);
   }
   for (let attempt = 0; attempt < 50; attempt++) {
     const level = tryReverseBuild(size, rand);
     if (level) return level;
   }
-  throw new Error("Failed to generate a wardrobe level");
+  throw new Error("Failed to generate a seasons level");
 }

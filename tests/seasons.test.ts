@@ -1,7 +1,7 @@
 import { describe, it } from "node:test";
 import assert from "node:assert/strict";
 import {
-  CLOTH_TYPES,
+  SEASON_TYPES,
   countRegions,
   countSingles,
   createBoard,
@@ -12,9 +12,9 @@ import {
   remainingCount,
   removeRegion,
   verifySolution,
-  type ClothType,
-  type WardrobeBoard,
-} from "../src/games/wardrobe/logic.js";
+  type SeasonType,
+  type SeasonsBoard,
+} from "../src/games/seasons/logic.js";
 
 let nextTestId = 1;
 
@@ -30,7 +30,7 @@ function mulberry32(seed: number): () => number {
   };
 }
 
-function boardFrom(rows: Array<Array<ClothType | null>>): WardrobeBoard {
+function boardFrom(rows: Array<Array<SeasonType | null>>): SeasonsBoard {
   return {
     size: rows.length,
     cells: rows.map((row) =>
@@ -42,30 +42,30 @@ function boardFrom(rows: Array<Array<ClothType | null>>): WardrobeBoard {
 }
 
 /** Plain type grid for assertions (tiles carry ids for animation). */
-function tops(board: WardrobeBoard): Array<Array<ClothType | null>> {
+function tops(board: SeasonsBoard): Array<Array<SeasonType | null>> {
   return board.cells.map((row) => row.map((cell) => cell?.t ?? null));
 }
 
-describe("wardrobe regions", () => {
+describe("seasons regions", () => {
   it("flood-fills orthogonally and ignores diagonals", () => {
     const board = boardFrom([
-      ["shirt", "shirt", "shoe"],
-      ["shoe", "shirt", "shoe"],
-      ["shoe", "shoe", "pant"],
+      ["autumn", "autumn", "winter"],
+      ["winter", "autumn", "winter"],
+      ["winter", "winter", "spring"],
     ]);
     const region = findRegion(board, 0, 0);
     assert.deepEqual(
       region.sort(),
       [[0, 0], [0, 1], [1, 1]].sort(),
     );
-    // (2,2) is a pant with no matching orthogonal neighbor: singleton region.
+    // (2,2) is a spring with no matching orthogonal neighbor: singleton region.
     assert.equal(findRegion(board, 2, 2).length, 1);
   });
 
   it("returns [] for empty and out-of-bounds cells", () => {
     const board = boardFrom([
-      ["shirt", null],
-      [null, "shoe"],
+      ["autumn", null],
+      [null, "winter"],
     ]);
     assert.deepEqual(findRegion(board, 0, 1), []);
     assert.deepEqual(findRegion(board, -1, 0), []);
@@ -73,11 +73,11 @@ describe("wardrobe regions", () => {
   });
 });
 
-describe("wardrobe removal", () => {
+describe("seasons removal", () => {
   it("rejects singletons without touching the board", () => {
     const board = boardFrom([
-      ["shirt", "shoe"],
-      ["pant", "bag"],
+      ["autumn", "winter"],
+      ["spring", "summer"],
     ]);
     const before = board.cells.map((row) => [...row]);
     assert.equal(removeRegion(board, findRegion(board, 0, 0)), false);
@@ -87,15 +87,15 @@ describe("wardrobe removal", () => {
 
   it("removes groups and lets squares above fall down", () => {
     const board = boardFrom([
-      ["shirt", "pant", "shoe"],
-      ["bag", "shoe", "shoe"],
-      ["bag", "shoe", "pant"],
+      ["autumn", "spring", "winter"],
+      ["summer", "winter", "winter"],
+      ["summer", "winter", "spring"],
     ]);
     assert.equal(removeRegion(board, findRegion(board, 1, 1)), true);
     assert.deepEqual(tops(board), [
-      ["shirt", null, null],
-      ["bag", null, null],
-      ["bag", "pant", "pant"],
+      ["autumn", null, null],
+      ["summer", null, null],
+      ["summer", "spring", "spring"],
     ]);
     assert.equal(remainingCount(board), 5);
     assert.equal(board.over, false);
@@ -103,23 +103,23 @@ describe("wardrobe removal", () => {
 
   it("collapses emptied columns to the right, order preserved", () => {
     const board = boardFrom([
-      ["shirt", "shoe", "pant"],
-      ["shirt", "shoe", "pant"],
-      ["shirt", "shoe", "bag"],
+      ["autumn", "winter", "spring"],
+      ["autumn", "winter", "spring"],
+      ["autumn", "winter", "summer"],
     ]);
     assert.equal(removeRegion(board, findRegion(board, 0, 1)), true);
     // The middle column is gone: survivors shift right, empties pad the left.
     assert.deepEqual(tops(board), [
-      [null, "shirt", "pant"],
-      [null, "shirt", "pant"],
-      [null, "shirt", "bag"],
+      [null, "autumn", "spring"],
+      [null, "autumn", "spring"],
+      [null, "autumn", "summer"],
     ]);
   });
 
   it("wins when the last square clears", () => {
     const board = boardFrom([
-      ["shirt", "shirt"],
-      ["shoe", "shoe"],
+      ["autumn", "autumn"],
+      ["winter", "winter"],
     ]);
     assert.equal(removeRegion(board, findRegion(board, 0, 0)), true);
     assert.equal(removeRegion(board, findRegion(board, 1, 1)), true);
@@ -131,12 +131,12 @@ describe("wardrobe removal", () => {
 
   it("loses when tiles remain but no group is clickable", () => {
     const board = boardFrom([
-      ["shirt", "shirt"],
-      ["shoe", "pant"],
+      ["autumn", "autumn"],
+      ["winter", "spring"],
     ]);
     assert.equal(hasAvailableMove(board), true);
     assert.equal(removeRegion(board, findRegion(board, 0, 0)), true);
-    // shoe vs pant: both singletons, nothing left to click.
+    // winter vs spring: both singletons, nothing left to click.
     assert.equal(remainingCount(board), 2);
     assert.equal(hasAvailableMove(board), false);
     assert.equal(board.over, true);
@@ -146,13 +146,13 @@ describe("wardrobe removal", () => {
   });
 });
 
-describe("wardrobe stuck detection", () => {
+describe("seasons stuck detection", () => {
   it("reports no move on all-singleton and empty boards", () => {
     assert.equal(
       hasAvailableMove(
         boardFrom([
-          ["shirt", "shoe"],
-          ["pant", "bag"],
+          ["autumn", "winter"],
+          ["spring", "summer"],
         ]),
       ),
       false,
@@ -164,8 +164,8 @@ describe("wardrobe stuck detection", () => {
     assert.equal(
       hasAvailableMove(
         boardFrom([
-          ["shirt", "shoe"],
-          ["pant", "shirt"],
+          ["autumn", "winter"],
+          ["spring", "autumn"],
         ]),
       ),
       false,
@@ -173,8 +173,8 @@ describe("wardrobe stuck detection", () => {
     assert.equal(
       hasAvailableMove(
         boardFrom([
-          ["shirt", "shoe"],
-          ["shirt", "pant"],
+          ["autumn", "winter"],
+          ["autumn", "spring"],
         ]),
       ),
       true,
@@ -182,8 +182,8 @@ describe("wardrobe stuck detection", () => {
   });
 });
 
-describe("wardrobe generator", () => {
-  it("produces full 10x10 boards using known clothing types", () => {
+describe("seasons generator", () => {
+  it("produces full 10x10 boards using known season types", () => {
     for (let i = 0; i < 3; i++) {
       const { cells, solution } = generateLevel();
       assert.equal(cells.length, 10);
@@ -191,7 +191,7 @@ describe("wardrobe generator", () => {
         assert.equal(row.length, 10);
         for (const cell of row) {
           assert.notEqual(cell, null);
-          assert.ok(CLOTH_TYPES.includes(cell!.t));
+          assert.ok(SEASON_TYPES.includes(cell!.t));
         }
       }
       // Every tile belongs to exactly one solution group.

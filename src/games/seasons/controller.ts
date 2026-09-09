@@ -1,12 +1,12 @@
 import type { GameInstance } from "../types.js";
-import { CLOTH_ICONS } from "./icons.js";
+import { SEASON_ICONS } from "./icons.js";
 import {
   createBoard,
   findRegion,
   generateLevel,
   remainingCount,
   removeRegion,
-  type WardrobeBoard,
+  type SeasonsBoard,
 } from "./logic.js";
 
 function el<T extends HTMLElement>(id: string): T {
@@ -18,14 +18,14 @@ function el<T extends HTMLElement>(id: string): T {
 /** Shared FLIP timing for falls and column slides. */
 const FLIP_MS = 240;
 
-export function createWardrobeGame(): GameInstance {
-  const root = el("wardrobe");
-  const grid = el("wardrobe-grid");
-  const message = el<HTMLParagraphElement>("wardrobe-message");
-  const level = el<HTMLParagraphElement>("wardrobe-level");
-  const newButton = el<HTMLButtonElement>("wardrobe-new-button");
+export function createSeasonsGame(): GameInstance {
+  const root = el("seasons");
+  const grid = el("seasons-grid");
+  const message = el<HTMLParagraphElement>("seasons-message");
+  const level = el<HTMLParagraphElement>("seasons-level");
+  const newButton = el<HTMLButtonElement>("seasons-new-button");
 
-  let board: WardrobeBoard = createBoard();
+  let board: SeasonsBoard = createBoard();
   let started = false;
   /**
    * Tile id -> chip element. Slots (grid buttons) stay put and keep focus;
@@ -63,8 +63,8 @@ export function createWardrobeGame(): GameInstance {
             let chip = chips.get(tile.id);
             if (!chip) {
               chip = document.createElement("div");
-              chip.className = `tile-chip cloth-${tile.t}`;
-              chip.innerHTML = CLOTH_ICONS[tile.t];
+              chip.className = `tile-chip season-${tile.t}`;
+              chip.innerHTML = SEASON_ICONS[tile.t];
               chips.set(tile.id, chip);
             }
             live.add(tile.id);
@@ -81,7 +81,7 @@ export function createWardrobeGame(): GameInstance {
     }
     grid.setAttribute(
       "aria-label",
-      `Wardrobe board, ${board.size} by ${board.size}, ${remainingCount(board)} pieces left`,
+      `Seasons board, ${board.size} by ${board.size}, ${remainingCount(board)} pieces left`,
     );
   }
 
@@ -108,7 +108,7 @@ export function createWardrobeGame(): GameInstance {
       for (let c = 0; c < board.size; c++) {
         const cell = document.createElement("button");
         cell.type = "button";
-        cell.className = "board-cell cloth-cell is-empty";
+        cell.className = "board-cell season-cell is-empty";
         cell.dataset.row = String(r);
         cell.dataset.col = String(c);
         cell.setAttribute("role", "gridcell");
@@ -290,7 +290,7 @@ export function createWardrobeGame(): GameInstance {
   newButton.addEventListener("click", newGame);
 
   return {
-    id: "wardrobe",
+    id: "seasons",
     mount(): void {
       root.classList.remove("hidden");
       document.getElementById("top")?.classList.add("has-result");

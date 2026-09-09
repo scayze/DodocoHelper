@@ -1,7 +1,7 @@
 import "./index.css";
 import { createCrownsGame } from "./games/crowns/controller.js";
 import { createMinesweeperGame } from "./games/minesweeper/controller.js";
-import { createWardrobeGame } from "./games/wardrobe/controller.js";
+import { createSeasonsGame } from "./games/seasons/controller.js";
 import { createTentsGame } from "./games/tents/controller.js";
 import type { GameId, GameInstance } from "./games/types.js";
 
@@ -14,14 +14,14 @@ function el<T extends HTMLElement>(id: string): T {
 const tabButtons: Record<GameId, HTMLButtonElement> = {
   crowns: el<HTMLButtonElement>("game-crowns"),
   minesweeper: el<HTMLButtonElement>("game-minesweeper"),
-  wardrobe: el<HTMLButtonElement>("game-wardrobe"),
+  seasons: el<HTMLButtonElement>("game-seasons"),
   tents: el<HTMLButtonElement>("game-tents"),
 };
 
 const games: Record<GameId, GameInstance> = {
   crowns: createCrownsGame(),
   minesweeper: createMinesweeperGame(),
-  wardrobe: createWardrobeGame(),
+  seasons: createSeasonsGame(),
   tents: createTentsGame(),
 };
 
@@ -40,7 +40,7 @@ function setGame(id: GameId): void {
   if (activeGame === id) return;
   games[activeGame].unmount();
   // Each game owns its sections: crowns owns the upload actions + solver
-  // stage, minesweeper and wardrobe own their own board containers.
+  // stage, minesweeper and seasons own their own board containers.
   document.getElementById("top")?.classList.remove("has-result");
   activeGame = id;
   games[activeGame].mount();
@@ -49,12 +49,12 @@ function setGame(id: GameId): void {
 
 tabButtons.crowns.addEventListener("click", () => setGame("crowns"));
 tabButtons.minesweeper.addEventListener("click", () => setGame("minesweeper"));
-tabButtons.wardrobe.addEventListener("click", () => setGame("wardrobe"));
+tabButtons.seasons.addEventListener("click", () => setGame("seasons"));
 tabButtons.tents.addEventListener("click", () => setGame("tents"));
 
 // Initial state: crowns visible, other games hidden.
 games.minesweeper.unmount();
-games.wardrobe.unmount();
+games.seasons.unmount();
 games.tents.unmount();
 games.crowns.mount();
 paintTabs();
