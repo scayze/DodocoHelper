@@ -287,7 +287,7 @@ describe("hints", () => {
   });
 
   it("finds deductions that require combining several constraints", () => {
-    const raw = JSON.parse(fs.readFileSync("test_fixtures/CrownsFixtures/image-puzzle.json", "utf8")) as unknown;
+    const raw = JSON.parse(fs.readFileSync("test_fixtures/ScreenshotFixtures/image123.expected.json", "utf8")) as unknown;
     const checked = validatePuzzleInput(raw);
     assert.ok(checked.puzzle);
     const hints = findHints(checked.puzzle!);

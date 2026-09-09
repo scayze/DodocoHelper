@@ -42,7 +42,7 @@ src/games/seasons/          # logic + solver + generator + icons + controller
 src/games/tents/            # logic + solver + generator + controller
 src/games/registry.ts       # minigame list consumed by the shell
 tests/                      # node:test suite (mirrors src/games/*)
-test_fixtures/              # ScreenshotFixtures (gating) + PhoneFixtures (best-effort) + CrownsFixtures
+test_fixtures/              # ScreenshotFixtures (gating) + PhoneFixtures (best-effort)
 ```
 
 ## Puzzle JSON schema
