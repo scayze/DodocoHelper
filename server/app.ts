@@ -136,8 +136,16 @@ export function createHandler(db: Db, opts: AppOptions = {}) {
         sendJson(res, 429, { error: "That player submitted too recently." });
         return;
       }
-      const { entry, improved } = submitScore(db, checked.value, now());
-      sendJson(res, 201, { entry, improved });
+      const { entry, duplicate } = submitScore(db, checked.value, now());
+      if (duplicate) {
+        sendJson(res, 409, {
+          error: "Score already submitted for this game today.",
+          entry,
+          duplicate: true,
+        });
+        return;
+      }
+      sendJson(res, 201, { entry, duplicate: false });
       return;
     }
 

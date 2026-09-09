@@ -1,6 +1,7 @@
 import "./index.css";
 import { GAMES } from "./games/registry.js";
 import type { GameId, GameInstance, ViewId } from "./games/types.js";
+import { NAME_EVENT, getDisplayName } from "./leaderboard/api.js";
 import { initLeaderboard } from "./leaderboard/view.js";
 
 initLeaderboard();
@@ -17,9 +18,14 @@ const tabButtons = {
 } as Record<ViewId, HTMLButtonElement>;
 
 const GAME_TITLES = {
-  home: "Welcome!",
   ...Object.fromEntries(GAMES.map((g) => [g.id, g.label])),
-} as Record<ViewId, string>;
+} as Record<GameId, string>;
+
+/** Home greets returning players by name; everyone else gets "Welcome!". */
+function homeTitle(): string {
+  const name = getDisplayName();
+  return name ? `Welcome ${name}!` : "Welcome!";
+}
 
 const gameTitle = el<HTMLElement>("game-title");
 const homeSection = el("home");
@@ -42,8 +48,9 @@ function paintTabs(): void {
     btn.classList.toggle("text-gold-600", active);
     btn.classList.toggle("text-gold-600/50", !active);
   }
-  gameTitle.textContent = GAME_TITLES[activeView];
-  document.title = `${GAME_TITLES[activeView]} - Dodoco Helper`;
+  const title = isGameId(activeView) ? GAME_TITLES[activeView] : homeTitle();
+  gameTitle.textContent = title;
+  document.title = `${title} - Dodoco Helper`;
 }
 
 function setView(id: ViewId): void {
@@ -68,6 +75,9 @@ function setView(id: ViewId): void {
 for (const id of Object.keys(tabButtons) as ViewId[]) {
   tabButtons[id].addEventListener("click", () => setView(id));
 }
+
+// A freshly confirmed name updates the greeting immediately.
+window.addEventListener(NAME_EVENT, () => paintTabs());
 
 // Initial state: home landing view visible, all games hidden.
 for (const game of Object.values(games)) game.unmount();

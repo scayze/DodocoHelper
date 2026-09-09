@@ -121,7 +121,11 @@ nav[aria-label="Primary"] .mode-btn svg {
 .btn-outline:focus-visible,
 .upload-card:focus-visible,
 .mode-btn:focus-visible,
-#retry-button:focus-visible {
+#retry-button:focus-visible,
+#lb-gate-confirm:focus-visible,
+#lb-gate-name:focus-visible,
+#lb-prev:focus-visible,
+#lb-next:focus-visible {
   outline: 2px solid #0f1930;
   outline-offset: 2px;
 }
@@ -129,6 +133,32 @@ nav[aria-label="Primary"] .mode-btn svg {
 .drop-active {
   border-color: #e6c96a;
   background: rgba(200, 160, 40, 0.1);
+}
+
+/* Transient submit-feedback toast: fixed above content, fades in/out. */
+#toast {
+  position: fixed;
+  left: 50%;
+  bottom: 1.25rem;
+  transform: translateX(-50%) translateY(8px);
+  z-index: 50;
+  max-width: min(92vw, 420px);
+  padding: 0.66rem 1.1rem;
+  border-radius: 999px;
+  background: #2e2a24;
+  color: #faf5e6;
+  font-size: 0.95rem;
+  font-weight: 600;
+  text-align: center;
+  box-shadow: 0 10px 24px rgba(60, 45, 10, 0.28);
+  opacity: 0;
+  transition: opacity 180ms ease, transform 180ms ease;
+  pointer-events: none;
+}
+
+#toast.show {
+  opacity: 1;
+  transform: translateX(-50%) translateY(0);
 }
 
 .board-cell {

@@ -15,12 +15,21 @@ npm run preview  # serve the production build
 npm test         # full test suite (unit + screenshot fixtures)
 ```
 
-## Leaderboard (daily best time, same deploy)
+## Leaderboard (daily, one-shot, same deploy)
 
-Each game reports wins to a daily per-game best-time board. The day key is
-UTC (`YYYY-MM-DD`) assigned server-side; players are `nickname + anonymous
-UUID` (stored in `localStorage`, no login). One row per
-`(day, game, clientId)` — only a faster time replaces the stored row.
+Each game reports wins to a daily per-game board. The day key is
+UTC (`YYYY-MM-DD`) assigned server-side; players are identified by a
+nickname + anonymous UUID stored in `localStorage` (no login, no rename —
+the name is permanent until storage is cleared).
+
+- Home shows a name gate until a name is saved; then the daily board shows.
+  Chevron buttons beside the title step back a day or forward to today.
+- Nameless wins queue client-side (earliest per game, day-stamped); confirming
+  a name flushes the queue. Named wins submit immediately after each minigame
+  with a small toast; offline failures re-queue and retry later.
+- **One-shot:** the first `POST` per `(day, game, player)` counts; retries get
+  `409`. Entries queued on a previous day are dropped and never reach the
+  current board.
 
 ```sh
 docker compose up --build   # :8080 serves the game; Caddy proxies /api/* to the api service
@@ -28,7 +37,7 @@ docker compose up --build   # :8080 serves the game; Caddy proxies /api/* to the
 
 - `GET  /api/healthz`
 - `GET  /api/leaderboard?game=crowns&day=2026-09-09&limit=20` (day defaults to today UTC)
-- `POST /api/scores` `{game, displayName (2–20 chars), clientId (UUID), durationMs, moves?, hintsUsed?}`
+- `POST /api/scores` `{game, displayName (2–20 chars), clientId (UUID), durationMs, moves?, hintsUsed?}` → `201` first submit, `409` retry
 - SQLite lives in the `leaderboard-data` volume (`DB_PATH=/data/leaderboard.db`); back it up by copying that file.
 - Abuse controls are best-effort v1: strict validation + per-IP/per-player rate limits. Times are client-reported, so treat the board as friendly rather than authoritative.
 

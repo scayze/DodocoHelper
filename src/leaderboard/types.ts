@@ -53,6 +53,13 @@ export function dayKeyUTC(at: Date = new Date()): string {
   return at.toISOString().slice(0, 10);
 }
 
+/** Shift a `YYYY-MM-DD` day key by whole UTC days (month/year safe). */
+export function shiftDayKey(day: string, deltaDays: number): string {
+  const [y, m, d] = day.split("-").map(Number);
+  const dt = new Date(Date.UTC(y, m - 1, d + deltaDays));
+  return dt.toISOString().slice(0, 10);
+}
+
 export function isValidDay(value: unknown): value is string {
   if (typeof value !== "string" || !DAY_RE.test(value)) return false;
   const [y, m, d] = value.split("-").map(Number);
