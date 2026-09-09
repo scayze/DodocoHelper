@@ -6,6 +6,7 @@ import {
   isValidDay,
 } from "../src/leaderboard/types.js";
 import { getLeaderboard, submitScore, type Db } from "./db.js";
+import { dailySeedsFor } from "./daily-seed.js";
 import { validateSubmit } from "./validate.js";
 
 const MAX_BODY_BYTES = 10_000;
@@ -112,6 +113,24 @@ export function createHandler(db: Db, opts: AppOptions = {}) {
         day,
         entries: getLeaderboard(db, game, day, limit),
       });
+      return;
+    }
+
+    if (req.method === "GET" && url.pathname === "/api/daily-seed") {
+      if (!getLimit.hit(`get:${ip}`)) {
+        sendJson(res, 429, { error: "Too many requests. Try again soon." });
+        return;
+      }
+      const day = url.searchParams.get("day") ?? dayKeyUTC(now());
+      if (!isValidDay(day)) {
+        sendJson(res, 400, { error: "day must be YYYY-MM-DD." });
+        return;
+      }
+      if (day > dayKeyUTC(now())) {
+        sendJson(res, 400, { error: "day must not be in the future." });
+        return;
+      }
+      sendJson(res, 200, dailySeedsFor(day));
       return;
     }
 

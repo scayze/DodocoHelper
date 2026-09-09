@@ -60,7 +60,7 @@ function isConnected(grid: number[], n: number, regionId: number): boolean {
  *    - Both regions remain exactly size N
  * 3. Repeat for many rounds to randomize the layout
  */
-function generateRegions(n: number): number[][] | null {
+function generateRegions(n: number, rand: () => number = Math.random): number[][] | null {
   const total = n * n;
   const side = Math.round(Math.sqrt(n));
 
@@ -80,8 +80,8 @@ function generateRegions(n: number): number[][] | null {
   const rounds = n * n * 20;
   for (let s = 0; s < rounds; s++) {
     // Pick a random cell
-    const r = Math.floor(Math.random() * n);
-    const c = Math.floor(Math.random() * n);
+    const r = Math.floor(rand() * n);
+    const c = Math.floor(rand() * n);
     const u = idx(n, r, c);
     const regU = grid[u];
 
@@ -89,7 +89,7 @@ function generateRegions(n: number): number[][] | null {
     const nbrs = neighbors4(n, r, c);
     const diffNbrs = nbrs.filter(([nr, nc]) => grid[idx(n, nr, nc)] !== regU);
     if (diffNbrs.length === 0) continue;
-    const [nr, nc] = diffNbrs[Math.floor(Math.random() * diffNbrs.length)];
+    const [nr, nc] = diffNbrs[Math.floor(rand() * diffNbrs.length)];
     const v = idx(n, nr, nc);
     const regV = grid[v];
 
@@ -118,8 +118,8 @@ function generateRegions(n: number): number[][] | null {
     if (regUBorder.length === 0 || regVBorder.length === 0) continue;
 
     // Pick random boundary cells from each region
-    const swapU = regUBorder[Math.floor(Math.random() * regUBorder.length)];
-    const swapV = regVBorder[Math.floor(Math.random() * regVBorder.length)];
+    const swapU = regUBorder[Math.floor(rand() * regUBorder.length)];
+    const swapV = regVBorder[Math.floor(rand() * regVBorder.length)];
 
     // Try the swap
     grid[swapU] = regV;
@@ -149,15 +149,17 @@ function generateRegions(n: number): number[][] | null {
 }
 
 /**
- * Generate a random valid Crown Puzzle.
+ * Generate a random valid Crown Puzzle. Pass `rand` (e.g. a seeded PRNG
+ * from the daily seed) for a reproducible board.
  */
 export function generatePuzzle(
   size = 9,
   crownsPerUnit = 2,
   maxAttempts = 50,
+  rand: () => number = Math.random,
 ): NormalizedPuzzle {
   for (let attempt = 0; attempt < maxAttempts; attempt++) {
-    const regions = generateRegions(size);
+    const regions = generateRegions(size, rand);
     if (!regions) continue;
 
     const puzzle: NormalizedPuzzle = {

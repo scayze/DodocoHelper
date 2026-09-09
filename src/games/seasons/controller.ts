@@ -1,5 +1,8 @@
 import type { GameInstance } from "../types.js";
-import { announceWin, createRunTimer } from "../../leaderboard/report.js";
+import { formatClock, todayUTC } from "../../leaderboard/api.js";
+import { announceWin, bindTimerPill, createRunTimer } from "../../leaderboard/report.js";
+import { fetchDailySeeds, mulberry32 } from "../daily.js";
+import { generateRandomLevel } from "./generator.js";
 import { SEASON_ICONS } from "./icons.js";
 import {
   createBoard,
@@ -8,7 +11,6 @@ import {
   removeRegion,
   type SeasonsBoard,
 } from "./logic.js";
-import { generateRandomLevel, type RandomLevel } from "./generator.js";
 
 function el<T extends HTMLElement>(id: string): T {
   const node = document.getElementById(id);
@@ -23,11 +25,13 @@ export function createSeasonsGame(): GameInstance {
   const root = el("seasons");
   const grid = el("seasons-grid");
   const message = el<HTMLParagraphElement>("seasons-message");
-  const level = el<HTMLParagraphElement>("seasons-level");
-  const newButton = el<HTMLButtonElement>("seasons-new-button");
+  const level = el("seasons-level");
+  const timerValue = el("seasons-timer-value");
 
   let board: SeasonsBoard = createBoard();
   let started = false;
+  /** UTC day key of the currently dealt board; re-deals at midnight rollover. */
+  let dailyDay: string | null = null;
   const runTimer = createRunTimer();
   let moveCount = 0;
   let winReported = false;
@@ -42,12 +46,6 @@ export function createSeasonsGame(): GameInstance {
   let animating = false;
   /** Bumps on every grid rebuild/unmount so stale flights can't repaint. */
   let moveEpoch = 0;
-  /** Next puzzle, generated while idle so starting a game never waits. */
-  let nextLevel: RandomLevel | null = null;
-  /** True while a background generation callback is pending. */
-  let prefetchScheduled = false;
-  /** Handle of the pending background callback, for cancellation. */
-  let prefetchHandle: number | null = null;
   /** Animations of the current flight; cancelled + cleared on teardown. */
   let flightAnims: Animation[] = [];
 
@@ -95,15 +93,23 @@ export function createSeasonsGame(): GameInstance {
     );
   }
 
+  function freezeClock(): void {
+    runTimer.stop();
+    timerValue.textContent = formatClock(runTimer.elapsed());
+  }
+
   function setStatus(): void {
     const left = remainingCount(board);
     level.textContent = `${left} left`;
-    message.textContent =
-      board.over && board.won
-        ? "Solved."
-        : board.over
-          ? "No moves left — start a new game."
-          : "";
+    if (board.over && board.won) {
+      message.textContent = "Solved.";
+      freezeClock();
+    } else if (board.over) {
+      message.textContent = "No moves left.";
+      freezeClock();
+    } else {
+      message.textContent = "";
+    }
   }
 
   function buildGrid(): void {
@@ -128,83 +134,35 @@ export function createSeasonsGame(): GameInstance {
     grid.appendChild(frag);
   }
 
-  function newGame(): void {
-    let levelData: RandomLevel;
-    if (nextLevel !== null) {
-      levelData = nextLevel;
-      nextLevel = null;
-    } else {
-      // Buffer empty (first load, or clicks outrunning the prefetch):
-      // deal synchronously (~10ms typical). Retried once; on total
-      // failure keep the current board instead of crashing.
-      let dealt: RandomLevel | null = null;
-      for (let attempt = 0; attempt < 2 && dealt === null; attempt++) {
-        try {
-          dealt = generateRandomLevel(board.size);
-        } catch {
-          dealt = null;
-        }
-      }
-      if (dealt === null) {
-        message.textContent = "Could not deal a new puzzle — try again.";
-        schedulePrefetch();
-        return;
-      }
-      levelData = dealt;
+  /** Deal the fixed daily board (seed from server, generated client-side). */
+  function dealDaily(day: string, seed: number): void {
+    let levelData;
+    try {
+      levelData = generateRandomLevel(board.size, { rand: mulberry32(seed) });
+    } catch {
+      message.textContent = "Could not deal today's puzzle.";
+      return;
     }
     board = createBoard(board.size);
     board.cells = levelData.cells;
+    dailyDay = day;
     started = true;
     moveCount = 0;
     winReported = false;
     runTimer.start();
+    bindTimerPill(runTimer, "seasons-timer-value", formatClock);
     buildGrid();
     paint();
     setStatus();
-    schedulePrefetch();
   }
 
-  /**
-   * Deal the following puzzle while the browser is idle. Failures leave the
-   * buffer empty so newGame() falls back to a synchronous attempt.
-   */
-  function schedulePrefetch(): void {
-    if (nextLevel !== null || prefetchScheduled) return;
-    prefetchScheduled = true;
-    const run = (): void => {
-      prefetchHandle = null;
-      prefetchScheduled = false;
-      try {
-        if (nextLevel === null) nextLevel = generateRandomLevel(board.size);
-      } catch {
-        nextLevel = null;
-      }
-    };
-    // requestIdleCallback is absent in some browsers (Safari): fall back to
-    // a plain macrotask. Either way this never runs during gameplay input.
-    const w = window as Window & {
-      requestIdleCallback?: (cb: () => void, opts?: { timeout: number }) => number;
-      cancelIdleCallback?: (handle: number) => void;
-    };
-    if (typeof w.requestIdleCallback === "function") {
-      prefetchHandle = w.requestIdleCallback(run, { timeout: 2000 });
-    } else {
-      prefetchHandle = window.setTimeout(run, 0);
-    }
-  }
-
-  function cancelPrefetch(): void {
-    if (prefetchHandle === null) return;
-    const w = window as Window & {
-      cancelIdleCallback?: (handle: number) => void;
-    };
-    if (typeof w.cancelIdleCallback === "function") {
-      w.cancelIdleCallback(prefetchHandle);
-    } else {
-      window.clearTimeout(prefetchHandle);
-    }
-    prefetchHandle = null;
-    prefetchScheduled = false;
+  function ensureDaily(): void {
+    const day = todayUTC();
+    if (started && dailyDay === day) return;
+    void fetchDailySeeds(day).then(({ day: seedDay, seeds }) => {
+      if (started && dailyDay === seedDay) return;
+      dealDaily(seedDay, seeds.seasons);
+    });
   }
 
   function snapshotChips(): Map<number, DOMRect> {
@@ -371,26 +329,29 @@ export function createSeasonsGame(): GameInstance {
   grid.addEventListener("pointerleave", clearPreview);
   grid.addEventListener("focusin", previewFromEvent);
   grid.addEventListener("focusout", clearPreview);
-  newButton.addEventListener("click", newGame);
 
   return {
     id: "seasons",
     mount(): void {
       root.classList.remove("hidden");
       document.getElementById("top")?.classList.add("has-result");
-      if (!started) newGame();
-      else {
+      if (!started) {
+        buildGrid();
+        paint();
+        setStatus();
+        ensureDaily();
+      } else if (dailyDay !== todayUTC()) {
+        ensureDaily();
+      } else {
         clearPreview();
         paint();
         setStatus();
-        schedulePrefetch();
       }
     },
     unmount(): void {
       moveEpoch++;
       clearPreview();
       teardownMove();
-      cancelPrefetch();
       root.classList.add("hidden");
     },
   };

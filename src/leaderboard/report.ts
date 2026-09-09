@@ -17,21 +17,69 @@ export interface WinDetail {
 
 export const WIN_EVENT = "dodoco:win";
 
-/** Start timestamp holder: call `start()` on new game, `elapsed()` on solve. */
+/** Start timestamp holder: call `start()` on new game, `elapsed()` on solve.
+ * `tick()` drives a visible count-up clock (e.g. the meta-row timer pill);
+ * `stop()` freezes it on win/loss. The clock keeps running across tab
+ * switches by design (no pause on unmount) so daily times stay comparable.
+ */
 export function createRunTimer(): {
   start(): void;
+  stop(): void;
   elapsed(): number;
+  tick(cb: (elapsedMs: number) => void): void;
 } {
   let startedAt = 0;
+  let stoppedAt: number | null = null;
+  let interval: number | null = null;
+  function clearTimerInterval(): void {
+    if (interval !== null) {
+      window.clearInterval(interval);
+      interval = null;
+    }
+  }
+  function elapsed(): number {
+    if (startedAt === 0) return 0;
+    const end = stoppedAt ?? performance.now();
+    return Math.max(1, Math.round(end - startedAt));
+  }
   return {
     start(): void {
+      clearTimerInterval();
       startedAt = performance.now();
+      stoppedAt = null;
     },
-    elapsed(): number {
-      if (startedAt === 0) return 0;
-      return Math.max(1, Math.round(performance.now() - startedAt));
+    stop(): void {
+      if (startedAt === 0 || stoppedAt !== null) return;
+      stoppedAt = performance.now();
+      clearTimerInterval();
+    },
+    elapsed,
+    tick(cb: (elapsedMs: number) => void): void {
+      clearTimerInterval();
+      cb(elapsed());
+      interval = window.setInterval(() => {
+        if (stoppedAt !== null) {
+          clearTimerInterval();
+          return;
+        }
+        cb(elapsed());
+      }, 250);
     },
   };
+}
+
+/** Bind a run timer to a `#*-timer-value` span; shows `0:00` before start. */
+export function bindTimerPill(
+  timer: ReturnType<typeof createRunTimer>,
+  valueId: string,
+  format: (ms: number) => string,
+): void {
+  const node = document.getElementById(valueId);
+  if (!node) return;
+  node.textContent = format(0);
+  timer.tick((ms) => {
+    node.textContent = format(ms);
+  });
 }
 
 /**

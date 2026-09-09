@@ -135,25 +135,6 @@
                   </span>
                 </span>
               </button>
-              <button id="generate-button" type="button" aria-label="Generate a level for me"
-                class="upload-card grid min-h-[163px] flex-1 cursor-pointer place-items-center rounded-2xl border-2 border-dashed border-night-700/30 bg-white/50 px-[18px] py-[26px] text-center text-night-900 shadow-[0_16px_50px_rgba(60,45,10,0.12)] transition-colors hover:border-gold-600">
-                <span>
-                  <svg width="35" height="35" viewBox="0 0 256 256" fill="none" stroke="currentColor" stroke-width="16" class="mx-auto text-night-700/70" aria-hidden="true">
-                    <rect x="32" y="32" width="192" height="192" rx="48" />
-                    <circle cx="88" cy="88" r="16" fill="currentColor" stroke="none" />
-                    <circle cx="168" cy="88" r="16" fill="currentColor" stroke="none" />
-                    <circle cx="128" cy="128" r="16" fill="currentColor" stroke="none" />
-                    <circle cx="88" cy="168" r="16" fill="currentColor" stroke="none" />
-                    <circle cx="168" cy="168" r="16" fill="currentColor" stroke="none" />
-                  </svg>
-                  <span class="upload-card-text block">
-                    <span class="mt-[11px] block text-[15px] font-semibold">Generate a level for me</span>
-                    <span class="mx-auto mt-[4px] block max-w-[34ch] text-[15px] text-night-800/70">
-                      A fresh random board, ready to play.
-                    </span>
-                  </span>
-                </span>
-              </button>
             </div>
             <input id="file-input" type="file" accept="image/png,image/jpeg,image/webp" class="sr-only" />
           </div>
@@ -188,16 +169,35 @@
 
               <div id="panel-ready" class="hidden rounded-2xl border border-night-700/15 bg-white/60 p-[18px] text-night-900 shadow-[0_16px_50px_rgba(60,45,10,0.12)] backdrop-blur-sm" tabindex="-1">
                 <div class="flex flex-col gap-[13px]">
+                  <div class="meta-row" aria-hidden="false">
+                    <span id="crowns-timer" class="meta-pill" role="timer" aria-label="Elapsed time">
+                      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+                        <circle cx="12" cy="13" r="8" />
+                        <path d="M12 9v4l2.5 2.5" />
+                        <path d="M9 2h6" />
+                      </svg>
+                      <span id="crowns-timer-value">0:00</span>
+                    </span>
+                    <span id="hint-level" class="meta-pill is-counter"></span>
+                  </div>
                   <figure class="min-w-0 flex-1">
                     <div id="board-grid" role="grid" aria-label="Puzzle board with regions, marks, and crowns" class="grid w-full rounded-xl bg-[rgb(95,112,128)]"></div>
                   </figure>
-                  <p id="hint-level" class="text-center text-[11px] font-bold uppercase tracking-[0.18em] text-gold-600" aria-hidden="true"></p>
                   <p id="hint-message" class="min-h-[24px] whitespace-pre-line text-center text-[15px] font-semibold leading-relaxed text-night-800/80" role="status" aria-live="polite"></p>
                   <div class="flex flex-row gap-[9px]">
-                    <button id="undo-button" type="button" class="btn-outline h-[48px] flex-1 rounded-full px-[22px] text-[15px] font-semibold disabled:cursor-not-allowed disabled:opacity-50" disabled>
-                      Undo
+                    <button id="undo-button" type="button" class="btn-outline game-btn h-[48px] flex-1 rounded-full px-[22px] text-[15px] font-semibold disabled:cursor-not-allowed disabled:opacity-50" disabled>
+                      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+                        <path d="M3 7v6h6" />
+                        <path d="M21 17a9 9 0 0 0-9-9 9 9 0 0 0-6 2.3L3 13" />
+                      </svg>
+                      <span>Undo</span>
                     </button>
-                    <button id="hint-button" type="button" class="btn-outline h-[48px] flex-1 rounded-full px-[22px] text-[15px] font-semibold disabled:cursor-not-allowed disabled:opacity-50">
+                    <button id="hint-button" type="button" class="btn-outline game-btn h-[48px] flex-1 rounded-full px-[22px] text-[15px] font-semibold disabled:cursor-not-allowed disabled:opacity-50">
+                      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+                        <path d="M9 18h6" />
+                        <path d="M10 22h4" />
+                        <path d="M12 2a7 7 0 0 0-4 12.7c.6.5 1 1.4 1 2.3h6c0-.9.4-1.8 1-2.3A7 7 0 0 0 12 2z" />
+                      </svg>
                       <span id="hint-label">Hint</span>
                     </button>
                   </div>
@@ -210,16 +210,21 @@
           <div class="mx-auto w-full" id="mines-col">
             <div id="mines-panel" class="rounded-2xl border border-night-700/15 bg-white/60 p-[18px] text-night-900 shadow-[0_16px_50px_rgba(60,45,10,0.12)] backdrop-blur-sm" tabindex="-1">
               <div class="flex flex-col gap-[13px]">
+                <div class="meta-row">
+                  <span id="mines-timer" class="meta-pill" role="timer" aria-label="Elapsed time">
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+                      <circle cx="12" cy="13" r="8" />
+                      <path d="M12 9v4l2.5 2.5" />
+                      <path d="M9 2h6" />
+                    </svg>
+                    <span id="mines-timer-value">0:00</span>
+                  </span>
+                  <span id="mines-level" class="meta-pill is-counter" aria-hidden="true"></span>
+                </div>
                 <figure class="min-w-0 flex-1">
                   <div id="mines-grid" role="grid" aria-label="Minesweeper board" class="grid w-full"></div>
                 </figure>
-                <p id="mines-level" class="text-center text-[11px] font-bold uppercase tracking-[0.18em] text-gold-600" aria-hidden="true"></p>
                 <p id="mines-message" class="min-h-[24px] whitespace-pre-line text-center text-[15px] font-semibold leading-relaxed text-night-800/80" role="status" aria-live="polite"></p>
-                <div class="flex flex-row gap-[9px]">
-                  <button id="mines-new-button" type="button" class="btn-outline h-[48px] flex-1 rounded-full px-[22px] text-[15px] font-semibold">
-                    New
-                  </button>
-                </div>
               </div>
             </div>
           </div>
@@ -228,16 +233,21 @@
           <div class="mx-auto w-full" id="seasons-col">
             <div id="seasons-panel" class="rounded-2xl border border-night-700/15 bg-white/60 p-[18px] text-night-900 shadow-[0_16px_50px_rgba(60,45,10,0.12)] backdrop-blur-sm" tabindex="-1">
               <div class="flex flex-col gap-[13px]">
+                <div class="meta-row">
+                  <span id="seasons-timer" class="meta-pill" role="timer" aria-label="Elapsed time">
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+                      <circle cx="12" cy="13" r="8" />
+                      <path d="M12 9v4l2.5 2.5" />
+                      <path d="M9 2h6" />
+                    </svg>
+                    <span id="seasons-timer-value">0:00</span>
+                  </span>
+                  <span id="seasons-level" class="meta-pill is-counter" aria-hidden="true"></span>
+                </div>
                 <figure class="min-w-0 flex-1">
                   <div id="seasons-grid" role="grid" aria-label="Seasons board" class="grid w-full"></div>
                 </figure>
-                <p id="seasons-level" class="text-center text-[11px] font-bold uppercase tracking-[0.18em] text-gold-600" aria-hidden="true"></p>
                 <p id="seasons-message" class="min-h-[24px] whitespace-pre-line text-center text-[15px] font-semibold leading-relaxed text-night-800/80" role="status" aria-live="polite"></p>
-                <div class="flex flex-row gap-[9px]">
-                  <button id="seasons-new-button" type="button" class="btn-outline h-[48px] flex-1 rounded-full px-[22px] text-[15px] font-semibold">
-                    New
-                  </button>
-                </div>
               </div>
             </div>
           </div>
@@ -246,14 +256,28 @@
           <div class="mx-auto w-full" id="tents-col">
             <div id="tents-panel" class="rounded-2xl border border-night-700/15 bg-white/60 p-[18px] text-night-900 shadow-[0_16px_50px_rgba(60,45,10,0.12)] backdrop-blur-sm" tabindex="-1">
               <div class="flex flex-col gap-[13px]">
+                <div class="meta-row">
+                  <span id="tents-timer" class="meta-pill" role="timer" aria-label="Elapsed time">
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+                      <circle cx="12" cy="13" r="8" />
+                      <path d="M12 9v4l2.5 2.5" />
+                      <path d="M9 2h6" />
+                    </svg>
+                    <span id="tents-timer-value">0:00</span>
+                  </span>
+                  <span id="tents-level" class="meta-pill is-counter" aria-hidden="true"></span>
+                </div>
                 <figure class="min-w-0 flex-1">
                   <div id="tents-grid" role="grid" aria-label="Tents and Trees board" class="grid w-full"></div>
                 </figure>
-                <p id="tents-level" class="text-center text-[11px] font-bold uppercase tracking-[0.18em] text-gold-600" aria-hidden="true"></p>
                 <p id="tents-message" class="min-h-[24px] whitespace-pre-line text-center text-[15px] font-semibold leading-relaxed text-night-800/80" role="status" aria-live="polite"></p>
                 <div class="flex flex-row gap-[9px]">
-                  <button id="tents-new-button" type="button" class="btn-outline h-[48px] flex-1 rounded-full px-[22px] text-[15px] font-semibold">
-                    New
+                  <button id="tents-undo-button" type="button" class="btn-outline game-btn h-[48px] flex-1 rounded-full px-[22px] text-[15px] font-semibold disabled:cursor-not-allowed disabled:opacity-50" disabled>
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+                      <path d="M3 7v6h6" />
+                      <path d="M21 17a9 9 0 0 0-9-9 9 9 0 0 0-6 2.3L3 13" />
+                    </svg>
+                    <span>Undo</span>
                   </button>
                 </div>
               </div>

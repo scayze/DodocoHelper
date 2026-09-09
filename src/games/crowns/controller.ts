@@ -1,15 +1,15 @@
 import "../../index.css";
-import { extractBoardFromFile } from "./extract.js";
 import { buildBoardGrid, paintBoard } from "./view.js";
 import { solvePuzzle } from "./solver.js";
 import { findHints } from "./hints.js";
 import type { Hint } from "./hints.js";
-import { validatePuzzleInput } from "./validator.js";
-import type { NormalizedPuzzle, PuzzleInput } from "./types.js";
+import type { NormalizedPuzzle } from "./types.js";
 import { nextMark } from "./marks.js";
 import { generatePuzzle } from "./generator.js";
 import type { GameInstance } from "../types.js";
-import { announceWin, createRunTimer } from "../../leaderboard/report.js";
+import { formatClock, todayUTC } from "../../leaderboard/api.js";
+import { announceWin, bindTimerPill, createRunTimer } from "../../leaderboard/report.js";
+import { fetchDailySeeds, mulberry32 } from "../daily.js";
 
 type Phase = "idle" | "working" | "ready" | "error";
 
@@ -19,16 +19,6 @@ function el<T extends HTMLElement>(id: string): T {
   return node as T;
 }
 
-/** Whether the crowns game is the currently visible tab. Upload/paste is ignored otherwise. */
-let crownsActive = false;
-
-export function setCrownsActive(active: boolean): void {
-  crownsActive = active;
-}
-
-const screenshotButton = el<HTMLButtonElement>("screenshot-button");
-const generateButton = el<HTMLButtonElement>("generate-button");
-const fileInput = el<HTMLInputElement>("file-input");
 const panels = {
   working: el("panel-working"),
   ready: el("panel-ready"),
@@ -37,13 +27,12 @@ const panels = {
 const resultArea = el("result-area");
 const errorTitle = el("error-title");
 const errorHint = el("error-hint");
-const retryButton = el<HTMLButtonElement>("retry-button");
 const boardGrid = el("board-grid");
 const hintButton = el<HTMLButtonElement>("hint-button");
-const hintLabel = el("hint-label");
 const hintMessage = el<HTMLParagraphElement>("hint-message");
-const hintLevel = el<HTMLParagraphElement>("hint-level");
+const hintLevel = el("hint-level");
 const undoButton = el<HTMLButtonElement>("undo-button");
+const timerValue = el("crowns-timer-value");
 const uploadSection = el("upload");
 const solverSection = el("solver");
 
@@ -55,6 +44,8 @@ const shownHints = new Set<string>();
 let activeHint: Hint | null = null;
 let undoStack: Array<{ r: number; c: number; prev: string }> = [];
 let puzzleSolved = false;
+/** UTC day key of the currently dealt board; re-deals at midnight rollover. */
+let dailyDay: string | null = null;
 const runTimer = createRunTimer();
 /**
  * Whether availableHints holds fresh results for the current board.
@@ -78,15 +69,21 @@ function setPhase(phase: Phase): void {
   if (phase === "error") focusPanel("panel-error");
 }
 
-function handleNewPuzzle(): void {
+function freezeClock(): void {
+  runTimer.stop();
+  timerValue.textContent = formatClock(runTimer.elapsed());
+}
+
+/** Deal the fixed daily board (seed from server, generated client-side). */
+function dealDaily(day: string, seed: number): void {
   if (isWorking) return;
   setPhase("working");
   isWorking = true;
   try {
-    const generated = generatePuzzle();
+    const generated = generatePuzzle(9, 2, 50, mulberry32(seed));
     const solved = solvePuzzle(generated);
     if (solved.status !== "solved" || !solved.solution) {
-      showError("Could not generate a puzzle.", solved.errors.join(" "));
+      showError("Could not deal today's puzzle.", solved.errors.join(" "));
       return;
     }
     puzzle = generated;
@@ -97,9 +94,11 @@ function handleNewPuzzle(): void {
     activeHint = null;
     undoStack = [];
     puzzleSolved = false;
+    dailyDay = day;
     hintMessage.textContent = "";
-    hintLevel.textContent = "";
+    hintLevel.textContent = "Daily";
     runTimer.start();
+    bindTimerPill(runTimer, "crowns-timer-value", formatClock);
     buildBoardGrid(boardGrid, generated);
     paintBoard(boardGrid, generated, new Set(), null);
     boardGrid.setAttribute("aria-label", describeBoard());
@@ -107,8 +106,17 @@ function handleNewPuzzle(): void {
     isWorking = false;
     setPhase("ready");
   } catch (e) {
-    showError("Could not generate a puzzle.", e instanceof Error ? e.message : "Try again.");
+    showError("Could not deal today's puzzle.", e instanceof Error ? e.message : "Try again.");
   }
+}
+
+function ensureDaily(): void {
+  const day = todayUTC();
+  if (puzzle && dailyDay === day) return;
+  void fetchDailySeeds(day).then(({ day: seedDay, seeds }) => {
+    if (puzzle && dailyDay === seedDay) return;
+    dealDaily(seedDay, seeds.crowns);
+  });
 }
 
 function showError(title: string, hint: string): void {
@@ -119,14 +127,12 @@ function showError(title: string, hint: string): void {
 }
 
 function refreshHintButton(): void {
-  // A solved puzzle turns the Hint button into a New puzzle button.
+  // Solved: both buttons park disabled. Daily has no New-puzzle action.
   if (puzzleSolved) {
-    hintLabel.textContent = "New puzzle";
-    hintButton.disabled = false;
+    hintButton.disabled = true;
     undoButton.disabled = true;
     return;
   }
-  hintLabel.textContent = "Hint";
   if (!fullSolution) {
     hintButton.disabled = true;
     undoButton.disabled = undoStack.length === 0;
@@ -159,7 +165,8 @@ function checkPlaySolved(): void {
   puzzleSolved = true;
   activeHint = null;
   hintMessage.textContent = "Solved.";
-  hintLevel.textContent = "";
+  hintLevel.textContent = "Daily";
+  freezeClock();
   announceWin({
     game: "crowns",
     durationMs: runTimer.elapsed(),
@@ -190,36 +197,6 @@ function describeBoard(): string {
   return `Puzzle board, ${puzzle.size} by ${puzzle.size}, ${placed} crowns total, ${shown} hints shown${highlight}`;
 }
 
-function runPuzzle(raw: PuzzleInput): void {
-  const { errors, puzzle: parsed } = validatePuzzleInput(raw);
-  if (!parsed) {
-    showError("That board did not pass validation.", errors.join(" "));
-    return;
-  }
-  const solved = solvePuzzle(raw);
-  if (solved.status !== "solved" || !solved.solution) {
-    showError("No crowns fit that board.", solved.errors.join(" "));
-    return;
-  }
-  puzzle = parsed;
-  fullSolution = solved.solution;
-  availableHints = [];
-  hintsComputed = false;
-  shownHints.clear();
-  activeHint = null;
-  undoStack = [];
-  puzzleSolved = false;
-  hintMessage.textContent = "";
-  hintLevel.textContent = "";
-  runTimer.start();
-  buildBoardGrid(boardGrid, parsed);
-  paintBoard(boardGrid, parsed, new Set(), null);
-  boardGrid.setAttribute("aria-label", describeBoard());
-  refreshHintButton();
-  isWorking = false;
-  setPhase("ready");
-}
-
 function recomputeEditedBoard(): void {
   if (!puzzle) return;
   const solved = solvePuzzle(puzzle);
@@ -234,10 +211,10 @@ function recomputeEditedBoard(): void {
   boardGrid.setAttribute("aria-label", describeBoard());
   if (fullSolution) {
     hintMessage.textContent = "";
-    hintLevel.textContent = "";
+    hintLevel.textContent = "Daily";
   } else {
     hintMessage.textContent = "These marks cannot all be satisfied. Change a queen or cross to continue.";
-    hintLevel.textContent = "";
+    hintLevel.textContent = "Daily";
   }
   refreshHintButton();
 }
@@ -255,14 +232,6 @@ function editCell(cell: HTMLElement): void {
   cell.focus({ preventScroll: true });
 }
 
-async function onHintButton(): Promise<void> {
-  if (puzzleSolved) {
-    handleNewPuzzle();
-    return;
-  }
-  await revealHint();
-}
-
 async function revealHint(): Promise<void> {
   if (!puzzle || !fullSolution || hintButton.disabled) return;
   if (!hintsComputed) {
@@ -270,7 +239,7 @@ async function revealHint(): Promise<void> {
     hintMessage.textContent = "Thinking…";
     // Yield so the message paints before the blocking search runs.
     await new Promise((resolve) => setTimeout(resolve, 0));
-    // The board may have changed while yielding (new puzzle started).
+    // The board may have changed while yielding (new daily dealt).
     if (!puzzle || !fullSolution) {
       refreshHintButton();
       return;
@@ -292,50 +261,10 @@ async function revealHint(): Promise<void> {
   activeHint = next;
   shownHints.add(hintId(next));
   hintMessage.textContent = next.text;
-  hintLevel.textContent = next.difficultyLabel === "Advanced" ? "" : `${next.difficultyLabel} hint`;
+  hintLevel.textContent = next.difficultyLabel === "Advanced" ? "Daily" : `${next.difficultyLabel} · Daily`;
   paintBoard(boardGrid, puzzle, new Set(), activeHint);
   boardGrid.setAttribute("aria-label", describeBoard());
   refreshHintButton();
-}
-
-async function handleFile(file: File): Promise<void> {
-  if (!crownsActive || isWorking) return;
-  if (!file.type.startsWith("image/")) {
-    showError("Please upload an image file.", "PNG or JPEG shots of the puzzle board work best.");
-    return;
-  }
-  setPhase("working");
-  isWorking = true;
-  try {
-    const extracted = await extractBoardFromFile(file);
-    if (!extracted.ok || !extracted.puzzle) {
-      showError(
-        "The grid reader could not map that shot.",
-        extracted.error ?? "Keep the whole board visible with the grid clearly shown.",
-      );
-      return;
-    }
-    runPuzzle(extracted.puzzle);
-  } catch (e) {
-    showError(
-      "That image could not be read.",
-      e instanceof Error ? e.message : "Please try a different file.",
-    );
-  }
-}
-
-/** First image file on the clipboard, or null when no image was pasted. */
-function clipboardImage(e: ClipboardEvent): File | null {
-  const files = e.clipboardData?.files;
-  if (!files) return null;
-  for (const file of Array.from(files)) {
-    if (file.type.startsWith("image/")) return file;
-  }
-  return null;
-}
-
-function setDragOver(on: boolean): void {
-  screenshotButton.classList.toggle("drop-active", on);
 }
 
 let listenersAttached = false;
@@ -343,36 +272,7 @@ let listenersAttached = false;
 function attachListeners(): void {
   if (listenersAttached) return;
   listenersAttached = true;
-  screenshotButton.addEventListener("click", () => fileInput.click());
-  generateButton.addEventListener("click", () => handleNewPuzzle());
-  uploadSection.addEventListener("dragover", (e) => {
-    if (!crownsActive) return;
-    e.preventDefault();
-    setDragOver(true);
-  });
-  uploadSection.addEventListener("dragleave", () => setDragOver(false));
-  uploadSection.addEventListener("drop", (e) => {
-    if (!crownsActive) return;
-    e.preventDefault();
-    setDragOver(false);
-    const file = e.dataTransfer?.files?.[0];
-    if (file) void handleFile(file);
-  });
-  fileInput.addEventListener("change", () => {
-    const file = fileInput.files?.[0];
-    if (file) void handleFile(file);
-    fileInput.value = "";
-  });
-  // Paste-to-upload: Ctrl+V anywhere on the page with an image on the clipboard.
-  document.addEventListener("paste", (e) => {
-    if (!crownsActive) return;
-    const file = clipboardImage(e);
-    if (!file) return;
-    e.preventDefault();
-    void handleFile(file);
-  });
-  retryButton.addEventListener("click", () => fileInput.click());
-  hintButton.addEventListener("click", onHintButton);
+  hintButton.addEventListener("click", () => void revealHint());
   undoButton.addEventListener("click", undo);
   boardGrid.addEventListener("click", (e) => {
     const cell = (e.target as HTMLElement).closest<HTMLElement>("[data-row][data-col]");
@@ -404,12 +304,17 @@ export function createCrownsGame(): GameInstance {
   return {
     id: "crowns",
     mount(): void {
-      setCrownsActive(true);
-      uploadSection.classList.remove("hidden");
+      // Daily Challenge owns a fixed puzzle: the upload stage stays hidden.
+      uploadSection.classList.add("hidden");
       solverSection.classList.remove("hidden");
+      if (!puzzle) {
+        setPhase("working");
+        ensureDaily();
+      } else if (dailyDay !== todayUTC()) {
+        ensureDaily();
+      }
     },
     unmount(): void {
-      setCrownsActive(false);
       uploadSection.classList.add("hidden");
       solverSection.classList.add("hidden");
     },

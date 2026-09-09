@@ -86,10 +86,17 @@ export function placeMines(
   board.placed = true;
 }
 
-/** Reveal a cell; flood-fills through zero-adjacent cells. Returns hit-mine. */
-export function reveal(board: MineBoard, r: number, c: number): boolean {
+/** Reveal a cell; flood-fills through zero-adjacent cells. Returns hit-mine.
+ * Pass `rand` (e.g. the daily seed) so deferred mine placement is reproducible.
+ */
+export function reveal(
+  board: MineBoard,
+  r: number,
+  c: number,
+  rand: () => number = Math.random,
+): boolean {
   if (board.over) return false;
-  if (!board.placed) placeMines(board, r, c);
+  if (!board.placed) placeMines(board, r, c, rand);
   const cur = board.state[r][c];
   if (cur === "revealed" || cur === "flagged") return false;
   if (board.mines[r][c]) {
@@ -129,7 +136,12 @@ export function toggleFlag(board: MineBoard, r: number, c: number): void {
  * flag count matches reveals all remaining hidden neighbors. Returns
  * hit-mine (true when a flag was misplaced and a mine went off).
  */
-export function chord(board: MineBoard, r: number, c: number): boolean {
+export function chord(
+  board: MineBoard,
+  r: number,
+  c: number,
+  rand: () => number = Math.random,
+): boolean {
   if (board.over || board.state[r][c] !== "revealed") return false;
   const want = board.adjacent[r][c];
   if (want <= 0) return false;
@@ -140,7 +152,7 @@ export function chord(board: MineBoard, r: number, c: number): boolean {
   if (flags !== want) return false;
   let hitMine = false;
   for (const [nr, nc] of neighborsOf(board.size, r, c)) {
-    if (board.state[nr][nc] === "hidden" && reveal(board, nr, nc)) hitMine = true;
+    if (board.state[nr][nc] === "hidden" && reveal(board, nr, nc, rand)) hitMine = true;
   }
   return hitMine;
 }

@@ -90,6 +90,57 @@ body {
   transform: translateY(1px);
 }
 
+/* Unified minigame controls (Daily Challenge): icon + label action buttons
+   and the non-interactive meta pills (timer left, puzzle counter right)
+   that sit in the meta row above each board. */
+.game-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+}
+
+.game-btn svg {
+  width: 18px;
+  height: 18px;
+  flex-shrink: 0;
+}
+
+.meta-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 9px;
+}
+
+.meta-pill {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  min-height: 36px;
+  padding: 6px 14px;
+  border-radius: 999px;
+  border: 1px solid rgba(34, 49, 84, 0.15);
+  background: rgba(255, 255, 255, 0.6);
+  font-size: 14px;
+  font-weight: 600;
+  line-height: 1;
+  color: #16223d;
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+}
+
+.meta-pill svg {
+  width: 15px;
+  height: 15px;
+  flex-shrink: 0;
+  color: #a37f1c;
+}
+
+.meta-pill.is-counter {
+  color: rgba(22, 34, 61, 0.8);
+}
+
 .mode-btn {
   cursor: pointer;
   transition: color 150ms ease;
@@ -119,6 +170,7 @@ nav[aria-label="Primary"] .mode-btn svg {
 
 .btn-gold:focus-visible,
 .btn-outline:focus-visible,
+.game-btn:focus-visible,
 .upload-card:focus-visible,
 .mode-btn:focus-visible,
 #retry-button:focus-visible,
