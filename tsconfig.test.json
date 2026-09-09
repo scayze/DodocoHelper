@@ -5,10 +5,18 @@
     "moduleResolution": "NodeNext",
     "strict": true,
     "types": ["node"],
-    "outDir": "dist",
+    "outDir": "dist-test",
     "rootDir": ".",
     "declaration": false,
     "sourceMap": false
   },
-  "include": ["src/core", "src/lib/extract.ts", "src/games/minesweeper/logic.ts", "src/games/seasons/logic.ts", "tests"]
+  "include": ["src/**/*", "tests"],
+  "exclude": [
+    "src/main.ts",
+    "src/games/registry.ts",
+    "src/**/controller.ts",
+    "src/**/view.ts",
+    "src/**/icons.ts",
+    "vite.config.ts"
+  ]
 }

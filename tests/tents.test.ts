@@ -2,15 +2,14 @@ import { describe, it } from "node:test";
 import assert from "node:assert/strict";
 import {
   checkWin,
-  countSolutions,
   createBoard,
-  generateLevel,
-  solveTents,
   tentsPlaced,
   toggleMark,
   validateLevelData,
   type TentsLevel,
 } from "../src/games/tents/logic.js";
+import { countSolutions, solveTents } from "../src/games/tents/solver.js";
+import { generateLevel } from "../src/games/tents/generator.js";
 
 /** Deterministic rand for stable generator assertions. */
 function mulberry32(seed: number): () => number {

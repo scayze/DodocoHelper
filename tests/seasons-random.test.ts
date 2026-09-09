@@ -7,7 +7,7 @@ import {
   type SeasonsBoard,
   type SeasonType,
 } from "../src/games/seasons/logic.js";
-import { generateRandomLevel } from "../src/games/seasons/randomLevel.js";
+import { generateRandomLevel } from "../src/games/seasons/generator.js";
 import { isSolvableTypes } from "../src/games/seasons/solver.js";
 
 function mulberry32(seed: number): () => number {

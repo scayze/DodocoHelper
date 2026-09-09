@@ -1,4 +1,4 @@
-import type { PuzzleInput } from "../core/types.js";
+import type { PuzzleInput } from "./types.js";
 
 export interface ExtractResult {
   ok: boolean;

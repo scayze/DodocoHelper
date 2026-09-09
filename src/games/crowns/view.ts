@@ -1,5 +1,5 @@
-import type { NormalizedPuzzle } from "../core/types.js";
-import type { Hint } from "../core/hints.js";
+import type { NormalizedPuzzle } from "./types.js";
+import type { Hint } from "./hints.js";
 
 /** Default region colors sampled from the original game screenshot. */
 export const REGION_PALETTE: Array<[number, number, number]> = [

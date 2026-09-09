@@ -4,7 +4,7 @@ import fs from "node:fs";
 import path from "node:path";
 import { PNG } from "pngjs";
 import { decode as decodeJpeg } from "jpeg-js";
-import { extractBoardFromRGBA, relabelMatch } from "../src/lib/extract.js";
+import { extractBoardFromRGBA, relabelMatch } from "../src/games/crowns/extract.js";
 
 function decodeImage(p: string): { data: Uint8ClampedArray; w: number; h: number } {
   const ext = path.extname(p).toLowerCase();

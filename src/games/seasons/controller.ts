@@ -7,7 +7,7 @@ import {
   removeRegion,
   type SeasonsBoard,
 } from "./logic.js";
-import { generateRandomLevel, type RandomLevel } from "./randomLevel.js";
+import { generateRandomLevel, type RandomLevel } from "./generator.js";
 
 function el<T extends HTMLElement>(id: string): T {
   const node = document.getElementById(id);

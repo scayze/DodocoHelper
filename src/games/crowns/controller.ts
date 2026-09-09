@@ -1,13 +1,13 @@
 import "../../index.css";
-import { extractBoardFromFile } from "../../lib/extract";
-import { buildBoardGrid, paintBoard } from "../../lib/renderBoard";
-import { solvePuzzle } from "../../core/solver.js";
-import { findHints } from "../../core/hints.js";
-import type { Hint } from "../../core/hints.js";
-import { validatePuzzleInput } from "../../core/validator.js";
-import type { NormalizedPuzzle, PuzzleInput } from "../../core/types.js";
-import { nextMark } from "../../core/marks.js";
-import { generatePuzzle } from "../../core/generate.js";
+import { extractBoardFromFile } from "./extract.js";
+import { buildBoardGrid, paintBoard } from "./view.js";
+import { solvePuzzle } from "./solver.js";
+import { findHints } from "./hints.js";
+import type { Hint } from "./hints.js";
+import { validatePuzzleInput } from "./validator.js";
+import type { NormalizedPuzzle, PuzzleInput } from "./types.js";
+import { nextMark } from "./marks.js";
+import { generatePuzzle } from "./generator.js";
 import type { GameInstance } from "../types.js";
 
 type Phase = "idle" | "working" | "ready" | "error";

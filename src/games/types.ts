@@ -21,4 +21,6 @@ export interface GameInstance {
 export interface GameDef {
   readonly id: GameId;
   readonly label: string;
+  /** Factory for the game's shell instance. Called once at startup. */
+  readonly create: () => GameInstance;
 }

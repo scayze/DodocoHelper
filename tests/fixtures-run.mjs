@@ -10,7 +10,7 @@ import path from "node:path";
 import { fileURLToPath } from "node:url";
 import { PNG } from "pngjs";
 import { decode as decodeJpeg } from "jpeg-js";
-import { extractBoardFromRGBA, relabelMatch } from "../dist/src/lib/extract.js";
+import { extractBoardFromRGBA, relabelMatch } from "../dist-test/src/games/crowns/extract.js";
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const ROOT = path.resolve(__dirname, "..");

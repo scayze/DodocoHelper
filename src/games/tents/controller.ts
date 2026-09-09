@@ -2,7 +2,6 @@ import type { GameInstance } from "../types.js";
 import {
   checkWin,
   createBoard,
-  generateLevel,
   tentsInCol,
   tentsInRow,
   totalTents,
@@ -10,6 +9,7 @@ import {
   toggleMark,
   type TentsBoard,
 } from "./logic.js";
+import { generateLevel } from "./generator.js";
 
 function el<T extends HTMLElement>(id: string): T {
   const node = document.getElementById(id);

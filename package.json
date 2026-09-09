@@ -8,9 +8,10 @@
     "dev": "vite",
     "build": "tsc -b && vite build",
     "preview": "vite preview",
-    "test": "tsc -p tsconfig.test.json && node --test dist/tests/solver.test.js dist/tests/extract.test.js dist/tests/minesweeper.test.js dist/tests/seasons.test.js dist/tests/seasons-random.test.js dist/tests/tents.test.js && npm run test:fixtures",
+    "test": "tsc -p tsconfig.test.json && node --test dist-test/tests/*.test.js && npm run test:fixtures",
     "test:fixtures": "node tests/fixtures-run.mjs --check",
     "fixtures": "tsc -p tsconfig.test.json && node tests/fixtures-run.mjs",
+    "clean": "node -e \"fs.rmSync('dist',{recursive:true,force:true});fs.rmSync('dist-test',{recursive:true,force:true})\"",
     "typecheck": "tsc -b"
   },
   "engines": {

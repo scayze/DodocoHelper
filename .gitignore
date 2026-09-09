@@ -3,10 +3,8 @@ node_modules/
 
 # Build outputs
 dist/
+dist-test/
 build/
-*.tsbuildinfo
-
-# TypeScript incremental build info
 *.tsbuildinfo
 
 # Logs

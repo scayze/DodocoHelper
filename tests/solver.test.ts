@@ -1,13 +1,12 @@
 import { describe, it } from "node:test";
 import assert from "node:assert/strict";
 import fs from "node:fs";
-import { validatePuzzleInput, validateSolution } from "../src/core/validator.js";
-import { solveAll, solvePuzzle, testAssumption, testAssumptionDetailed } from "../src/core/solver.js";
-import { findHints } from "../src/core/hints.js";
-import { nextMark } from "../src/core/marks.js";
-import { validatePuzzleInput as checkInput } from "../src/core/validator.js";
-import { generatePuzzle } from "../src/core/generate.js";
-import type { NormalizedPuzzle } from "../src/core/types.js";
+import { validatePuzzleInput, validateSolution } from "../src/games/crowns/validator.js";
+import { solveAll, solvePuzzle, testAssumption, testAssumptionDetailed } from "../src/games/crowns/solver.js";
+import { findHints } from "../src/games/crowns/hints.js";
+import { nextMark } from "../src/games/crowns/marks.js";
+import { generatePuzzle } from "../src/games/crowns/generator.js";
+import type { NormalizedPuzzle } from "../src/games/crowns/types.js";
 
 // ---------------------------------------------------------------------------
 // Shared fixtures
@@ -54,7 +53,7 @@ function baseInput() {
 }
 
 function normalized(input: unknown): NormalizedPuzzle {
-  const { errors, puzzle } = checkInput(input);
+  const { errors, puzzle } = validatePuzzleInput(input);
   assert.deepEqual(errors, []);
   assert.ok(puzzle);
   return puzzle!;
@@ -288,7 +287,7 @@ describe("hints", () => {
   });
 
   it("finds deductions that require combining several constraints", () => {
-    const raw = JSON.parse(fs.readFileSync("public/examples/image-puzzle.json", "utf8")) as unknown;
+    const raw = JSON.parse(fs.readFileSync("test_fixtures/CrownsFixtures/image-puzzle.json", "utf8")) as unknown;
     const checked = validatePuzzleInput(raw);
     assert.ok(checked.puzzle);
     const hints = findHints(checked.puzzle!);

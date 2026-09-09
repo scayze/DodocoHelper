@@ -1,8 +1,5 @@
 import "./index.css";
-import { createCrownsGame } from "./games/crowns/controller.js";
-import { createMinesweeperGame } from "./games/minesweeper/controller.js";
-import { createSeasonsGame } from "./games/seasons/controller.js";
-import { createTentsGame } from "./games/tents/controller.js";
+import { GAMES } from "./games/registry.js";
 import type { GameId, GameInstance, ViewId } from "./games/types.js";
 
 function el<T extends HTMLElement>(id: string): T {
@@ -11,31 +8,23 @@ function el<T extends HTMLElement>(id: string): T {
   return node as T;
 }
 
-const tabButtons: Record<ViewId, HTMLButtonElement> = {
+const tabButtons = {
   home: el<HTMLButtonElement>("nav-home"),
-  crowns: el<HTMLButtonElement>("game-crowns"),
-  minesweeper: el<HTMLButtonElement>("game-minesweeper"),
-  seasons: el<HTMLButtonElement>("game-seasons"),
-  tents: el<HTMLButtonElement>("game-tents"),
-};
+  ...Object.fromEntries(GAMES.map((g) => [g.id, el<HTMLButtonElement>(`game-${g.id}`)])),
+} as Record<ViewId, HTMLButtonElement>;
 
-const GAME_TITLES: Record<ViewId, string> = {
+const GAME_TITLES = {
   home: "Welcome!",
-  crowns: "Crowns",
-  minesweeper: "Minesweeper",
-  seasons: "Seasons",
-  tents: "Tents & Trees",
-};
+  ...Object.fromEntries(GAMES.map((g) => [g.id, g.label])),
+} as Record<ViewId, string>;
 
 const gameTitle = el<HTMLElement>("game-title");
 const homeSection = el("home");
 
-const games: Record<GameId, GameInstance> = {
-  crowns: createCrownsGame(),
-  minesweeper: createMinesweeperGame(),
-  seasons: createSeasonsGame(),
-  tents: createTentsGame(),
-};
+const games = Object.fromEntries(GAMES.map((g) => [g.id, g.create()])) as Record<
+  GameId,
+  GameInstance
+>;
 
 function isGameId(id: ViewId): id is GameId {
   return id !== "home";
@@ -73,16 +62,11 @@ function setView(id: ViewId): void {
   paintTabs();
 }
 
-tabButtons.home.addEventListener("click", () => setView("home"));
-tabButtons.crowns.addEventListener("click", () => setView("crowns"));
-tabButtons.minesweeper.addEventListener("click", () => setView("minesweeper"));
-tabButtons.seasons.addEventListener("click", () => setView("seasons"));
-tabButtons.tents.addEventListener("click", () => setView("tents"));
+for (const id of Object.keys(tabButtons) as ViewId[]) {
+  tabButtons[id].addEventListener("click", () => setView(id));
+}
 
 // Initial state: home landing view visible, all games hidden.
-games.crowns.unmount();
-games.minesweeper.unmount();
-games.seasons.unmount();
-games.tents.unmount();
+for (const game of Object.values(games)) game.unmount();
 homeSection.classList.remove("hidden");
 paintTabs();
