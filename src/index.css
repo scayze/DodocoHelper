@@ -106,6 +106,97 @@ body {
   flex-shrink: 0;
 }
 
+/* Daily/endless mode toggle: textual, centered in the timer row. */
+.mode-toggle {
+  display: flex;
+  flex: 1 1 auto;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  min-width: 0;
+  font-size: 14px;
+  font-weight: 600;
+  letter-spacing: 0.08em;
+  white-space: nowrap;
+}
+
+.mode-toggle-btn {
+  cursor: pointer;
+  padding: 4px 6px;
+  border-radius: 8px;
+  color: rgba(22, 34, 61, 0.45);
+  transition: color 150ms ease;
+}
+
+.mode-toggle-btn:hover {
+  color: #0f1930;
+}
+
+.mode-toggle-btn.is-active {
+  color: #a37f1c;
+}
+
+.mode-toggle-sep {
+  color: rgba(22, 34, 61, 0.25);
+}
+
+.mode-toggle-btn:focus-visible {
+  outline: 2px solid #0f1930;
+  outline-offset: 2px;
+}
+
+/* Endless unlock spawn: plays once when the endless button appears after
+   the daily is completed. */
+@keyframes mode-unlock-pop {
+  from {
+    opacity: 0;
+    transform: scale(0.6);
+  }
+
+  60% {
+    opacity: 1;
+    transform: scale(1.08);
+  }
+
+  to {
+    opacity: 1;
+    transform: scale(1);
+  }
+}
+
+.mode-toggle-btn.unlock-pop,
+.mode-toggle-sep.unlock-pop {
+  animation: mode-unlock-pop 350ms ease-out;
+}
+
+/* Inline endless settings rows: label left, number input right. */
+.settings-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  font-size: 15px;
+  font-weight: 600;
+  color: rgba(22, 34, 61, 0.8);
+}
+
+.settings-row input[type="number"] {
+  width: 76px;
+  height: 40px;
+  border-radius: 999px;
+  border: 1px solid rgba(34, 49, 84, 0.3);
+  background: rgba(255, 255, 255, 0.7);
+  text-align: center;
+  font-size: 15px;
+  font-weight: 600;
+  color: #0f1930;
+}
+
+.settings-row input[type="number"]:focus-visible {
+  outline: 2px solid #0f1930;
+  outline-offset: 2px;
+}
+
 .meta-row {
   display: flex;
   align-items: center;
@@ -171,7 +262,6 @@ nav[aria-label="Primary"] .mode-btn svg {
 .btn-gold:focus-visible,
 .btn-outline:focus-visible,
 .game-btn:focus-visible,
-.upload-card:focus-visible,
 .mode-btn:focus-visible,
 #retry-button:focus-visible,
 #lb-gate-confirm:focus-visible,
@@ -181,11 +271,6 @@ nav[aria-label="Primary"] .mode-btn svg {
 [id$="-lb-next"]:focus-visible {
   outline: 2px solid #0f1930;
   outline-offset: 2px;
-}
-
-.drop-active {
-  border-color: #e6c96a;
-  background: rgba(200, 160, 40, 0.1);
 }
 
 /* Transient submit-feedback toast: fixed above content, fades in/out. */
@@ -374,13 +459,12 @@ nav[aria-label="Primary"] .mode-btn svg {
   min-height: 0;
 }
 
-/* Collapse the solver stage when idle so header + upload stay truly centered. */
+/* Collapse the solver stage when idle so the header stays truly centered. */
 #solver:has(> #result-area.hidden) {
   display: none;
 }
 
-/* Shared stage width: upload actions, crowns stage, home, and every per-game stage align. */
-#upload-actions,
+/* Shared stage width: crowns stage, home, and every per-game stage align. */
 #stage-col,
 #home-col,
 #mines-col,
@@ -388,16 +472,6 @@ nav[aria-label="Primary"] .mode-btn svg {
 #tents-col {
   width: min(92vw, 484px);
   margin-inline: auto;
-}
-
-/* Shrink both entry cards to icon-only once a result exists so header + board fit 100dvh. */
-main.has-result #upload-actions .upload-card {
-  min-height: 0;
-  padding-block: 0.66rem;
-}
-
-main.has-result #upload-actions .upload-card .upload-card-text {
-  display: none;
 }
 
 #skeleton-grid {
@@ -577,7 +651,7 @@ main.has-result #upload-actions .upload-card .upload-card-text {
 }
 
 .season-summer { background: #f0dfae; }
-.season-autumn { background: #dfa06f; }
+.season-autumn { background: #e9bf94; }
 .season-spring { background: #cfe0c3; }
 .season-winter { background: #c3d9e8; }
 
@@ -598,8 +672,8 @@ main.has-result #upload-actions .upload-card .upload-card-text {
 }
 
 .tile-chip svg {
-  width: 60%;
-  height: 60%;
+  width: 52%;
+  height: 52%;
   color: #16223d;
 }
 

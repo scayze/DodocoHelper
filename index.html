@@ -19,8 +19,8 @@
   <body>
     <div class="parchment-page">
       <main id="top" class="mx-auto flex h-full min-h-0 w-full max-w-6xl flex-1 flex-col justify-center px-[18px] sm:px-[26px]">
-        <header class="shrink-0 pt-[22px] pb-[13px] text-center md:pt-[26px] md:pb-[18px]">
-          <!-- Home + game tabs: Lucide home/crown/leaf/tent (ISC) + Phosphor bomb (MIT), inlined as SVG like the upload cards below. -->
+        <header class="shrink-0 pt-[22px] pb-[2px] text-center md:pt-[26px] md:pb-[4px]">
+          <!-- Home + game tabs: Lucide home/crown/leaf/tent (ISC) + Phosphor bomb (MIT), inlined as SVG. -->
           <nav id="primary-nav" aria-label="Primary" class="flex items-center justify-center gap-5 text-gold-600">
             <button id="nav-home" type="button" class="mode-btn font-semibold text-gold-600" aria-label="Home" title="Home">
               <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
@@ -83,31 +83,7 @@
           </div>
         </section>
 
-        <section id="upload" class="flex shrink-0 justify-center pb-[13px]">
-          <div class="w-full" id="upload-actions">
-            <div class="flex flex-row items-stretch gap-[9px]">
-              <button id="screenshot-button" type="button" aria-label="Start from a screenshot"
-                class="upload-card grid min-h-[163px] flex-1 cursor-pointer place-items-center rounded-2xl border-2 border-dashed border-night-700/30 bg-white/50 px-[18px] py-[26px] text-center text-night-900 shadow-[0_16px_50px_rgba(60,45,10,0.12)] transition-colors hover:border-gold-600">
-                <span>
-                  <svg width="35" height="35" viewBox="0 0 256 256" fill="none" stroke="currentColor" stroke-width="16" class="mx-auto text-night-700/70" aria-hidden="true">
-                    <rect x="32" y="32" width="192" height="192" rx="16" />
-                    <circle cx="100" cy="100" r="16" fill="currentColor" stroke="none" />
-                    <path d="m32,192 60-60 40,40 32-32 60,60" stroke-linecap="round" stroke-linejoin="round" />
-                  </svg>
-                  <span class="upload-card-text block">
-                    <span class="mt-[11px] block text-[15px] font-semibold">Start from a screenshot</span>
-                    <span class="mx-auto mt-[4px] block max-w-[34ch] text-[15px] text-night-800/70">
-                      Paste, drag, or click to browse.
-                    </span>
-                  </span>
-                </span>
-              </button>
-            </div>
-            <input id="file-input" type="file" accept="image/png,image/jpeg,image/webp" class="sr-only" />
-          </div>
-        </section>
-
-        <section id="solver" class="grid min-h-0 w-full shrink-0 place-items-center py-[9px]">
+        <section id="solver" class="grid min-h-0 w-full shrink-0 place-items-center pt-[2px] pb-[9px]">
           <div id="result-area" class="hidden w-full min-h-0" aria-live="polite">
             <div class="mx-auto w-full" id="stage-col">
 
@@ -146,6 +122,11 @@
                       </svg>
                       <span id="crowns-timer-value">0:00</span>
                     </span>
+                    <div id="crowns-mode" class="mode-toggle" role="group" aria-label="Play mode">
+                      <button id="crowns-mode-daily" type="button" class="mode-toggle-btn is-active" aria-pressed="true">Daily</button>
+                      <span id="crowns-mode-sep" aria-hidden="true" class="mode-toggle-sep">|</span>
+                      <button id="crowns-mode-endless" type="button" class="mode-toggle-btn" aria-pressed="false">Endless</button>
+                    </div>
                     <span id="hint-level" class="meta-pill is-counter"></span>
                   </div>
                   <figure class="min-w-0 flex-1">
@@ -175,6 +156,20 @@
                     <ol id="crowns-lb-list" class="flex flex-col gap-[9px]"></ol>
                     <p id="crowns-lb-status" class="min-h-[24px] text-center text-[15px] font-semibold leading-relaxed text-night-800/70" role="status" aria-live="polite"></p>
                   </div>
+                  <div id="crowns-settings" class="hidden flex-col gap-[9px] rounded-xl bg-white/70 px-[18px] py-[13px] shadow-sm">
+                    <label class="settings-row" for="crowns-set-size">
+                      <span>Board size</span>
+                      <input id="crowns-set-size" type="number" min="6" max="10" step="1" inputmode="numeric" />
+                    </label>
+                    <label class="settings-row" for="crowns-set-crowns">
+                      <span>Crowns per row / column / region</span>
+                      <input id="crowns-set-crowns" type="number" min="1" max="2" step="1" inputmode="numeric" />
+                    </label>
+                    <button id="crowns-screenshot" type="button" class="btn-outline h-[44px] rounded-full px-[22px] text-[15px] font-semibold">
+                      Solve from screenshot…
+                    </button>
+                    <input id="crowns-file-input" type="file" accept="image/png,image/jpeg,image/webp" class="sr-only" />
+                  </div>
                   <div class="flex flex-row justify-between gap-[9px]">
                     <button id="crowns-view-toggle" type="button" class="btn-outline game-btn h-[48px] w-[48px] rounded-full disabled:cursor-not-allowed disabled:opacity-50" aria-label="Show leaderboard" title="Show leaderboard" aria-expanded="false">
                       <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
@@ -199,13 +194,25 @@
                         <path d="M21 17a9 9 0 0 0-9-9 9 9 0 0 0-6 2.3L3 13" />
                       </svg>
                     </button>
+                    <button id="crowns-settings-toggle" type="button" class="btn-outline game-btn hidden h-[48px] w-[48px] rounded-full disabled:cursor-not-allowed disabled:opacity-50" aria-label="Endless settings" title="Endless settings" aria-expanded="false">
+                      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+                        <circle cx="12" cy="12" r="3" />
+                        <path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 1 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 1 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 1 1-2.83-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 1 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 1 1 2.83-2.83l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 1 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 1 1 2.83 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 1 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z" />
+                      </svg>
+                    </button>
+                    <button id="crowns-regen" type="button" class="btn-outline game-btn hidden h-[48px] w-[48px] rounded-full disabled:cursor-not-allowed disabled:opacity-50" aria-label="New endless board" title="New endless board">
+                      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+                        <path d="M21 12a9 9 0 1 1-2.64-6.36" />
+                        <path d="M21 3v6h-6" />
+                      </svg>
+                    </button>
                   </div>
                 </div>
               </div>
             </div>
           </div>
         </section>
-        <section id="mines" class="hidden grid min-h-0 w-full shrink-0 place-items-center py-[9px]">
+        <section id="mines" class="hidden grid min-h-0 w-full shrink-0 place-items-center pt-[2px] pb-[9px]">
           <div class="mx-auto w-full" id="mines-col">
             <div id="mines-panel" class="rounded-2xl border border-night-700/15 bg-white/60 p-[18px] text-night-900 shadow-[0_16px_50px_rgba(60,45,10,0.12)] backdrop-blur-sm" tabindex="-1">
               <div class="flex flex-col gap-[13px]">
@@ -218,8 +225,13 @@
                       <path d="M9 2h6" />
                     </svg>
                     <span id="mines-timer-value">0:00</span>
-                  </span>
-                  <span id="mines-level" class="meta-pill is-counter" aria-hidden="true"></span>
+                    </span>
+                    <div id="mines-mode" class="mode-toggle" role="group" aria-label="Play mode">
+                      <button id="mines-mode-daily" type="button" class="mode-toggle-btn is-active" aria-pressed="true">Daily</button>
+                      <span id="mines-mode-sep" aria-hidden="true" class="mode-toggle-sep">|</span>
+                      <button id="mines-mode-endless" type="button" class="mode-toggle-btn" aria-pressed="false">Endless</button>
+                    </div>
+                    <span id="mines-level" class="meta-pill is-counter" aria-hidden="true"></span>
                 </div>
                 <figure class="min-w-0 flex-1">
                   <div id="mines-grid" role="grid" aria-label="Minesweeper board" class="grid w-full"></div>
@@ -248,6 +260,16 @@
                   <ol id="mines-lb-list" class="flex flex-col gap-[9px]"></ol>
                   <p id="mines-lb-status" class="min-h-[24px] text-center text-[15px] font-semibold leading-relaxed text-night-800/70" role="status" aria-live="polite"></p>
                 </div>
+                <div id="mines-settings" class="hidden flex-col gap-[9px] rounded-xl bg-white/70 px-[18px] py-[13px] shadow-sm">
+                  <label class="settings-row" for="mines-set-size">
+                    <span>Board size</span>
+                    <input id="mines-set-size" type="number" min="6" max="12" step="1" inputmode="numeric" />
+                  </label>
+                  <label class="settings-row" for="mines-set-mines">
+                    <span>Bombs</span>
+                    <input id="mines-set-mines" type="number" min="1" max="60" step="1" inputmode="numeric" />
+                  </label>
+                </div>
                 <div class="flex flex-row justify-between gap-[9px]">
                   <button id="mines-view-toggle" type="button" class="btn-outline game-btn h-[48px] w-[48px] rounded-full disabled:cursor-not-allowed disabled:opacity-50" aria-label="Show leaderboard" title="Show leaderboard" aria-expanded="false">
                     <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
@@ -259,12 +281,24 @@
                       <path d="M18 2H6v7a6 6 0 0 0 12 0V2Z" />
                     </svg>
                   </button>
+                  <button id="mines-settings-toggle" type="button" class="btn-outline game-btn hidden h-[48px] w-[48px] rounded-full disabled:cursor-not-allowed disabled:opacity-50" aria-label="Endless settings" title="Endless settings" aria-expanded="false">
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+                      <circle cx="12" cy="12" r="3" />
+                      <path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 1 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 1 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 1 1-2.83-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 1 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 1 1 2.83-2.83l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 1 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 1 1 2.83 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 1 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z" />
+                    </svg>
+                  </button>
+                  <button id="mines-regen" type="button" class="btn-outline game-btn hidden h-[48px] w-[48px] rounded-full disabled:cursor-not-allowed disabled:opacity-50" aria-label="New endless board" title="New endless board">
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+                      <path d="M21 12a9 9 0 1 1-2.64-6.36" />
+                      <path d="M21 3v6h-6" />
+                    </svg>
+                  </button>
                 </div>
               </div>
             </div>
           </div>
         </section>
-        <section id="seasons" class="hidden grid min-h-0 w-full shrink-0 place-items-center py-[9px]">
+        <section id="seasons" class="hidden grid min-h-0 w-full shrink-0 place-items-center pt-[2px] pb-[9px]">
           <div class="mx-auto w-full" id="seasons-col">
             <div id="seasons-panel" class="rounded-2xl border border-night-700/15 bg-white/60 p-[18px] text-night-900 shadow-[0_16px_50px_rgba(60,45,10,0.12)] backdrop-blur-sm" tabindex="-1">
               <div class="flex flex-col gap-[13px]">
@@ -277,8 +311,13 @@
                       <path d="M9 2h6" />
                     </svg>
                     <span id="seasons-timer-value">0:00</span>
-                  </span>
-                  <span id="seasons-level" class="meta-pill is-counter" aria-hidden="true"></span>
+                    </span>
+                    <div id="seasons-mode" class="mode-toggle" role="group" aria-label="Play mode">
+                      <button id="seasons-mode-daily" type="button" class="mode-toggle-btn is-active" aria-pressed="true">Daily</button>
+                      <span id="seasons-mode-sep" aria-hidden="true" class="mode-toggle-sep">|</span>
+                      <button id="seasons-mode-endless" type="button" class="mode-toggle-btn" aria-pressed="false">Endless</button>
+                    </div>
+                    <span id="seasons-level" class="meta-pill is-counter" aria-hidden="true"></span>
                 </div>
                 <figure class="min-w-0 flex-1">
                   <div id="seasons-grid" role="grid" aria-label="Seasons board" class="grid w-full"></div>
@@ -307,6 +346,12 @@
                   <ol id="seasons-lb-list" class="flex flex-col gap-[9px]"></ol>
                   <p id="seasons-lb-status" class="min-h-[24px] text-center text-[15px] font-semibold leading-relaxed text-night-800/70" role="status" aria-live="polite"></p>
                 </div>
+                <div id="seasons-settings" class="hidden flex-col gap-[9px] rounded-xl bg-white/70 px-[18px] py-[13px] shadow-sm">
+                  <label class="settings-row" for="seasons-set-size">
+                    <span>Board size</span>
+                    <input id="seasons-set-size" type="number" min="6" max="12" step="1" inputmode="numeric" />
+                  </label>
+                </div>
                 <div class="flex flex-row justify-between gap-[9px]">
                   <button id="seasons-view-toggle" type="button" class="btn-outline game-btn h-[48px] w-[48px] rounded-full disabled:cursor-not-allowed disabled:opacity-50" aria-label="Show leaderboard" title="Show leaderboard" aria-expanded="false">
                     <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
@@ -318,12 +363,24 @@
                       <path d="M18 2H6v7a6 6 0 0 0 12 0V2Z" />
                     </svg>
                   </button>
+                  <button id="seasons-settings-toggle" type="button" class="btn-outline game-btn hidden h-[48px] w-[48px] rounded-full disabled:cursor-not-allowed disabled:opacity-50" aria-label="Endless settings" title="Endless settings" aria-expanded="false">
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+                      <circle cx="12" cy="12" r="3" />
+                      <path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 1 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 1 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 1 1-2.83-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 1 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 1 1 2.83-2.83l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 1 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 1 1 2.83 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 1 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z" />
+                    </svg>
+                  </button>
+                  <button id="seasons-regen" type="button" class="btn-outline game-btn hidden h-[48px] w-[48px] rounded-full disabled:cursor-not-allowed disabled:opacity-50" aria-label="New endless board" title="New endless board">
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+                      <path d="M21 12a9 9 0 1 1-2.64-6.36" />
+                      <path d="M21 3v6h-6" />
+                    </svg>
+                  </button>
                 </div>
               </div>
             </div>
           </div>
         </section>
-        <section id="tents" class="hidden grid min-h-0 w-full shrink-0 place-items-center py-[9px]">
+        <section id="tents" class="hidden grid min-h-0 w-full shrink-0 place-items-center pt-[2px] pb-[9px]">
           <div class="mx-auto w-full" id="tents-col">
             <div id="tents-panel" class="rounded-2xl border border-night-700/15 bg-white/60 p-[18px] text-night-900 shadow-[0_16px_50px_rgba(60,45,10,0.12)] backdrop-blur-sm" tabindex="-1">
               <div class="flex flex-col gap-[13px]">
@@ -336,8 +393,13 @@
                       <path d="M9 2h6" />
                     </svg>
                     <span id="tents-timer-value">0:00</span>
-                  </span>
-                  <span id="tents-level" class="meta-pill is-counter" aria-hidden="true"></span>
+                    </span>
+                    <div id="tents-mode" class="mode-toggle" role="group" aria-label="Play mode">
+                      <button id="tents-mode-daily" type="button" class="mode-toggle-btn is-active" aria-pressed="true">Daily</button>
+                      <span id="tents-mode-sep" aria-hidden="true" class="mode-toggle-sep">|</span>
+                      <button id="tents-mode-endless" type="button" class="mode-toggle-btn" aria-pressed="false">Endless</button>
+                    </div>
+                    <span id="tents-level" class="meta-pill is-counter" aria-hidden="true"></span>
                 </div>
                 <figure class="min-w-0 flex-1">
                   <div id="tents-grid" role="grid" aria-label="Tents and Trees board" class="grid w-full"></div>
@@ -366,6 +428,12 @@
                   <ol id="tents-lb-list" class="flex flex-col gap-[9px]"></ol>
                   <p id="tents-lb-status" class="min-h-[24px] text-center text-[15px] font-semibold leading-relaxed text-night-800/70" role="status" aria-live="polite"></p>
                 </div>
+                <div id="tents-settings" class="hidden flex-col gap-[9px] rounded-xl bg-white/70 px-[18px] py-[13px] shadow-sm">
+                  <label class="settings-row" for="tents-set-size">
+                    <span>Board size</span>
+                    <input id="tents-set-size" type="number" min="5" max="10" step="1" inputmode="numeric" />
+                  </label>
+                </div>
                 <div class="flex flex-row justify-between gap-[9px]">
                   <button id="tents-view-toggle" type="button" class="btn-outline game-btn h-[48px] w-[48px] rounded-full disabled:cursor-not-allowed disabled:opacity-50" aria-label="Show leaderboard" title="Show leaderboard" aria-expanded="false">
                     <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
@@ -381,6 +449,18 @@
                     <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
                       <path d="M3 7v6h6" />
                       <path d="M21 17a9 9 0 0 0-9-9 9 9 0 0 0-6 2.3L3 13" />
+                    </svg>
+                  </button>
+                  <button id="tents-settings-toggle" type="button" class="btn-outline game-btn hidden h-[48px] w-[48px] rounded-full disabled:cursor-not-allowed disabled:opacity-50" aria-label="Endless settings" title="Endless settings" aria-expanded="false">
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+                      <circle cx="12" cy="12" r="3" />
+                      <path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 1 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 1 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 1 1-2.83-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 1 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 1 1 2.83-2.83l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 1 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 1 1 2.83 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 1 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z" />
+                    </svg>
+                  </button>
+                  <button id="tents-regen" type="button" class="btn-outline game-btn hidden h-[48px] w-[48px] rounded-full disabled:cursor-not-allowed disabled:opacity-50" aria-label="New endless board" title="New endless board">
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+                      <path d="M21 12a9 9 0 1 1-2.64-6.36" />
+                      <path d="M21 3v6h-6" />
                     </svg>
                   </button>
                 </div>

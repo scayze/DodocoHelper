@@ -107,8 +107,8 @@ function setView(id: ViewId): void {
   } else {
     homeSection.classList.add("hidden");
   }
-  // Each game owns its sections: crowns owns the upload actions + solver
-  // stage, minesweeper and seasons own their own board containers.
+  // Each game owns its sections: crowns owns the solver stage,
+  // minesweeper, seasons and tents own their own board containers.
   document.getElementById("top")?.classList.remove("has-result");
   activeView = id;
   // Taps across views never combine toward the hidden reset.

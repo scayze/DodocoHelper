@@ -16,6 +16,15 @@ import {
   type TentsBoard,
 } from "./logic.js";
 import { generateLevel } from "./generator.js";
+import {
+  clampTentsSettings,
+  isEndlessUnlocked,
+  loadEndlessSettings,
+  saveEndlessSettings,
+  setEndlessUnlocked,
+  type PlayMode,
+  type TentsEndlessSettings,
+} from "../mode.js";
 
 function el<T extends HTMLElement>(id: string): T {
   const node = document.getElementById(id);
@@ -30,16 +39,52 @@ export function createTentsGame(): GameInstance {
   const level = el("tents-level");
   const undoButton = el<HTMLButtonElement>("tents-undo-button");
   const timerValue = el("tents-timer-value");
+  const modeDailyBtn = el<HTMLButtonElement>("tents-mode-daily");
+  const modeEndlessBtn = el<HTMLButtonElement>("tents-mode-endless");
+  const modeSep = el("tents-mode-sep");
+  const settingsPanel = el("tents-settings");
+  const settingsToggle = el<HTMLButtonElement>("tents-settings-toggle");
+  const regenBtn = el<HTMLButtonElement>("tents-regen");
+  const viewToggle = el<HTMLButtonElement>("tents-view-toggle");
+  const lbView = el("tents-lb-view");
+  const setSizeInput = el<HTMLInputElement>("tents-set-size");
 
   let board: TentsBoard | null = null;
   let started = false;
-  /** UTC day key of the currently dealt board; re-deals at midnight rollover. */
+  /** UTC day key of the currently dealt daily board; re-deals at midnight rollover. */
   let dailyDay: string | null = null;
   const runTimer = createRunTimer();
   let moveCount = 0;
   let winReported = false;
   /** Mark history for the unified Undo button (unknown/grass/tent steps). */
   let undoStack: Array<{ r: number; c: number; prev: CellMark }> = [];
+
+  /** Session-only mode; every load boots into daily. */
+  let mode: PlayMode = "daily";
+  const endlessTimer = createRunTimer();
+  let settingsOpen = false;
+  /** Stashed per-mode play state; working vars above always mirror the active mode. */
+  interface Slot {
+    board: TentsBoard;
+    moveCount: number;
+    undoStack: Array<{ r: number; c: number; prev: CellMark }>;
+    winReported: boolean;
+    day: string | null;
+    timerLive: boolean;
+  }
+  let daily: Slot | null = null;
+  let endless: Slot | null = null;
+
+  function activeTimer(): ReturnType<typeof createRunTimer> {
+    return mode === "endless" ? endlessTimer : runTimer;
+  }
+
+  function stashActive(): void {
+    if (!started || !board) return;
+    const slot: Slot = { board, moveCount, undoStack, winReported, day: dailyDay, timerLive: true };
+    if (mode === "daily") daily = slot;
+    else endless = slot;
+  }
 
   function paint(): void {
     if (!board) return;
@@ -84,16 +129,17 @@ export function createTentsGame(): GameInstance {
   }
 
   function freezeClock(): void {
-    runTimer.stop();
-    timerValue.textContent = formatClock(runTimer.elapsed());
+    activeTimer().stop();
+    timerValue.textContent = formatClock(activeTimer().elapsed());
   }
 
   function pauseClock(): void {
     runTimer.pause();
+    endlessTimer.pause();
   }
 
   function resumeClock(): void {
-    if (started && board && !board.over) runTimer.resume();
+    if (started && board && !board.over) activeTimer().resume();
   }
 
   function onBoardToggle(e: Event): void {
@@ -115,7 +161,13 @@ export function createTentsGame(): GameInstance {
       freezeClock();
       if (!winReported) {
         winReported = true;
-        announceWin({ game: "tents", durationMs: runTimer.elapsed(), moves: moveCount });
+        // Endless wins stay local: only daily wins reach the leaderboard.
+        if (mode === "daily") {
+          // Solving the daily reveals the endless button (rest of the day).
+          setEndlessUnlocked(todayUTC());
+          announceWin({ game: "tents", durationMs: runTimer.elapsed(), moves: moveCount });
+          paintMode();
+        }
       }
     } else {
       message.textContent = "";
@@ -159,19 +211,32 @@ export function createTentsGame(): GameInstance {
 
   /** Deal the fixed daily board (seed from server, generated client-side). */
   function dealDaily(day: string, seed: number): void {
-    let level;
+    let levelData;
     try {
-      level = generateLevel(TENTS_DEFAULT_SIZE, mulberry32(seed));
+      levelData = generateLevel(TENTS_DEFAULT_SIZE, mulberry32(seed));
     } catch {
-      message.textContent = "Could not deal today's puzzle.";
+      if (mode === "daily") message.textContent = "Could not deal today's puzzle.";
       return;
     }
-    board = createBoard(level);
+    if (mode !== "daily") {
+      // Parked while endless is showing; timer starts on return to daily.
+      daily = {
+        board: createBoard(levelData),
+        moveCount: 0,
+        undoStack: [],
+        winReported: false,
+        day,
+        timerLive: false,
+      };
+      return;
+    }
+    board = createBoard(levelData);
     dailyDay = day;
     started = true;
     moveCount = 0;
     winReported = false;
     undoStack = [];
+    daily = { board, moveCount, undoStack, winReported, day, timerLive: true };
     runTimer.start();
     if (typeof document !== "undefined" && document.hidden) runTimer.pause();
     bindTimerPill(runTimer, "tents-timer-value", formatClock);
@@ -182,11 +247,130 @@ export function createTentsGame(): GameInstance {
 
   function ensureDaily(): void {
     const day = todayUTC();
-    if (started && dailyDay === day) return;
+    if (daily && daily.day === day) return;
     void fetchDailySeeds(day).then(({ day: seedDay, seeds }) => {
-      if (started && dailyDay === seedDay) return;
+      if (daily && daily.day === seedDay) return;
       dealDaily(seedDay, seeds.tents);
     });
+  }
+
+  /** Read settings inputs, clamp, persist, and echo the clamped values back. */
+  function readSettings(): TentsEndlessSettings {
+    const clamped = clampTentsSettings({ size: setSizeInput.value });
+    saveEndlessSettings("tents", clamped);
+    setSizeInput.value = String(clamped.size);
+    return clamped;
+  }
+
+  function fillSettingsInputs(s: TentsEndlessSettings): void {
+    setSizeInput.value = String(s.size);
+  }
+
+  /** Deal a fresh endless board from the current settings; restarts the endless clock. */
+  function dealEndless(): void {
+    const s = readSettings();
+    let levelData;
+    try {
+      levelData = generateLevel(s.size, Math.random);
+    } catch {
+      message.textContent = "Could not generate a board — try a smaller size.";
+      return;
+    }
+    board = createBoard(levelData);
+    dailyDay = null;
+    started = true;
+    moveCount = 0;
+    winReported = false;
+    undoStack = [];
+    endless = { board, moveCount, undoStack, winReported, day: null, timerLive: true };
+    endlessTimer.start();
+    if (typeof document !== "undefined" && document.hidden) endlessTimer.pause();
+    bindTimerPill(endlessTimer, "tents-timer-value", formatClock);
+    buildGrid();
+    paint();
+    setStatus();
+  }
+
+  /** Show the stored slot's board; start or resume its timer as appropriate. */
+  function activateSlot(slot: Slot): void {
+    board = slot.board;
+    moveCount = slot.moveCount;
+    undoStack = slot.undoStack;
+    winReported = slot.winReported;
+    dailyDay = slot.day;
+    started = true;
+    const timer = activeTimer();
+    bindTimerPill(timer, "tents-timer-value", formatClock);
+    buildGrid();
+    paint();
+    if (!slot.timerLive) {
+      slot.timerLive = true;
+      timer.start();
+      if (typeof document !== "undefined" && document.hidden) timer.pause();
+    } else if (board && !board.over) {
+      timer.resume();
+    }
+    setStatus();
+  }
+
+  function paintSettings(): void {
+    const show = mode === "endless" && settingsOpen;
+    settingsPanel.classList.toggle("hidden", !show);
+    settingsPanel.classList.toggle("flex", show);
+    settingsToggle.setAttribute("aria-expanded", show ? "true" : "false");
+  }
+
+  function paintMode(): void {
+    const isEndless = mode === "endless";
+    modeDailyBtn.classList.toggle("is-active", !isEndless);
+    modeDailyBtn.setAttribute("aria-pressed", String(!isEndless));
+    modeEndlessBtn.classList.toggle("is-active", isEndless);
+    modeEndlessBtn.setAttribute("aria-pressed", String(isEndless));
+    // Endless spawns in (with a pop) once today's daily is completed.
+    const unlocked = isEndlessUnlocked(todayUTC());
+    const wasLocked = modeEndlessBtn.classList.contains("hidden");
+    modeEndlessBtn.classList.toggle("hidden", !unlocked);
+    modeSep.classList.toggle("hidden", !unlocked);
+    if (unlocked && wasLocked) {
+      for (const node of [modeEndlessBtn, modeSep]) {
+        node.classList.remove("unlock-pop");
+        void node.offsetWidth;
+        node.classList.add("unlock-pop");
+        node.addEventListener("animationend", () => node.classList.remove("unlock-pop"), {
+          once: true,
+        });
+      }
+    }
+    settingsToggle.classList.toggle("hidden", !isEndless);
+    regenBtn.classList.toggle("hidden", !isEndless);
+    // The leaderboard only tracks daily scores.
+    viewToggle.classList.toggle("hidden", isEndless);
+    if (isEndless && !lbView.classList.contains("hidden")) viewToggle.click();
+    paintSettings();
+  }
+
+  function setMode(next: PlayMode): void {
+    if (mode === next) return;
+    if (next === "endless" && !isEndlessUnlocked(todayUTC())) return;
+    stashActive();
+    activeTimer().pause();
+    mode = next;
+    settingsOpen = false;
+    const slot = mode === "daily" ? daily : endless;
+    if (slot) {
+      activateSlot(slot);
+    } else if (mode === "endless") {
+      dealEndless();
+    } else {
+      started = false;
+      board = null;
+      undoStack = [];
+      message.textContent = "";
+      level.textContent = "";
+      undoButton.disabled = true;
+      ensureDaily();
+    }
+    paintMode();
   }
 
   function activateCell(cell: HTMLElement): void {
@@ -238,22 +422,42 @@ export function createTentsGame(): GameInstance {
   grid.addEventListener("keydown", onKey);
   undoButton.addEventListener("click", undo);
   window.addEventListener(BOARD_EVENT, onBoardToggle);
+  modeDailyBtn.addEventListener("click", () => setMode("daily"));
+  modeEndlessBtn.addEventListener("click", () => setMode("endless"));
+  regenBtn.addEventListener("click", () => {
+    if (mode === "endless") dealEndless();
+  });
+  settingsToggle.addEventListener("click", () => {
+    settingsOpen = !settingsOpen;
+    paintSettings();
+  });
+  setSizeInput.addEventListener("change", readSettings);
+  fillSettingsInputs(loadEndlessSettings("tents"));
 
   return {
     id: "tents",
     mount(): void {
       root.classList.remove("hidden");
       document.getElementById("top")?.classList.add("has-result");
-      if (!started) {
+      if (mode === "endless") {
+        if (endless && board) {
+          paint();
+          setStatus();
+          resumeClock();
+        } else {
+          dealEndless();
+        }
+      } else if (!daily) {
         // Deal async; grid builds once the daily seed resolves.
         ensureDaily();
-      } else if (dailyDay !== todayUTC()) {
+      } else if (daily.day !== todayUTC()) {
         ensureDaily();
       } else {
         paint();
         setStatus();
         resumeClock();
       }
+      paintMode();
     },
     unmount(): void {
       pauseClock();

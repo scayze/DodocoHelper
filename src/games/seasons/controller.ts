@@ -10,8 +10,18 @@ import {
   findRegion,
   remainingCount,
   removeRegion,
+  SEASONS_SIZE,
   type SeasonsBoard,
 } from "./logic.js";
+import {
+  clampSeasonsSettings,
+  isEndlessUnlocked,
+  loadEndlessSettings,
+  saveEndlessSettings,
+  setEndlessUnlocked,
+  type PlayMode,
+  type SeasonsEndlessSettings,
+} from "../mode.js";
 
 function el<T extends HTMLElement>(id: string): T {
   const node = document.getElementById(id);
@@ -28,14 +38,49 @@ export function createSeasonsGame(): GameInstance {
   const message = el<HTMLParagraphElement>("seasons-message");
   const level = el("seasons-level");
   const timerValue = el("seasons-timer-value");
+  const modeDailyBtn = el<HTMLButtonElement>("seasons-mode-daily");
+  const modeEndlessBtn = el<HTMLButtonElement>("seasons-mode-endless");
+  const modeSep = el("seasons-mode-sep");
+  const settingsPanel = el("seasons-settings");
+  const settingsToggle = el<HTMLButtonElement>("seasons-settings-toggle");
+  const regenBtn = el<HTMLButtonElement>("seasons-regen");
+  const viewToggle = el<HTMLButtonElement>("seasons-view-toggle");
+  const lbView = el("seasons-lb-view");
+  const setSizeInput = el<HTMLInputElement>("seasons-set-size");
 
   let board: SeasonsBoard = createBoard();
   let started = false;
-  /** UTC day key of the currently dealt board; re-deals at midnight rollover. */
+  /** UTC day key of the currently dealt daily board; re-deals at midnight rollover. */
   let dailyDay: string | null = null;
   const runTimer = createRunTimer();
   let moveCount = 0;
   let winReported = false;
+
+  /** Session-only mode; every load boots into daily. */
+  let mode: PlayMode = "daily";
+  const endlessTimer = createRunTimer();
+  let settingsOpen = false;
+  /** Stashed per-mode play state; working vars above always mirror the active mode. */
+  interface Slot {
+    board: SeasonsBoard;
+    moveCount: number;
+    winReported: boolean;
+    day: string | null;
+    timerLive: boolean;
+  }
+  let daily: Slot | null = null;
+  let endless: Slot | null = null;
+
+  function activeTimer(): ReturnType<typeof createRunTimer> {
+    return mode === "endless" ? endlessTimer : runTimer;
+  }
+
+  function stashActive(): void {
+    if (!started) return;
+    const slot: Slot = { board, moveCount, winReported, day: dailyDay, timerLive: true };
+    if (mode === "daily") daily = slot;
+    else endless = slot;
+  }
   /**
    * Tile id -> chip element. Slots (grid buttons) stay put and keep focus;
    * chips move between slots so falls and slides can animate via FLIP.
@@ -95,16 +140,17 @@ export function createSeasonsGame(): GameInstance {
   }
 
   function freezeClock(): void {
-    runTimer.stop();
-    timerValue.textContent = formatClock(runTimer.elapsed());
+    activeTimer().stop();
+    timerValue.textContent = formatClock(activeTimer().elapsed());
   }
 
   function pauseClock(): void {
     runTimer.pause();
+    endlessTimer.pause();
   }
 
   function resumeClock(): void {
-    if (started && !board.over) runTimer.resume();
+    if (started && !board.over) activeTimer().resume();
   }
 
   function onBoardToggle(e: Event): void {
@@ -154,17 +200,24 @@ export function createSeasonsGame(): GameInstance {
   function dealDaily(day: string, seed: number): void {
     let levelData;
     try {
-      levelData = generateRandomLevel(board.size, { rand: mulberry32(seed) });
+      levelData = generateRandomLevel(SEASONS_SIZE, { rand: mulberry32(seed) });
     } catch {
-      message.textContent = "Could not deal today's puzzle.";
+      if (mode === "daily") message.textContent = "Could not deal today's puzzle.";
       return;
     }
-    board = createBoard(board.size);
-    board.cells = levelData.cells;
+    const fresh = createBoard(SEASONS_SIZE);
+    fresh.cells = levelData.cells;
+    if (mode !== "daily") {
+      // Parked while endless is showing; timer starts on return to daily.
+      daily = { board: fresh, moveCount: 0, winReported: false, day, timerLive: false };
+      return;
+    }
+    board = fresh;
     dailyDay = day;
     started = true;
     moveCount = 0;
     winReported = false;
+    daily = { board, moveCount, winReported, day, timerLive: true };
     runTimer.start();
     if (typeof document !== "undefined" && document.hidden) runTimer.pause();
     bindTimerPill(runTimer, "seasons-timer-value", formatClock);
@@ -175,11 +228,127 @@ export function createSeasonsGame(): GameInstance {
 
   function ensureDaily(): void {
     const day = todayUTC();
-    if (started && dailyDay === day) return;
+    if (daily && daily.day === day) return;
     void fetchDailySeeds(day).then(({ day: seedDay, seeds }) => {
-      if (started && dailyDay === seedDay) return;
+      if (daily && daily.day === seedDay) return;
       dealDaily(seedDay, seeds.seasons);
     });
+  }
+
+  /** Read settings inputs, clamp, persist, and echo the clamped values back. */
+  function readSettings(): SeasonsEndlessSettings {
+    const clamped = clampSeasonsSettings({ size: setSizeInput.value });
+    saveEndlessSettings("seasons", clamped);
+    setSizeInput.value = String(clamped.size);
+    return clamped;
+  }
+
+  function fillSettingsInputs(s: SeasonsEndlessSettings): void {
+    setSizeInput.value = String(s.size);
+  }
+
+  /** Deal a fresh endless board from the current settings; restarts the endless clock. */
+  function dealEndless(): void {
+    const s = readSettings();
+    let levelData;
+    try {
+      levelData = generateRandomLevel(s.size, { rand: Math.random });
+    } catch {
+      message.textContent = "Could not generate a board — try a smaller size.";
+      return;
+    }
+    board = createBoard(s.size);
+    board.cells = levelData.cells;
+    dailyDay = null;
+    started = true;
+    moveCount = 0;
+    winReported = false;
+    endless = { board, moveCount, winReported, day: null, timerLive: true };
+    endlessTimer.start();
+    if (typeof document !== "undefined" && document.hidden) endlessTimer.pause();
+    bindTimerPill(endlessTimer, "seasons-timer-value", formatClock);
+    buildGrid();
+    paint();
+    setStatus();
+  }
+
+  /** Show the stored slot's board; start or resume its timer as appropriate. */
+  function activateSlot(slot: Slot): void {
+    board = slot.board;
+    moveCount = slot.moveCount;
+    winReported = slot.winReported;
+    dailyDay = slot.day;
+    started = true;
+    const timer = activeTimer();
+    bindTimerPill(timer, "seasons-timer-value", formatClock);
+    buildGrid();
+    paint();
+    if (!slot.timerLive) {
+      slot.timerLive = true;
+      timer.start();
+      if (typeof document !== "undefined" && document.hidden) timer.pause();
+    } else if (!board.over) {
+      timer.resume();
+    }
+    setStatus();
+  }
+
+  function paintSettings(): void {
+    const show = mode === "endless" && settingsOpen;
+    settingsPanel.classList.toggle("hidden", !show);
+    settingsPanel.classList.toggle("flex", show);
+    settingsToggle.setAttribute("aria-expanded", show ? "true" : "false");
+  }
+
+  function paintMode(): void {
+    const isEndless = mode === "endless";
+    modeDailyBtn.classList.toggle("is-active", !isEndless);
+    modeDailyBtn.setAttribute("aria-pressed", String(!isEndless));
+    modeEndlessBtn.classList.toggle("is-active", isEndless);
+    modeEndlessBtn.setAttribute("aria-pressed", String(isEndless));
+    // Endless spawns in (with a pop) once today's daily is completed.
+    const unlocked = isEndlessUnlocked(todayUTC());
+    const wasLocked = modeEndlessBtn.classList.contains("hidden");
+    modeEndlessBtn.classList.toggle("hidden", !unlocked);
+    modeSep.classList.toggle("hidden", !unlocked);
+    if (unlocked && wasLocked) {
+      for (const node of [modeEndlessBtn, modeSep]) {
+        node.classList.remove("unlock-pop");
+        void node.offsetWidth;
+        node.classList.add("unlock-pop");
+        node.addEventListener("animationend", () => node.classList.remove("unlock-pop"), {
+          once: true,
+        });
+      }
+    }
+    settingsToggle.classList.toggle("hidden", !isEndless);
+    regenBtn.classList.toggle("hidden", !isEndless);
+    // The leaderboard only tracks daily scores.
+    viewToggle.classList.toggle("hidden", isEndless);
+    if (isEndless && !lbView.classList.contains("hidden")) viewToggle.click();
+    paintSettings();
+  }
+
+  function setMode(next: PlayMode): void {
+    if (mode === next) return;
+    if (next === "endless" && !isEndlessUnlocked(todayUTC())) return;
+    stashActive();
+    activeTimer().pause();
+    mode = next;
+    settingsOpen = false;
+    const slot = mode === "daily" ? daily : endless;
+    if (slot) {
+      activateSlot(slot);
+    } else if (mode === "endless") {
+      dealEndless();
+    } else {
+      started = false;
+      buildGrid();
+      paint();
+      setStatus();
+      ensureDaily();
+    }
+    paintMode();
   }
 
   function snapshotChips(): Map<number, DOMRect> {
@@ -260,7 +429,13 @@ export function createSeasonsGame(): GameInstance {
     setStatus();
     if (board.over && board.won && !winReported) {
       winReported = true;
-      announceWin({ game: "seasons", durationMs: runTimer.elapsed(), moves: moveCount });
+      // Endless wins stay local: only daily wins reach the leaderboard.
+      if (mode === "daily") {
+        // Solving the daily reveals the endless button (rest of the day).
+        setEndlessUnlocked(todayUTC());
+        announceWin({ game: "seasons", durationMs: runTimer.elapsed(), moves: moveCount });
+        paintMode();
+      }
     }
     cell.focus({ preventScroll: true });
     animating = true;
@@ -347,18 +522,37 @@ export function createSeasonsGame(): GameInstance {
   grid.addEventListener("focusin", previewFromEvent);
   grid.addEventListener("focusout", clearPreview);
   window.addEventListener(BOARD_EVENT, onBoardToggle);
+  modeDailyBtn.addEventListener("click", () => setMode("daily"));
+  modeEndlessBtn.addEventListener("click", () => setMode("endless"));
+  regenBtn.addEventListener("click", () => {
+    if (mode === "endless") dealEndless();
+  });
+  settingsToggle.addEventListener("click", () => {
+    settingsOpen = !settingsOpen;
+    paintSettings();
+  });
+  setSizeInput.addEventListener("change", readSettings);
+  fillSettingsInputs(loadEndlessSettings("seasons"));
 
   return {
     id: "seasons",
     mount(): void {
       root.classList.remove("hidden");
       document.getElementById("top")?.classList.add("has-result");
-      if (!started) {
+      if (mode === "endless") {
+        if (endless) {
+          paint();
+          setStatus();
+          resumeClock();
+        } else {
+          dealEndless();
+        }
+      } else if (!daily) {
         buildGrid();
         paint();
         setStatus();
         ensureDaily();
-      } else if (dailyDay !== todayUTC()) {
+      } else if (daily.day !== todayUTC()) {
         ensureDaily();
       } else {
         clearPreview();
@@ -366,6 +560,7 @@ export function createSeasonsGame(): GameInstance {
         setStatus();
         resumeClock();
       }
+      paintMode();
     },
     unmount(): void {
       pauseClock();
