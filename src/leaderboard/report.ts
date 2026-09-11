@@ -1,4 +1,4 @@
-import type { LeaderboardGameId } from "./types.js";
+import { winScoreFor, type LeaderboardGameId } from "./types.js";
 import {
   getDisplayName,
   hasValidName,
@@ -13,6 +13,10 @@ export interface WinDetail {
   durationMs: number;
   moves?: number;
   hintsUsed?: number;
+  /** Primary metric; defaults to the win value when omitted. */
+  score?: number;
+  /** False for a finished-but-unsolved daily. Defaults to true. */
+  won?: boolean;
 }
 
 export const WIN_EVENT = "dodoco:win";
@@ -123,16 +127,18 @@ export function bindTimerPill(
 }
 
 /**
- * Win routing: named players submit immediately (failure re-queues for a
- * later flush); nameless players accumulate earliest-per-game queue entries
- * until they pick a name on the Home board.
+ * Finished-daily routing (win or loss): named players submit immediately
+ * (failure re-queues for a later flush); nameless players accumulate
+ * earliest-per-game queue entries until they pick a name on the Home board.
  */
-export function announceWin(detail: WinDetail): void {
+export function announceResult(detail: WinDetail): void {
   const win = {
     game: detail.game,
     durationMs: Math.max(1, Math.round(detail.durationMs)),
     moves: Math.max(0, Math.round(detail.moves ?? 0)),
     hintsUsed: Math.max(0, Math.round(detail.hintsUsed ?? 0)),
+    score: Math.max(0, Math.round(detail.score ?? winScoreFor(detail.game))),
+    won: detail.won ?? true,
   };
   if (!hasValidName()) {
     queueWin(win);
@@ -152,4 +158,9 @@ export function announceWin(detail: WinDetail): void {
       );
       window.dispatchEvent(new CustomEvent(WIN_EVENT, { detail: win }));
     });
+}
+
+/** Win-only alias for games that cannot fail (crowns, tents). */
+export function announceWin(detail: WinDetail): void {
+  announceResult({ ...detail, score: detail.score ?? winScoreFor(detail.game), won: true });
 }

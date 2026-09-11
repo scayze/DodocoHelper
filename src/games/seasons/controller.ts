@@ -1,7 +1,9 @@
 import type { GameInstance } from "../types.js";
 import { formatClock, todayUTC } from "../../leaderboard/api.js";
-import { announceWin, bindTimerPill, createRunTimer } from "../../leaderboard/report.js";
+import { formatScore } from "../../leaderboard/types.js";
+import { announceResult, bindTimerPill, createRunTimer } from "../../leaderboard/report.js";
 import { BOARD_EVENT, type BoardDetail } from "../../leaderboard/view.js";
+import { isDailyComplete, loadDailyResult, saveDailyResult } from "../daily-result.js";
 import { fetchDailySeeds, mulberry32 } from "../daily.js";
 import { generateRandomLevel } from "./generator.js";
 import { SEASON_ICONS } from "./icons.js";
@@ -54,7 +56,9 @@ export function createSeasonsGame(): GameInstance {
   let dailyDay: string | null = null;
   const runTimer = createRunTimer();
   let moveCount = 0;
-  let winReported = false;
+  let resultReported = false;
+  /** True once today's daily is finished (locks the board across reloads). */
+  let dailyLocked = false;
 
   /** Session-only mode; every load boots into daily. */
   let mode: PlayMode = "daily";
@@ -64,7 +68,7 @@ export function createSeasonsGame(): GameInstance {
   interface Slot {
     board: SeasonsBoard;
     moveCount: number;
-    winReported: boolean;
+    resultReported: boolean;
     day: string | null;
     timerLive: boolean;
   }
@@ -77,7 +81,7 @@ export function createSeasonsGame(): GameInstance {
 
   function stashActive(): void {
     if (!started) return;
-    const slot: Slot = { board, moveCount, winReported, day: dailyDay, timerLive: true };
+    const slot: Slot = { board, moveCount, resultReported, day: dailyDay, timerLive: true };
     if (mode === "daily") daily = slot;
     else endless = slot;
   }
@@ -150,6 +154,7 @@ export function createSeasonsGame(): GameInstance {
   }
 
   function resumeClock(): void {
+    if (dailyLocked && mode === "daily") return;
     if (started && !board.over) activeTimer().resume();
   }
 
@@ -161,6 +166,18 @@ export function createSeasonsGame(): GameInstance {
   }
 
   function setStatus(): void {
+    if (dailyLocked && mode === "daily") {
+      const stored = loadDailyResult("seasons");
+      if (stored) {
+        level.textContent = stored.won ? "Solved" : `${formatScore("seasons", stored.score)} left`;
+        message.textContent =
+          `Daily complete — ${formatScore("seasons", stored.score)} · ` +
+          `${formatClock(stored.durationMs)}. Back tomorrow.`;
+        freezeClock();
+        return;
+      }
+      dailyLocked = false;
+    }
     const left = remainingCount(board);
     level.textContent = `${left} left`;
     if (board.over && board.won) {
@@ -171,6 +188,42 @@ export function createSeasonsGame(): GameInstance {
       freezeClock();
     } else {
       message.textContent = "";
+      return;
+    }
+    // Game over (solved or stuck): one daily result, wins and losses alike.
+    if (!resultReported) {
+      resultReported = true;
+      if (mode === "daily" && dailyDay !== null) {
+        // Finishing the daily (either way) reveals endless for the day.
+        setEndlessUnlocked(todayUTC());
+        const durationMs = runTimer.elapsed();
+        announceResult({
+          game: "seasons",
+          durationMs,
+          moves: moveCount,
+          score: left,
+          won: board.won,
+        });
+        saveDailyResult("seasons", {
+          day: dailyDay,
+          won: board.won,
+          score: left,
+          durationMs,
+          moves: moveCount,
+        });
+        paintMode();
+      }
+    }
+  }
+
+  /** Lock a finished daily so reloads keep the result instead of redealing play. */
+  function refreshDailyLock(): void {
+    dailyLocked =
+      mode === "daily" && dailyDay !== null && isDailyComplete("seasons", dailyDay);
+    if (dailyLocked) {
+      resultReported = true;
+      activeTimer().stop();
+      setStatus();
     }
   }
 
@@ -209,21 +262,23 @@ export function createSeasonsGame(): GameInstance {
     fresh.cells = levelData.cells;
     if (mode !== "daily") {
       // Parked while endless is showing; timer starts on return to daily.
-      daily = { board: fresh, moveCount: 0, winReported: false, day, timerLive: false };
+      daily = { board: fresh, moveCount: 0, resultReported: false, day, timerLive: false };
       return;
     }
     board = fresh;
     dailyDay = day;
     started = true;
     moveCount = 0;
-    winReported = false;
-    daily = { board, moveCount, winReported, day, timerLive: true };
+    resultReported = false;
+    dailyLocked = false;
+    daily = { board, moveCount, resultReported, day, timerLive: true };
     runTimer.start();
     if (typeof document !== "undefined" && document.hidden) runTimer.pause();
     bindTimerPill(runTimer, "seasons-timer-value", formatClock);
     buildGrid();
     paint();
     setStatus();
+    refreshDailyLock();
   }
 
   function ensureDaily(): void {
@@ -262,8 +317,8 @@ export function createSeasonsGame(): GameInstance {
     dailyDay = null;
     started = true;
     moveCount = 0;
-    winReported = false;
-    endless = { board, moveCount, winReported, day: null, timerLive: true };
+    resultReported = false;
+    endless = { board, moveCount, resultReported, day: null, timerLive: true };
     endlessTimer.start();
     if (typeof document !== "undefined" && document.hidden) endlessTimer.pause();
     bindTimerPill(endlessTimer, "seasons-timer-value", formatClock);
@@ -276,7 +331,8 @@ export function createSeasonsGame(): GameInstance {
   function activateSlot(slot: Slot): void {
     board = slot.board;
     moveCount = slot.moveCount;
-    winReported = slot.winReported;
+    resultReported = slot.resultReported;
+    dailyLocked = false;
     dailyDay = slot.day;
     started = true;
     const timer = activeTimer();
@@ -291,6 +347,7 @@ export function createSeasonsGame(): GameInstance {
       timer.resume();
     }
     setStatus();
+    refreshDailyLock();
   }
 
   function paintSettings(): void {
@@ -415,6 +472,7 @@ export function createSeasonsGame(): GameInstance {
 
   function activateCell(cell: HTMLElement): void {
     if (!started || board.over || animating) return;
+    if (dailyLocked && mode === "daily") return;
     const r = Number(cell.dataset.row);
     const c = Number(cell.dataset.col);
     if (!Number.isInteger(r) || !Number.isInteger(c)) return;
@@ -427,16 +485,6 @@ export function createSeasonsGame(): GameInstance {
     moveCount++;
     paint();
     setStatus();
-    if (board.over && board.won && !winReported) {
-      winReported = true;
-      // Endless wins stay local: only daily wins reach the leaderboard.
-      if (mode === "daily") {
-        // Solving the daily reveals the endless button (rest of the day).
-        setEndlessUnlocked(todayUTC());
-        announceWin({ game: "seasons", durationMs: runTimer.elapsed(), moves: moveCount });
-        paintMode();
-      }
-    }
     cell.focus({ preventScroll: true });
     animating = true;
     const epoch = moveEpoch;
@@ -472,6 +520,7 @@ export function createSeasonsGame(): GameInstance {
   /** Highlight the whole removable region at (r, c); clears on singletons. */
   function showPreview(r: number, c: number): void {
     if (!started || board.over) return;
+    if (dailyLocked && mode === "daily") return;
     const region = findRegion(board, r, c);
     if (region.length < 2) {
       // Entered a real cell with nothing removable: drop stale highlight.
@@ -558,6 +607,7 @@ export function createSeasonsGame(): GameInstance {
         clearPreview();
         paint();
         setStatus();
+        refreshDailyLock();
         resumeClock();
       }
       paintMode();

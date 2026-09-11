@@ -13,7 +13,13 @@ import {
 } from "./api.js";
 import { WIN_EVENT, type WinDetail } from "./report.js";
 import { showToast } from "./toast.js";
-import { isValidDay, shiftDayKey, type LeaderboardGameId } from "./types.js";
+import {
+  formatScore,
+  isValidDay,
+  shiftDayKey,
+  winScoreFor,
+  type LeaderboardGameId,
+} from "./types.js";
 
 /** Dispatched on window when a minigame flips between grid and board. */
 export const BOARD_EVENT = "dodoco:board";
@@ -53,6 +59,8 @@ async function flushQueue(displayName: string): Promise<{ submitted: number }> {
         durationMs: win.durationMs,
         moves: win.moves,
         hintsUsed: win.hintsUsed,
+        score: win.score,
+        won: win.won,
       });
       dropQueuedWin(win.game);
       if (status === "submitted") submitted++;
@@ -224,8 +232,8 @@ export function initGameLeaderboard(game: LeaderboardGameId, prefix: string): vo
         span.className = "min-w-0 flex-1 truncate text-[15px] font-semibold text-night-800/70";
         span.textContent =
           viewDay === todayUTC()
-            ? `No ${gameLabel(game)} times today yet — be the first.`
-            : `No ${gameLabel(game)} times on ${viewDay} yet.`;
+            ? `No ${gameLabel(game)} scores today yet — be the first.`
+            : `No ${gameLabel(game)} scores on ${viewDay} yet.`;
         li.appendChild(span);
         list.appendChild(li);
       } else {
@@ -246,6 +254,14 @@ export function initGameLeaderboard(game: LeaderboardGameId, prefix: string): vo
           time.className = "shrink-0 text-[15px] font-bold tabular-nums";
           time.textContent = formatDuration(entry.durationMs);
           li.append(rank, avatar, name, time);
+          const scoreText = formatScore(game, entry.score ?? winScoreFor(game));
+          if (scoreText) {
+            const score = document.createElement("span");
+            score.className =
+              "shrink-0 text-[13px] font-semibold tabular-nums text-night-800/60";
+            score.textContent = scoreText;
+            li.appendChild(score);
+          }
           list.appendChild(li);
         });
       }

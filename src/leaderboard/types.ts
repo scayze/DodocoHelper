@@ -25,6 +25,26 @@ export interface ScoreSubmit {
   durationMs: number;
   moves: number;
   hintsUsed: number;
+  /**
+   * Primary ranking metric (time is only the tiebreak for these games):
+   * - seasons: blocks left at game over (`remainingCount`, 0 = solved).
+   * - minesweeper: percent of safe cells cleared `0..100` (100 = solved).
+   * - crowns/tents: always 0 (unranked, time-only boards).
+   */
+  score: number;
+  /** False when the daily was finished without solving it. */
+  won: boolean;
+}
+
+/** Win-equivalent score per game (used to backfill pre-score rows). */
+export function winScoreFor(game: LeaderboardGameId): number {
+  return game === "minesweeper" ? 100 : 0;
+}
+
+export function formatScore(game: LeaderboardGameId, score: number): string {
+  if (game === "minesweeper") return `${score}%`;
+  if (game === "seasons") return score === 1 ? "1 block" : `${score} blocks`;
+  return "";
 }
 
 export interface LeaderboardEntry extends ScoreSubmit {

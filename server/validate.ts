@@ -59,15 +59,40 @@ export function validateSubmit(body: unknown):
   if (!isInt(hintsUsed) || hintsUsed < 0 || hintsUsed > 10_000) {
     return { ok: false, error: "hintsUsed must be an integer between 0 and 10000." };
   }
+  const game: LeaderboardGameId = b["game"];
+  // Primary metric (time is only the tiebreak for these games):
+  // seasons = blocks left, minesweeper = percent cleared 0..100.
+  // Crowns/tents are time-only boards: score must be absent or 0, won true.
+  const scoreRaw = b["score"] === undefined ? 0 : b["score"];
+  if (!isInt(scoreRaw) || scoreRaw < 0 || scoreRaw > 100) {
+    return { ok: false, error: "score must be an integer between 0 and 100." };
+  }
+  const wonRaw = b["won"] === undefined ? true : b["won"];
+  if (typeof wonRaw !== "boolean") {
+    return { ok: false, error: "won must be a boolean." };
+  }
+  if (game === "seasons") {
+    if (wonRaw !== (scoreRaw === 0)) {
+      return { ok: false, error: "seasons: won must match score === 0." };
+    }
+  } else if (game === "minesweeper") {
+    if (wonRaw !== (scoreRaw === 100)) {
+      return { ok: false, error: "minesweeper: won must match score === 100." };
+    }
+  } else if (!wonRaw || scoreRaw !== 0) {
+    return { ok: false, error: "crowns/tents boards are win-only: won must be true and score 0." };
+  }
   return {
     ok: true,
     value: {
-      game: b["game"],
+      game,
       displayName: name,
       clientId: (b["clientId"] as string).toLowerCase(),
       durationMs: b["durationMs"],
       moves,
       hintsUsed,
+      score: scoreRaw,
+      won: wonRaw,
     },
   };
 }

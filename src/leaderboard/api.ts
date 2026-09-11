@@ -3,6 +3,7 @@ import {
   MIN_NAME_LENGTH,
   dayKeyUTC,
   isLeaderboardGame,
+  winScoreFor,
   type LeaderboardGameId,
   type LeaderboardResponse,
   type ScoreSubmit,
@@ -18,7 +19,16 @@ const LEGACY_KEY = "dodoco:pendingWin";
 const QUEUE_VERSION = 1;
 
 /** All localStorage keys owned by the dodoco site. Nothing else is touched. */
-const DODOCO_KEYS = [CLIENT_KEY, NAME_KEY, QUEUE_KEY, LEGACY_KEY] as const;
+const DODOCO_KEYS = [
+  CLIENT_KEY,
+  NAME_KEY,
+  QUEUE_KEY,
+  LEGACY_KEY,
+  "dodoco:daily-result:crowns",
+  "dodoco:daily-result:minesweeper",
+  "dodoco:daily-result:seasons",
+  "dodoco:daily-result:tents",
+] as const;
 
 /** Remove every dodoco-owned key so a visitor can "reregister" from scratch. */
 export function resetDodocoStorage(): void {
@@ -36,7 +46,11 @@ export interface QueuedWin {
   durationMs: number;
   moves: number;
   hintsUsed: number;
-  /** Epoch ms when the win happened. */
+  /** Primary metric: blocks left (seasons) or percent cleared (minesweeper). */
+  score: number;
+  /** False when the daily was finished without solving it. */
+  won: boolean;
+  /** Epoch ms when the run finished. */
   at: number;
   /** UTC day when queued; entries from a previous day are never submitted. */
   day: string;
@@ -106,14 +120,27 @@ export function setDisplayName(name: string): void {
 function isQueuedWin(value: unknown): value is QueuedWin {
   if (typeof value !== "object" || value === null) return false;
   const w = value as Record<string, unknown>;
+  // score/won are optional here so wins queued before fail-states existed
+  // still flush (as wins); loadQueuedWins normalizes the missing fields.
   return (
     isLeaderboardGame(w["game"]) &&
     typeof w["durationMs"] === "number" &&
     Number.isInteger(w["durationMs"]) &&
     (w["durationMs"] as number) > 0 &&
     typeof w["at"] === "number" &&
-    typeof w["day"] === "string"
+    typeof w["day"] === "string" &&
+    (w["score"] === undefined ||
+      (typeof w["score"] === "number" && Number.isInteger(w["score"]))) &&
+    (w["won"] === undefined || typeof w["won"] === "boolean")
   );
+}
+
+function normalizeQueuedWin(w: QueuedWin): QueuedWin {
+  if (typeof w.score !== "number" || !Number.isInteger(w.score)) {
+    w.score = winScoreFor(w.game);
+  }
+  if (typeof w.won !== "boolean") w.won = true;
+  return w;
 }
 
 function readQueue(): QueuedWin[] {
@@ -154,14 +181,16 @@ function migrateLegacy(): QueuedWin[] {
     if (!isLeaderboardGame(parsed.game) || typeof parsed.durationMs !== "number") return [];
     const at = typeof parsed.at === "number" ? parsed.at : Date.now();
     return [
-      {
+      normalizeQueuedWin({
         game: parsed.game,
         durationMs: Math.max(1, Math.round(parsed.durationMs)),
         moves: Math.max(0, Math.round(Number(parsed.moves) || 0)),
         hintsUsed: Math.max(0, Math.round(Number(parsed.hintsUsed) || 0)),
+        score: winScoreFor(parsed.game),
+        won: true,
         at,
         day: dayKeyUTC(new Date(at)),
-      },
+      }),
     ];
   } catch {
     return [];
@@ -175,24 +204,28 @@ function migrateLegacy(): QueuedWin[] {
 }
 
 /**
- * Queue a win. One slot per game, earliest kept: the first attempt is the
- * would-be daily attempt, replays while nameless don't overwrite it.
- * Returns the queued entry.
+ * Queue a finished daily (win or loss). One slot per game, earliest kept:
+ * the first attempt is the would-be daily attempt, replays while nameless
+ * don't overwrite it. Returns the queued entry.
  */
 export function queueWin(win: {
   game: LeaderboardGameId;
   durationMs: number;
   moves?: number;
   hintsUsed?: number;
+  score?: number;
+  won?: boolean;
 }): QueuedWin {
-  const entry: QueuedWin = {
+  const entry: QueuedWin = normalizeQueuedWin({
     game: win.game,
     durationMs: Math.max(1, Math.round(win.durationMs)),
     moves: Math.max(0, Math.round(win.moves ?? 0)),
     hintsUsed: Math.max(0, Math.round(win.hintsUsed ?? 0)),
+    score: win.score ?? winScoreFor(win.game),
+    won: win.won ?? true,
     at: Date.now(),
     day: dayKeyUTC(),
-  };
+  });
   const wins = [...migrateLegacy(), ...readQueue()];
   if (!wins.some((w) => w.game === entry.game)) wins.push(entry);
   writeQueue(wins);
@@ -202,7 +235,7 @@ export function queueWin(win: {
 /** Queued wins, oldest first. Migrates legacy entries and drops stale days. */
 export function loadQueuedWins(): QueuedWin[] {
   const migrated = migrateLegacy();
-  const wins = readQueue();
+  const wins = readQueue().map(normalizeQueuedWin);
   const merged = [...wins];
   for (const m of migrated) {
     if (!merged.some((w) => w.game === m.game)) merged.push(m);
