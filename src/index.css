@@ -106,6 +106,13 @@ body {
   flex-shrink: 0;
 }
 
+/* Tailwind's `hidden` loses to the unlayered `.game-btn` display rule, so
+   mode toggles (regen/settings/leaderboard buttons) would stay visible in
+   daily mode. Higher specificity restores `hidden` for icon buttons. */
+.game-btn.hidden {
+  display: none;
+}
+
 /* Daily/endless mode toggle: textual, centered in the timer row. */
 .mode-toggle {
   display: flex;
