@@ -84,14 +84,6 @@ export function initNameGate(): void {
 
   let flushing = false;
 
-  function paintExisting(): void {
-    const current = getDisplayName();
-    if (current) {
-      nameEl.value = current;
-      statusEl.textContent = `Playing as ${current}.`;
-    }
-  }
-
   function confirmName(): void {
     const raw = nameEl.value;
     if (!isValidDisplayName(raw)) {
@@ -104,16 +96,17 @@ export function initNameGate(): void {
     confirmEl.disabled = true;
     statusEl.textContent = "Saving…";
     const displayName = raw.trim().replace(/\s+/g, " ");
+    // Dispatches NAME_EVENT: main.ts hides the gate and shows "Welcome X!".
     setDisplayName(displayName);
     void flushQueue(displayName)
       .then(({ submitted }) => {
-        statusEl.textContent = `Playing as ${displayName}.`;
+        statusEl.textContent = "";
         if (submitted > 0) {
           showToast(submitted === 1 ? "Score submitted." : `${submitted} scores submitted.`);
         }
       })
       .catch(() => {
-        statusEl.textContent = `Playing as ${displayName}.`;
+        statusEl.textContent = "";
       })
       .finally(() => {
         flushing = false;
@@ -130,9 +123,8 @@ export function initNameGate(): void {
   });
 
   if (hasValidName()) {
-    paintExisting();
     // Retry anything left queued (e.g. an earlier offline submit) now that
-    // a named player is back.
+    // a named player is back. The gate itself stays hidden (see main.ts).
     if (loadQueuedWins().some((w) => w.day === todayUTC())) {
       void flushQueue(getDisplayName());
     }

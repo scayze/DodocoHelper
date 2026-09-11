@@ -21,7 +21,7 @@
       <main id="top" class="mx-auto flex h-full min-h-0 w-full max-w-6xl flex-1 flex-col justify-center px-[18px] sm:px-[26px]">
         <header class="shrink-0 pt-[22px] pb-[13px] text-center md:pt-[26px] md:pb-[18px]">
           <!-- Home + game tabs: Lucide home/crown/leaf/tent (ISC) + Phosphor bomb (MIT), inlined as SVG like the upload cards below. -->
-          <nav aria-label="Primary" class="flex items-center justify-center gap-5 text-gold-600">
+          <nav id="primary-nav" aria-label="Primary" class="flex items-center justify-center gap-5 text-gold-600">
             <button id="nav-home" type="button" class="mode-btn font-semibold text-gold-600" aria-label="Home" title="Home">
               <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
                 <path d="m3 9 9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z" />
@@ -63,24 +63,21 @@
 
         <section id="home" class="grid min-h-0 w-full shrink-0 place-items-center py-[9px]">
           <div class="mx-auto w-full" id="home-col">
-            <div id="home-panel" class="rounded-2xl border border-night-700/15 bg-white/60 p-[18px] text-night-900 shadow-[0_16px_50px_rgba(60,45,10,0.12)] backdrop-blur-sm" tabindex="-1">
-              <div class="flex flex-col gap-[13px]">
-                <div id="lb-gate" class="flex flex-col gap-[13px]">
-                  <p class="text-center text-[15px] font-semibold leading-relaxed text-night-800/80">
-                    Click the Icons above to get playing!
-                  </p>
-                  <div class="flex flex-row gap-[9px]">
-                    <input id="lb-gate-name" type="text" maxlength="20" autocomplete="nickname" placeholder="Your name"
-                      class="h-[48px] min-w-0 flex-1 rounded-full border border-night-700/30 bg-white/70 px-[22px] text-[15px] font-semibold text-night-900 placeholder:text-night-800/50" />
-                    <button id="lb-gate-confirm" type="button" class="btn-outline h-[48px] shrink-0 rounded-full px-[22px] text-[15px] font-semibold disabled:cursor-not-allowed disabled:opacity-50">
-                      Confirm
-                    </button>
-                  </div>
-                  <p id="lb-gate-status" class="min-h-[24px] text-center text-[15px] font-semibold leading-relaxed text-night-800/70" role="status" aria-live="polite"></p>
-                  <blockquote class="text-center">
-                    <p id="quote" class="text-[15px] font-semibold leading-relaxed text-night-800/80" aria-live="polite"></p>
-                  </blockquote>
-                </div>
+            <div id="home-panel" class="text-night-900" tabindex="-1">
+              <div id="lb-gate" class="flex flex-col items-center gap-[9px]">
+                <label for="lb-gate-name" class="flex flex-wrap items-center justify-center gap-x-[10px] gap-y-[9px] text-center font-display text-[26px] leading-none tracking-tight text-balance text-night-900 md:text-[2.2rem]">
+                  <span>My Name is</span>
+                  <input id="lb-gate-name" type="text" maxlength="20" autocomplete="nickname" placeholder="_____"
+                    aria-label="Your name"
+                    class="w-[180px] border-b-2 border-night-700/40 bg-transparent px-[6px] pb-[2px] text-center font-display text-[26px] leading-none tracking-tight text-night-900 placeholder:text-night-800/40 focus:border-gold-600 focus:outline-none md:text-[2.2rem]" />
+                  <button id="lb-gate-confirm" type="button" aria-label="Save name" title="Save name"
+                    class="btn-outline grid h-[48px] w-[48px] shrink-0 place-items-center rounded-full disabled:cursor-not-allowed disabled:opacity-50">
+                    <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+                      <path d="M20 6 9 17l-5-5" />
+                    </svg>
+                  </button>
+                </label>
+                <p id="lb-gate-status" class="min-h-[24px] text-center text-[15px] font-semibold leading-relaxed text-night-800/70" role="status" aria-live="polite"></p>
               </div>
             </div>
           </div>

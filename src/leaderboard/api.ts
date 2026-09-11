@@ -17,6 +17,20 @@ const QUEUE_KEY = "dodoco:pendingWins";
 const LEGACY_KEY = "dodoco:pendingWin";
 const QUEUE_VERSION = 1;
 
+/** All localStorage keys owned by the dodoco site. Nothing else is touched. */
+const DODOCO_KEYS = [CLIENT_KEY, NAME_KEY, QUEUE_KEY, LEGACY_KEY] as const;
+
+/** Remove every dodoco-owned key so a visitor can "reregister" from scratch. */
+export function resetDodocoStorage(): void {
+  for (const key of DODOCO_KEYS) {
+    try {
+      localStorage.removeItem(key);
+    } catch {
+      // Private mode etc: keep going; reload still resets the session view.
+    }
+  }
+}
+
 export interface QueuedWin {
   game: LeaderboardGameId;
   durationMs: number;
