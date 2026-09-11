@@ -707,6 +707,34 @@ nav[aria-label="Primary"] .mode-btn svg {
   animation: panel-in 180ms ease-out;
 }
 
+/* Leaderboard overlay: the board covers exactly the grid's box (same stage,
+   same size) so opening it never grows or shrinks the panel. The grid figure
+   stays in flow but invisible to hold the height; the entry list scrolls
+   internally while the day-nav header and status line stay fixed. */
+.game-stage {
+  position: relative;
+  width: min(100%, 50dvh, 440px);
+  margin-inline: auto;
+}
+
+.lb-overlay {
+  position: absolute;
+  inset: 0;
+  overflow: hidden;
+}
+
+.lb-overlay > div:first-child,
+.lb-overlay > p {
+  flex-shrink: 0;
+}
+
+.lb-list {
+  flex: 1 1 auto;
+  min-height: 0;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+}
+
 @keyframes panel-in {
   from {
     opacity: 0;

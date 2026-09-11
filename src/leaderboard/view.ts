@@ -168,8 +168,10 @@ function resolveGameBoard(prefix: string): GameBoardElements | null {
 
 /**
  * Per-minigame leaderboard. One instance per game page shows only that game's
- * board; the toggle button swaps just the game grid with the board while the
- * meta-row (timer, mode switch, counter) and the status line stay visible.
+ * board; the toggle button overlays the board onto the exact grid box while
+ * the meta-row (timer, mode switch, counter) and the status line stay
+ * visible. The grid figure keeps its layout box (invisible + inert) so the
+ * panel never grows or shrinks; the entry list scrolls inside the overlay.
  * Daily-only: controllers hide the toggle and auto-close the board in
  * endless mode, so the trophy button never appears there.
  */
@@ -201,7 +203,11 @@ export function initGameLeaderboard(game: LeaderboardGameId, prefix: string): vo
 
   function setShowing(showBoard: boolean): void {
     showingBoard = showBoard;
-    gridWrap.classList.toggle("hidden", showBoard);
+    // invisible (not hidden): the figure holds the stage height so the
+    // overlay matches the grid box pixel-for-pixel. inert keeps keyboard
+    // focus and assistive tech out of the hidden grid.
+    gridWrap.classList.toggle("invisible", showBoard);
+    gridWrap.toggleAttribute("inert", showBoard);
     boardView.classList.toggle("hidden", !showBoard);
     boardView.classList.toggle("flex", showBoard);
     paintToggle();
