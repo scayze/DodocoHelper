@@ -15,11 +15,15 @@ import {
 import {
   chord,
   createBoard,
+  createPreplacedBoard,
+  ensureFirstClickSafe,
   minePositions,
   reveal,
   toggleFlag,
   type MineBoard,
 } from "./logic.js";
+import { generateMines } from "./generator.js";
+import type { Opening } from "./solver.js";
 
 function el<T extends HTMLElement>(id: string): T {
   const node = document.getElementById(id);
@@ -60,8 +64,10 @@ export function createMinesweeperGame(): GameInstance {
   const LONG_PRESS_MS = 450;
 
   let board: MineBoard = createBoard();
-  /** Seeded RNG for the active board's deferred mine placement. */
+  /** Seeded RNG for the active board (mine relocation on off-hint first clicks). */
   let boardRand: () => number = Math.random;
+  /** Guaranteed no-guess opening for the active pre-generated board. */
+  let openingHint: Opening | null = null;
   let started = false;
   /** UTC day key of the currently dealt daily board; re-deals at midnight rollover. */
   let dailyDay: string | null = null;
@@ -76,6 +82,7 @@ export function createMinesweeperGame(): GameInstance {
   interface Slot {
     board: MineBoard;
     rand: () => number;
+    opening: Opening | null;
     started: boolean;
     winReported: boolean;
     day: string | null;
@@ -93,6 +100,7 @@ export function createMinesweeperGame(): GameInstance {
     const slot: Slot = {
       board,
       rand: boardRand,
+      opening: openingHint,
       started,
       winReported,
       day: dailyDay,
@@ -135,11 +143,22 @@ export function createMinesweeperGame(): GameInstance {
         cell.classList.toggle("is-revealed", revealed);
         cell.classList.toggle("is-flagged", flagged);
         cell.classList.toggle("is-mine", revealed && isMine);
+        // Opening hint marking: daily only, until the first reveal.
+        const showHint =
+          mode === "daily" &&
+          !revealed &&
+          !flagged &&
+          !board.over &&
+          board.revealedCount === 0 &&
+          openingHint !== null &&
+          r === openingHint.r &&
+          c === openingHint.c;
+        cell.classList.toggle("is-hint", showHint);
         cell.setAttribute(
           "aria-label",
           `Row ${r + 1}, column ${c + 1}, ${
             revealed ? (isMine ? "mine" : `${count} nearby`) : flagged ? "flagged" : "hidden"
-          }`,
+          }${showHint ? ", hinted opening" : ""}`,
         );
         if (revealed && !isMine && count > 0) {
           chip.textContent = String(count);
@@ -230,21 +249,23 @@ export function createMinesweeperGame(): GameInstance {
     grid.appendChild(frag);
   }
 
-  /** Deal the fixed daily board (seed from server, generated client-side). */
+  /** Deal the fixed daily board (pre-generated, guaranteed-solvable). */
   function dealDaily(day: string, seed: number): void {
-    const fresh = createBoard();
     const rand = mulberry32(seed);
+    const { mines, opening } = generateMines(9, 15, rand);
+    const fresh = createPreplacedBoard(9, 15, mines);
     if (mode !== "daily") {
       // Parked while endless is showing; timer starts on return to daily.
-      daily = { board: fresh, rand, started: true, winReported: false, day, timerLive: false };
+      daily = { board: fresh, rand, opening, started: true, winReported: false, day, timerLive: false };
       return;
     }
     board = fresh;
     boardRand = rand;
+    openingHint = opening;
     dailyDay = day;
     started = true;
     winReported = false;
-    daily = { board, rand: boardRand, started, winReported, day, timerLive: true };
+    daily = { board, rand: boardRand, opening, started, winReported, day, timerLive: true };
     runTimer.start();
     if (typeof document !== "undefined" && document.hidden) runTimer.pause();
     bindTimerPill(runTimer, "mines-timer-value", formatClock);
@@ -280,15 +301,17 @@ export function createMinesweeperGame(): GameInstance {
     setMinesInput.value = String(s.mines);
   }
 
-  /** Deal a fresh endless board from the current settings; restarts the endless clock. */
+  /** Deal a fresh endless board (pre-generated, guaranteed-solvable). */
   function dealEndless(): void {
     const s = readSettings();
-    board = createBoard(s.size, s.mines);
+    const { mines, opening } = generateMines(s.size, s.mines, Math.random);
+    board = createPreplacedBoard(s.size, s.mines, mines);
     boardRand = Math.random;
+    openingHint = opening;
     dailyDay = null;
     started = true;
     winReported = false;
-    endless = { board, rand: boardRand, started, winReported, day: null, timerLive: true };
+    endless = { board, rand: boardRand, opening, started, winReported, day: null, timerLive: true };
     endlessTimer.start();
     if (typeof document !== "undefined" && document.hidden) endlessTimer.pause();
     bindTimerPill(endlessTimer, "mines-timer-value", formatClock);
@@ -302,6 +325,7 @@ export function createMinesweeperGame(): GameInstance {
   function activateSlot(slot: Slot): void {
     board = slot.board;
     boardRand = slot.rand;
+    openingHint = slot.opening;
     dailyDay = slot.day;
     started = slot.started;
     winReported = slot.winReported;
@@ -414,8 +438,21 @@ export function createMinesweeperGame(): GameInstance {
       // Forgiving tap: tapping a flag removes it (long-press re-flags).
       toggleFlag(board, r, c);
     } else {
+      const first = board.revealedCount === 0;
+      const followed = !openingHint || (r === openingHint.r && c === openingHint.c);
+      // Pre-generated boards are placed; keep first-click-safe for players
+      // who ignore the hint (guarantee then no longer applies).
+      if (first && board.placed) ensureFirstClickSafe(board, r, c, boardRand);
       const hitMine = reveal(board, r, c, boardRand);
       if (hitMine) revealAllMines();
+      paint();
+      setStatus();
+      if (first && !followed && mode === "daily" && !board.over) {
+        message.textContent =
+          "That start isn't the guaranteed one — still safe, but you'll be on your own.";
+      }
+      cell.focus({ preventScroll: true });
+      return;
     }
     paint();
     setStatus();

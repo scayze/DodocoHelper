@@ -1,5 +1,7 @@
 /** Framework-free Minesweeper core: board model + reveal/flag/win logic. No DOM. */
 
+import { computeAdjacent } from "./solver.js";
+
 export const MINES_SIZE = 9;
 export const MINES_COUNT = 15;
 
@@ -70,20 +72,72 @@ export function placeMines(
     board.mines[r][c] = true;
     placed++;
   }
+  const adjacent = computeAdjacent(board.mines, size);
   for (let r = 0; r < size; r++) {
     for (let c = 0; c < size; c++) {
-      if (board.mines[r][c]) {
-        board.adjacent[r][c] = -1;
-        continue;
-      }
-      let n = 0;
-      for (const [nr, nc] of neighborsOf(size, r, c)) {
-        if (board.mines[nr][nc]) n++;
-      }
-      board.adjacent[r][c] = n;
+      board.adjacent[r][c] = adjacent[r][c];
     }
   }
   board.placed = true;
+}
+
+/**
+ * Build a board from a pre-generated mine layout (e.g. a verified-solvable
+ * daily). The board arrives placed so the first click needs no deferred
+ * placement; see `ensureFirstClickSafe` for off-hint clicks.
+ */
+export function createPreplacedBoard(
+  size: number,
+  mineCount: number,
+  mines: boolean[][],
+): MineBoard {
+  const board = createBoard(size, mineCount);
+  for (let r = 0; r < size; r++) {
+    for (let c = 0; c < size; c++) {
+      board.mines[r][c] = mines[r][c];
+    }
+  }
+  board.adjacent = computeAdjacent(mines, size);
+  board.placed = true;
+  return board;
+}
+
+/**
+ * Keep the "first click never explodes" promise on pre-generated boards when
+ * the player ignores the hinted opening: relocate a mine sitting under the
+ * clicked cell to a random non-neighboring free cell. The no-guess guarantee
+ * only holds for the hinted opening, so off-hint starts are safe but not
+ * guaranteed solvable.
+ */
+export function ensureFirstClickSafe(
+  board: MineBoard,
+  r: number,
+  c: number,
+  rand: () => number = Math.random,
+): void {
+  if (!board.mines[r][c]) return;
+  const { size } = board;
+  const forbidden = new Set<string>([`${r},${c}`]);
+  for (const [nr, nc] of neighborsOf(size, r, c)) forbidden.add(`${nr},${nc}`);
+  const targets: Array<[number, number]> = [];
+  for (let tr = 0; tr < size; tr++) {
+    for (let tc = 0; tc < size; tc++) {
+      if (!board.mines[tr][tc] && !forbidden.has(`${tr},${tc}`)) targets.push([tr, tc]);
+    }
+  }
+  // Tiny boards may have no non-neighboring cell; fall back to any free cell.
+  if (targets.length === 0) {
+    for (let tr = 0; tr < size; tr++) {
+      for (let tc = 0; tc < size; tc++) {
+        if (!board.mines[tr][tc] && (tr !== r || tc !== c)) targets.push([tr, tc]);
+      }
+    }
+  }
+  if (targets.length === 0) return;
+  const [nr, nc] = targets[Math.floor(rand() * targets.length)];
+  board.mines[r][c] = false;
+  board.mines[nr][nc] = true;
+  board.adjacent = computeAdjacent(board.mines, size);
 }
 
 /** Reveal a cell; flood-fills through zero-adjacent cells. Returns hit-mine.
