@@ -59,6 +59,8 @@ export function createMinesweeperGame(): GameInstance {
   const regenBtn = el<HTMLButtonElement>("mines-regen");
   const viewToggle = el<HTMLButtonElement>("mines-view-toggle");
   const lbView = el("mines-lb-view");
+  /** Board visibility stashed when leaving for endless (which has no board). */
+  let boardOpenBeforeEndless = false;
   const setSizeInput = el<HTMLInputElement>("mines-set-size");
   const setMinesInput = el<HTMLInputElement>("mines-set-mines");
 
@@ -440,6 +442,11 @@ export function createMinesweeperGame(): GameInstance {
   function setMode(next: PlayMode): void {
     if (mode === next) return;
     if (next === "endless" && !isEndlessUnlocked(todayUTC())) return;
+    if (next === "endless") {
+      // Endless has no board: remember whether it was showing so the trip
+      // back to daily restores it (paintMode auto-closes it below).
+      boardOpenBeforeEndless = !lbView.classList.contains("hidden");
+    }
     stashActive();
     activeTimer().pause();
     mode = next;
@@ -457,6 +464,12 @@ export function createMinesweeperGame(): GameInstance {
       ensureDaily();
     }
     paintMode();
+    if (next === "daily") {
+      if (boardOpenBeforeEndless && lbView.classList.contains("hidden")) {
+        viewToggle.click();
+      }
+      boardOpenBeforeEndless = false;
+    }
   }
 
   function cellCoords(cell: HTMLElement): [number, number] | null {

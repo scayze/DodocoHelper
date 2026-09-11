@@ -59,6 +59,8 @@ const settingsToggle = el<HTMLButtonElement>("crowns-settings-toggle");
 const regenBtn = el<HTMLButtonElement>("crowns-regen");
 const viewToggle = el<HTMLButtonElement>("crowns-view-toggle");
 const lbView = el("crowns-lb-view");
+/** Board visibility stashed when leaving for endless (which has no board). */
+let boardOpenBeforeEndless = false;
 const setSizeInput = el<HTMLInputElement>("crowns-set-size");
 const setCrownsInput = el<HTMLInputElement>("crowns-set-crowns");
 const screenshotBtn = el<HTMLButtonElement>("crowns-screenshot");
@@ -377,6 +379,11 @@ function paintMode(): void {
 function setMode(next: PlayMode): void {
   if (mode === next) return;
   if (next === "endless" && !isEndlessUnlocked(todayUTC())) return;
+  if (next === "endless") {
+    // Endless has no board: remember whether it was showing so the trip
+    // back to daily restores it (paintMode auto-closes it below).
+    boardOpenBeforeEndless = !lbView.classList.contains("hidden");
+  }
   stashActive();
   activeTimer().pause();
   mode = next;
@@ -394,6 +401,12 @@ function setMode(next: PlayMode): void {
     ensureDaily();
   }
   paintMode();
+  if (next === "daily") {
+    if (boardOpenBeforeEndless && lbView.classList.contains("hidden")) {
+      viewToggle.click();
+    }
+    boardOpenBeforeEndless = false;
+  }
 }
 
 function showError(title: string, hint: string): void {

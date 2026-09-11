@@ -141,7 +141,8 @@ export function initNameGate(): void {
 
 export interface GameBoardElements {
   toggle: HTMLButtonElement;
-  gameView: HTMLElement;
+  /** Grid figure swapped with the board; meta-row and status line stay put. */
+  gridWrap: HTMLElement;
   boardView: HTMLElement;
   list: HTMLOListElement;
   status: HTMLParagraphElement;
@@ -152,27 +153,30 @@ export interface GameBoardElements {
 
 function resolveGameBoard(prefix: string): GameBoardElements | null {
   const toggle = el<HTMLButtonElement>(`${prefix}-view-toggle`);
-  const gameView = el<HTMLElement>(`${prefix}-game-view`);
+  const gridWrap = el<HTMLElement>(`${prefix}-grid-wrap`);
   const boardView = el<HTMLElement>(`${prefix}-lb-view`);
   const list = el<HTMLOListElement>(`${prefix}-lb-list`);
   const status = el<HTMLParagraphElement>(`${prefix}-lb-status`);
   const day = el<HTMLElement>(`${prefix}-lb-day`);
   const prev = el<HTMLButtonElement>(`${prefix}-lb-prev`);
   const next = el<HTMLButtonElement>(`${prefix}-lb-next`);
-  if (!toggle || !gameView || !boardView || !list || !status || !day || !prev || !next) {
+  if (!toggle || !gridWrap || !boardView || !list || !status || !day || !prev || !next) {
     return null;
   }
-  return { toggle, gameView, boardView, list, status, day, prev, next };
+  return { toggle, gridWrap, boardView, list, status, day, prev, next };
 }
 
 /**
  * Per-minigame leaderboard. One instance per game page shows only that game's
- * board; the toggle button (always visible) swaps the game grid and the board.
+ * board; the toggle button swaps just the game grid with the board while the
+ * meta-row (timer, mode switch, counter) and the status line stay visible.
+ * Daily-only: controllers hide the toggle and auto-close the board in
+ * endless mode, so the trophy button never appears there.
  */
 export function initGameLeaderboard(game: LeaderboardGameId, prefix: string): void {
   const nodes = resolveGameBoard(prefix);
   if (!nodes) return;
-  const { toggle, gameView, boardView, list, status, day, prev, next } = nodes;
+  const { toggle, gridWrap, boardView, list, status, day, prev, next } = nodes;
 
   let viewDay = todayUTC();
   let loading = false;
@@ -197,7 +201,7 @@ export function initGameLeaderboard(game: LeaderboardGameId, prefix: string): vo
 
   function setShowing(showBoard: boolean): void {
     showingBoard = showBoard;
-    gameView.classList.toggle("hidden", showBoard);
+    gridWrap.classList.toggle("hidden", showBoard);
     boardView.classList.toggle("hidden", !showBoard);
     boardView.classList.toggle("flex", showBoard);
     paintToggle();

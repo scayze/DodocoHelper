@@ -47,6 +47,8 @@ export function createTentsGame(): GameInstance {
   const regenBtn = el<HTMLButtonElement>("tents-regen");
   const viewToggle = el<HTMLButtonElement>("tents-view-toggle");
   const lbView = el("tents-lb-view");
+  /** Board visibility stashed when leaving for endless (which has no board). */
+  let boardOpenBeforeEndless = false;
   const setSizeInput = el<HTMLInputElement>("tents-set-size");
 
   let board: TentsBoard | null = null;
@@ -352,6 +354,11 @@ export function createTentsGame(): GameInstance {
   function setMode(next: PlayMode): void {
     if (mode === next) return;
     if (next === "endless" && !isEndlessUnlocked(todayUTC())) return;
+    if (next === "endless") {
+      // Endless has no board: remember whether it was showing so the trip
+      // back to daily restores it (paintMode auto-closes it below).
+      boardOpenBeforeEndless = !lbView.classList.contains("hidden");
+    }
     stashActive();
     activeTimer().pause();
     mode = next;
@@ -371,6 +378,12 @@ export function createTentsGame(): GameInstance {
       ensureDaily();
     }
     paintMode();
+    if (next === "daily") {
+      if (boardOpenBeforeEndless && lbView.classList.contains("hidden")) {
+        viewToggle.click();
+      }
+      boardOpenBeforeEndless = false;
+    }
   }
 
   function activateCell(cell: HTMLElement): void {

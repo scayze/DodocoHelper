@@ -48,6 +48,8 @@ export function createSeasonsGame(): GameInstance {
   const regenBtn = el<HTMLButtonElement>("seasons-regen");
   const viewToggle = el<HTMLButtonElement>("seasons-view-toggle");
   const lbView = el("seasons-lb-view");
+  /** Board visibility stashed when leaving for endless (which has no board). */
+  let boardOpenBeforeEndless = false;
   const setSizeInput = el<HTMLInputElement>("seasons-set-size");
 
   let board: SeasonsBoard = createBoard();
@@ -184,7 +186,7 @@ export function createSeasonsGame(): GameInstance {
       message.textContent = "Solved.";
       freezeClock();
     } else if (board.over) {
-      message.textContent = "No moves left.";
+      message.textContent = "Game Over!";
       freezeClock();
     } else {
       message.textContent = "";
@@ -389,6 +391,11 @@ export function createSeasonsGame(): GameInstance {
   function setMode(next: PlayMode): void {
     if (mode === next) return;
     if (next === "endless" && !isEndlessUnlocked(todayUTC())) return;
+    if (next === "endless") {
+      // Endless has no board: remember whether it was showing so the trip
+      // back to daily restores it (paintMode auto-closes it below).
+      boardOpenBeforeEndless = !lbView.classList.contains("hidden");
+    }
     stashActive();
     activeTimer().pause();
     mode = next;
@@ -406,6 +413,12 @@ export function createSeasonsGame(): GameInstance {
       ensureDaily();
     }
     paintMode();
+    if (next === "daily") {
+      if (boardOpenBeforeEndless && lbView.classList.contains("hidden")) {
+        viewToggle.click();
+      }
+      boardOpenBeforeEndless = false;
+    }
   }
 
   function snapshotChips(): Map<number, DOMRect> {
