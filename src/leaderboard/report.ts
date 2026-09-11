@@ -19,17 +19,24 @@ export const WIN_EVENT = "dodoco:win";
 
 /** Start timestamp holder: call `start()` on new game, `elapsed()` on solve.
  * `tick()` drives a visible count-up clock (e.g. the meta-row timer pill);
- * `stop()` freezes it on win/loss. The clock keeps running across tab
- * switches by design (no pause on unmount) so daily times stay comparable.
+ * `stop()` freezes it on win/loss. Only actively viewed time counts:
+ * `pause()` banks the span so far (tab hidden, other minigame, leaderboard
+ * sub-view) and `resume()` starts a fresh span; finished games never resume.
  */
-export function createRunTimer(): {
+export function createRunTimer(now: () => number = () => performance.now()): {
   start(): void;
   stop(): void;
+  pause(): void;
+  resume(): void;
   elapsed(): number;
   tick(cb: (elapsedMs: number) => void): void;
 } {
-  let startedAt = 0;
-  let stoppedAt: number | null = null;
+  let live = false;
+  let stopped = false;
+  /** Milliseconds of actively viewed time banked by earlier spans. */
+  let banked = 0;
+  /** Start of the current active span, or null while paused. */
+  let runningSince: number | null = null;
   let interval: number | null = null;
   function clearTimerInterval(): void {
     if (interval !== null) {
@@ -37,28 +44,45 @@ export function createRunTimer(): {
       interval = null;
     }
   }
+  function bankActive(): void {
+    if (runningSince !== null) {
+      banked += Math.max(0, now() - runningSince);
+      runningSince = null;
+    }
+  }
   function elapsed(): number {
-    if (startedAt === 0) return 0;
-    const end = stoppedAt ?? performance.now();
-    return Math.max(1, Math.round(end - startedAt));
+    if (!live) return 0;
+    const extra = runningSince !== null ? Math.max(0, now() - runningSince) : 0;
+    return Math.max(1, Math.round(banked + extra));
   }
   return {
     start(): void {
       clearTimerInterval();
-      startedAt = performance.now();
-      stoppedAt = null;
+      live = true;
+      stopped = false;
+      banked = 0;
+      runningSince = now();
     },
     stop(): void {
-      if (startedAt === 0 || stoppedAt !== null) return;
-      stoppedAt = performance.now();
+      if (!live || stopped) return;
+      bankActive();
+      stopped = true;
       clearTimerInterval();
+    },
+    pause(): void {
+      if (!live || stopped || runningSince === null) return;
+      bankActive();
+    },
+    resume(): void {
+      if (!live || stopped || runningSince !== null) return;
+      runningSince = now();
     },
     elapsed,
     tick(cb: (elapsedMs: number) => void): void {
       clearTimerInterval();
       cb(elapsed());
       interval = window.setInterval(() => {
-        if (stoppedAt !== null) {
+        if (stopped) {
           clearTimerInterval();
           return;
         }

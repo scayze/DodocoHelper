@@ -1,6 +1,7 @@
 import type { GameInstance } from "../types.js";
 import { formatClock, todayUTC } from "../../leaderboard/api.js";
 import { announceWin, bindTimerPill, createRunTimer } from "../../leaderboard/report.js";
+import { BOARD_EVENT, type BoardDetail } from "../../leaderboard/view.js";
 import { fetchDailySeeds, mulberry32 } from "../daily.js";
 import {
   checkWin,
@@ -87,6 +88,21 @@ export function createTentsGame(): GameInstance {
     timerValue.textContent = formatClock(runTimer.elapsed());
   }
 
+  function pauseClock(): void {
+    runTimer.pause();
+  }
+
+  function resumeClock(): void {
+    if (started && board && !board.over) runTimer.resume();
+  }
+
+  function onBoardToggle(e: Event): void {
+    const detail = (e as CustomEvent<BoardDetail>).detail;
+    if (!detail || detail.game !== "tents") return;
+    if (detail.showingBoard) pauseClock();
+    else resumeClock();
+  }
+
   function refreshUndo(): void {
     undoButton.disabled = undoStack.length === 0 || !board || board.over;
   }
@@ -157,6 +173,7 @@ export function createTentsGame(): GameInstance {
     winReported = false;
     undoStack = [];
     runTimer.start();
+    if (typeof document !== "undefined" && document.hidden) runTimer.pause();
     bindTimerPill(runTimer, "tents-timer-value", formatClock);
     buildGrid();
     paint();
@@ -220,6 +237,7 @@ export function createTentsGame(): GameInstance {
   grid.addEventListener("click", onClick);
   grid.addEventListener("keydown", onKey);
   undoButton.addEventListener("click", undo);
+  window.addEventListener(BOARD_EVENT, onBoardToggle);
 
   return {
     id: "tents",
@@ -234,10 +252,14 @@ export function createTentsGame(): GameInstance {
       } else {
         paint();
         setStatus();
+        resumeClock();
       }
     },
     unmount(): void {
+      pauseClock();
       root.classList.add("hidden");
     },
+    pauseClock,
+    resumeClock,
   };
 }

@@ -1,6 +1,7 @@
 import type { GameInstance } from "../types.js";
 import { formatClock, todayUTC } from "../../leaderboard/api.js";
 import { announceWin, bindTimerPill, createRunTimer } from "../../leaderboard/report.js";
+import { BOARD_EVENT, type BoardDetail } from "../../leaderboard/view.js";
 import { fetchDailySeeds, mulberry32 } from "../daily.js";
 import { generateRandomLevel } from "./generator.js";
 import { SEASON_ICONS } from "./icons.js";
@@ -98,6 +99,21 @@ export function createSeasonsGame(): GameInstance {
     timerValue.textContent = formatClock(runTimer.elapsed());
   }
 
+  function pauseClock(): void {
+    runTimer.pause();
+  }
+
+  function resumeClock(): void {
+    if (started && !board.over) runTimer.resume();
+  }
+
+  function onBoardToggle(e: Event): void {
+    const detail = (e as CustomEvent<BoardDetail>).detail;
+    if (!detail || detail.game !== "seasons") return;
+    if (detail.showingBoard) pauseClock();
+    else resumeClock();
+  }
+
   function setStatus(): void {
     const left = remainingCount(board);
     level.textContent = `${left} left`;
@@ -150,6 +166,7 @@ export function createSeasonsGame(): GameInstance {
     moveCount = 0;
     winReported = false;
     runTimer.start();
+    if (typeof document !== "undefined" && document.hidden) runTimer.pause();
     bindTimerPill(runTimer, "seasons-timer-value", formatClock);
     buildGrid();
     paint();
@@ -329,6 +346,7 @@ export function createSeasonsGame(): GameInstance {
   grid.addEventListener("pointerleave", clearPreview);
   grid.addEventListener("focusin", previewFromEvent);
   grid.addEventListener("focusout", clearPreview);
+  window.addEventListener(BOARD_EVENT, onBoardToggle);
 
   return {
     id: "seasons",
@@ -346,13 +364,17 @@ export function createSeasonsGame(): GameInstance {
         clearPreview();
         paint();
         setStatus();
+        resumeClock();
       }
     },
     unmount(): void {
+      pauseClock();
       moveEpoch++;
       clearPreview();
       teardownMove();
       root.classList.add("hidden");
     },
+    pauseClock,
+    resumeClock,
   };
 }

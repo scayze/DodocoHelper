@@ -1,10 +1,15 @@
 import "./index.css";
 import { GAMES } from "./games/registry.js";
 import type { GameId, GameInstance, ViewId } from "./games/types.js";
-import { NAME_EVENT, getDisplayName } from "./leaderboard/api.js";
-import { initLeaderboard } from "./leaderboard/view.js";
+import { NAME_EVENT, getDisplayName, hasValidName } from "./leaderboard/api.js";
+import { initGameLeaderboard, initNameGate } from "./leaderboard/view.js";
+import { pickRandomQuote } from "./quotes.js";
 
-initLeaderboard();
+initNameGate();
+initGameLeaderboard("crowns", "crowns");
+initGameLeaderboard("minesweeper", "mines");
+initGameLeaderboard("seasons", "seasons");
+initGameLeaderboard("tents", "tents");
 
 function el<T extends HTMLElement>(id: string): T {
   const node = document.getElementById(id);
@@ -17,6 +22,8 @@ const tabButtons = {
   ...Object.fromEntries(GAMES.map((g) => [g.id, el<HTMLButtonElement>(`game-${g.id}`)])),
 } as Record<ViewId, HTMLButtonElement>;
 
+const gameButtons = GAMES.map((g) => tabButtons[g.id]);
+
 const GAME_TITLES = {
   ...Object.fromEntries(GAMES.map((g) => [g.id, g.label])),
 } as Record<GameId, string>;
@@ -25,6 +32,22 @@ const GAME_TITLES = {
 function homeTitle(): string {
   const name = getDisplayName();
   return name ? `Welcome ${name}!` : "Welcome!";
+}
+
+/** Random quote of the day, re-rolled on every Home visit. */
+function paintQuote(): void {
+  const quote = document.getElementById("quote");
+  if (quote) quote.textContent = `\u201C${pickRandomQuote()}\u201D`;
+}
+
+/** Minigame tabs stay locked until a display name has been saved. */
+function paintGate(): void {
+  const named = hasValidName();
+  for (const btn of gameButtons) {
+    btn.disabled = !named;
+    btn.classList.toggle("opacity-40", !named);
+    btn.classList.toggle("cursor-not-allowed", !named);
+  }
 }
 
 const gameTitle = el<HTMLElement>("game-title");
@@ -55,7 +78,16 @@ function paintTabs(): void {
 
 function setView(id: ViewId): void {
   if (activeView === id) return;
+  if (isGameId(id) && !hasValidName()) {
+    // Nameless visitors stay on Home and are pointed at the name gate.
+    const nameInput = document.getElementById("lb-gate-name") as HTMLInputElement | null;
+    const gateStatus = document.getElementById("lb-gate-status");
+    if (gateStatus) gateStatus.textContent = "Tell us your name first to start playing.";
+    nameInput?.focus();
+    return;
+  }
   if (isGameId(activeView)) {
+    games[activeView].pauseClock();
     games[activeView].unmount();
   } else {
     homeSection.classList.add("hidden");
@@ -66,8 +98,10 @@ function setView(id: ViewId): void {
   activeView = id;
   if (isGameId(id)) {
     games[id].mount();
+    games[id].resumeClock();
   } else {
     homeSection.classList.remove("hidden");
+    paintQuote();
   }
   paintTabs();
 }
@@ -76,10 +110,26 @@ for (const id of Object.keys(tabButtons) as ViewId[]) {
   tabButtons[id].addEventListener("click", () => setView(id));
 }
 
-// A freshly confirmed name updates the greeting immediately.
-window.addEventListener(NAME_EVENT, () => paintTabs());
+// A freshly confirmed name updates the greeting and unlocks the games.
+window.addEventListener(NAME_EVENT, () => {
+  paintGate();
+  paintTabs();
+});
+
+// Daily clocks only run while actively viewed: hidden tabs, minimized
+// windows and app switches freeze every game; returning resumes the active
+// view (finished games stay frozen via the timer's stopped state).
+document.addEventListener("visibilitychange", () => {
+  if (document.hidden) {
+    for (const game of Object.values(games)) game.pauseClock();
+  } else if (isGameId(activeView)) {
+    games[activeView].resumeClock();
+  }
+});
 
 // Initial state: home landing view visible, all games hidden.
 for (const game of Object.values(games)) game.unmount();
 homeSection.classList.remove("hidden");
+paintQuote();
+paintGate();
 paintTabs();

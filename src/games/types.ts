@@ -16,6 +16,10 @@ export interface GameInstance {
   mount(): void;
   /** Hide this game's root section. State is preserved for return visits. */
   unmount(): void;
+  /** Freeze the daily clock; only actively viewed time counts. */
+  pauseClock(): void;
+  /** Resume the daily clock if the daily is still in progress. */
+  resumeClock(): void;
 }
 
 export interface GameDef {

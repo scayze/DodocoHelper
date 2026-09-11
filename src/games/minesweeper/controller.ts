@@ -1,6 +1,7 @@
 import type { GameInstance } from "../types.js";
 import { formatClock, todayUTC } from "../../leaderboard/api.js";
 import { announceWin, bindTimerPill, createRunTimer } from "../../leaderboard/report.js";
+import { BOARD_EVENT, type BoardDetail } from "../../leaderboard/view.js";
 import { fetchDailySeeds, mulberry32 } from "../daily.js";
 import {
   chord,
@@ -114,6 +115,21 @@ export function createMinesweeperGame(): GameInstance {
     timerValue.textContent = formatClock(runTimer.elapsed());
   }
 
+  function pauseClock(): void {
+    runTimer.pause();
+  }
+
+  function resumeClock(): void {
+    if (started && !board.over) runTimer.resume();
+  }
+
+  function onBoardToggle(e: Event): void {
+    const detail = (e as CustomEvent<BoardDetail>).detail;
+    if (!detail || detail.game !== "minesweeper") return;
+    if (detail.showingBoard) pauseClock();
+    else resumeClock();
+  }
+
   function setStatus(): void {
     const left = Math.max(0, board.mineCount - flaggedCount());
     level.textContent = `${board.mineCount} mines · ${left} left`;
@@ -162,6 +178,7 @@ export function createMinesweeperGame(): GameInstance {
     started = true;
     winReported = false;
     runTimer.start();
+    if (typeof document !== "undefined" && document.hidden) runTimer.pause();
     bindTimerPill(runTimer, "mines-timer-value", formatClock);
     clearPress();
     buildGrid();
@@ -322,6 +339,7 @@ export function createMinesweeperGame(): GameInstance {
   grid.addEventListener("pointerup", clearPress);
   grid.addEventListener("pointercancel", clearPress);
   grid.addEventListener("pointerleave", clearPress);
+  window.addEventListener(BOARD_EVENT, onBoardToggle);
 
   return {
     id: "minesweeper",
@@ -338,10 +356,14 @@ export function createMinesweeperGame(): GameInstance {
       } else {
         paint();
         setStatus();
+        resumeClock();
       }
     },
     unmount(): void {
+      pauseClock();
       root.classList.add("hidden");
     },
+    pauseClock,
+    resumeClock,
   };
 }

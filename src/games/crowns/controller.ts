@@ -9,6 +9,7 @@ import { generatePuzzle } from "./generator.js";
 import type { GameInstance } from "../types.js";
 import { formatClock, todayUTC } from "../../leaderboard/api.js";
 import { announceWin, bindTimerPill, createRunTimer } from "../../leaderboard/report.js";
+import { BOARD_EVENT, type BoardDetail } from "../../leaderboard/view.js";
 import { fetchDailySeeds, mulberry32 } from "../daily.js";
 
 type Phase = "idle" | "working" | "ready" | "error";
@@ -98,6 +99,7 @@ function dealDaily(day: string, seed: number): void {
     hintMessage.textContent = "";
     hintLevel.textContent = "Daily";
     runTimer.start();
+    if (typeof document !== "undefined" && document.hidden) runTimer.pause();
     bindTimerPill(runTimer, "crowns-timer-value", formatClock);
     buildBoardGrid(boardGrid, generated);
     paintBoard(boardGrid, generated, new Set(), null);
@@ -269,11 +271,27 @@ async function revealHint(): Promise<void> {
 
 let listenersAttached = false;
 
+function pauseClock(): void {
+  runTimer.pause();
+}
+
+function resumeClock(): void {
+  if (puzzle && !puzzleSolved) runTimer.resume();
+}
+
+function onBoardToggle(e: Event): void {
+  const detail = (e as CustomEvent<BoardDetail>).detail;
+  if (!detail || detail.game !== "crowns") return;
+  if (detail.showingBoard) pauseClock();
+  else resumeClock();
+}
+
 function attachListeners(): void {
   if (listenersAttached) return;
   listenersAttached = true;
   hintButton.addEventListener("click", () => void revealHint());
   undoButton.addEventListener("click", undo);
+  window.addEventListener(BOARD_EVENT, onBoardToggle);
   boardGrid.addEventListener("click", (e) => {
     const cell = (e.target as HTMLElement).closest<HTMLElement>("[data-row][data-col]");
     if (cell && boardGrid.contains(cell)) editCell(cell);
@@ -312,11 +330,16 @@ export function createCrownsGame(): GameInstance {
         ensureDaily();
       } else if (dailyDay !== todayUTC()) {
         ensureDaily();
+      } else {
+        resumeClock();
       }
     },
     unmount(): void {
+      pauseClock();
       uploadSection.classList.add("hidden");
       solverSection.classList.add("hidden");
     },
+    pauseClock,
+    resumeClock,
   };
 }
