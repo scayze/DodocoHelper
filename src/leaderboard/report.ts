@@ -28,6 +28,8 @@ export function createRunTimer(now: () => number = () => performance.now()): {
   stop(): void;
   pause(): void;
   resume(): void;
+  /** Detach the display interval without touching elapsed/stopped state. */
+  untick(): void;
   elapsed(): number;
   tick(cb: (elapsedMs: number) => void): void;
 } {
@@ -77,6 +79,9 @@ export function createRunTimer(now: () => number = () => performance.now()): {
       if (!live || stopped || runningSince !== null) return;
       runningSince = now();
     },
+    untick(): void {
+      clearTimerInterval();
+    },
     elapsed,
     tick(cb: (elapsedMs: number) => void): void {
       clearTimerInterval();
@@ -92,6 +97,14 @@ export function createRunTimer(now: () => number = () => performance.now()): {
   };
 }
 
+/** Which timer currently drives each pill: every game owns a daily and an
+ * endless timer sharing one `#*-timer-value` span, so rebinding must silence
+ * the previous writer. Otherwise the paused timer's interval keeps stamping
+ * its frozen value over the active clock (stuck/flickering pill, clobbered
+ * final time after a win).
+ */
+const pillOwners = new Map<string, ReturnType<typeof createRunTimer>>();
+
 /** Bind a run timer to a `#*-timer-value` span; shows `0:00` before start. */
 export function bindTimerPill(
   timer: ReturnType<typeof createRunTimer>,
@@ -100,6 +113,9 @@ export function bindTimerPill(
 ): void {
   const node = document.getElementById(valueId);
   if (!node) return;
+  const prev = pillOwners.get(valueId);
+  if (prev && prev !== timer) prev.untick();
+  pillOwners.set(valueId, timer);
   node.textContent = format(0);
   timer.tick((ms) => {
     node.textContent = format(ms);

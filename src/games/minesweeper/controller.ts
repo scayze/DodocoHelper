@@ -439,7 +439,6 @@ export function createMinesweeperGame(): GameInstance {
       toggleFlag(board, r, c);
     } else {
       const first = board.revealedCount === 0;
-      const followed = !openingHint || (r === openingHint.r && c === openingHint.c);
       // Pre-generated boards are placed; keep first-click-safe for players
       // who ignore the hint (guarantee then no longer applies).
       if (first && board.placed) ensureFirstClickSafe(board, r, c, boardRand);
@@ -447,10 +446,6 @@ export function createMinesweeperGame(): GameInstance {
       if (hitMine) revealAllMines();
       paint();
       setStatus();
-      if (first && !followed && mode === "daily" && !board.over) {
-        message.textContent =
-          "That start isn't the guaranteed one — still safe, but you'll be on your own.";
-      }
       cell.focus({ preventScroll: true });
       return;
     }

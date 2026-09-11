@@ -40,6 +40,11 @@ const resultArea = el("result-area");
 const errorTitle = el("error-title");
 const errorHint = el("error-hint");
 const boardGrid = el("board-grid");
+const workingMessage = el("working-message");
+
+function setWorkingMessage(text: string): void {
+  workingMessage.textContent = text;
+}
 const hintButton = el<HTMLButtonElement>("hint-button");
 const hintMessage = el<HTMLParagraphElement>("hint-message");
 const hintLevel = el("hint-level");
@@ -210,6 +215,7 @@ function dealDaily(day: string, seed: number): void {
     };
     return;
   }
+  setWorkingMessage("Dealing today’s puzzle…");
   setPhase("working");
   isWorking = true;
   applyBoard(generated, solution, day);
@@ -245,6 +251,7 @@ function fillSettingsInputs(s: CrownsEndlessSettings): void {
 function dealEndless(): void {
   if (isWorking || readingShot) return;
   const s = readSettings();
+  setWorkingMessage("Dealing a new board…");
   setPhase("working");
   isWorking = true;
   try {
@@ -382,7 +389,8 @@ function setMode(next: PlayMode): void {
   } else {
     puzzle = null;
     fullSolution = null;
-    setPhase("idle");
+    setWorkingMessage("Dealing today’s puzzle…");
+    setPhase("working");
     ensureDaily();
   }
   paintMode();
@@ -622,6 +630,7 @@ export function createCrownsGame(): GameInstance {
       } else if (mode === "endless") {
         dealEndless();
       } else {
+        setWorkingMessage("Dealing today’s puzzle…");
         setPhase("working");
         ensureDaily();
       }
