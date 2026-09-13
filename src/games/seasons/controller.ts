@@ -2,7 +2,7 @@ import type { GameInstance } from "../types.js";
 import { formatClock, todayUTC } from "../../leaderboard/api.js";
 import { formatScore } from "../../leaderboard/types.js";
 import { announceResult, bindTimerPill, createRunTimer } from "../../leaderboard/report.js";
-import { BOARD_EVENT, type BoardDetail } from "../../leaderboard/view.js";
+import { boardEvents, type BoardDetail } from "../../leaderboard/view.js";
 import { isDailyComplete, loadDailyResult, saveDailyResult } from "../daily-result.js";
 import { fetchDailySeeds, mulberry32 } from "../daily.js";
 import { generateRandomLevel } from "./generator.js";
@@ -160,9 +160,8 @@ export function createSeasonsGame(): GameInstance {
     if (started && !board.over) activeTimer().resume();
   }
 
-  function onBoardToggle(e: Event): void {
-    const detail = (e as CustomEvent<BoardDetail>).detail;
-    if (!detail || detail.game !== "seasons") return;
+  function onBoardToggle(detail: BoardDetail): void {
+    if (detail.game !== "seasons") return;
     if (detail.showingBoard) pauseClock();
     else resumeClock();
   }
@@ -583,7 +582,7 @@ export function createSeasonsGame(): GameInstance {
   grid.addEventListener("pointerleave", clearPreview);
   grid.addEventListener("focusin", previewFromEvent);
   grid.addEventListener("focusout", clearPreview);
-  window.addEventListener(BOARD_EVENT, onBoardToggle);
+  boardEvents.on(onBoardToggle);
   modeDailyBtn.addEventListener("click", () => setMode("daily"));
   modeEndlessBtn.addEventListener("click", () => setMode("endless"));
   regenBtn.addEventListener("click", () => {

@@ -11,8 +11,9 @@ import {
   submitScore,
   todayUTC,
 } from "./api.js";
-import { WIN_EVENT, type WinDetail } from "./report.js";
+import { winEvents } from "./report.js";
 import { showToast } from "./toast.js";
+import { createEventHub } from "../events.js";
 import {
   formatScore,
   isValidDay,
@@ -21,8 +22,8 @@ import {
   type LeaderboardGameId,
 } from "./types.js";
 
-/** Dispatched on window when a minigame flips between grid and board. */
-export const BOARD_EVENT = "dodoco:board";
+/** Fired when a minigame flips between grid and leaderboard board. */
+export const boardEvents = createEventHub<BoardDetail>();
 
 export interface BoardDetail {
   game: LeaderboardGameId;
@@ -104,7 +105,7 @@ export function initNameGate(): void {
     confirmEl.disabled = true;
     statusEl.textContent = "Saving…";
     const displayName = raw.trim().replace(/\s+/g, " ");
-    // Dispatches NAME_EVENT: main.ts hides the gate and shows "Welcome X!".
+    // Dispatches nameEvents: main.ts hides the gate and shows "Welcome X!".
     setDisplayName(displayName);
     void flushQueue(displayName)
       .then(({ submitted }) => {
@@ -211,9 +212,7 @@ export function initGameLeaderboard(game: LeaderboardGameId, prefix: string): vo
     boardView.classList.toggle("hidden", !showBoard);
     boardView.classList.toggle("flex", showBoard);
     paintToggle();
-    window.dispatchEvent(
-      new CustomEvent<BoardDetail>(BOARD_EVENT, { detail: { game, showingBoard } }),
-    );
+    boardEvents.dispatch({ game, showingBoard });
     if (showBoard && !loaded) {
       void load();
     }
@@ -297,9 +296,8 @@ export function initGameLeaderboard(game: LeaderboardGameId, prefix: string): vo
 
   // Named wins post from the game itself; jump back to today (fresh scores
   // always land there) and refresh when this game's board is showing.
-  window.addEventListener(WIN_EVENT, (e) => {
-    const detail = (e as CustomEvent<WinDetail>).detail;
-    if (!detail || detail.game !== game) return;
+  winEvents.on((detail) => {
+    if (detail.game !== game) return;
     const today = todayUTC();
     if (viewDay !== today) {
       viewDay = today;

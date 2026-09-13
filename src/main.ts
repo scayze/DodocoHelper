@@ -2,7 +2,7 @@ import "./index.css";
 import { GAMES } from "./games/registry.js";
 import type { GameId, GameInstance, ViewId } from "./games/types.js";
 import {
-  NAME_EVENT,
+  nameEvents,
   getDisplayName,
   hasValidName,
   resetDodocoStorage,
@@ -163,7 +163,7 @@ function initHiddenReset(): void {
 }
 
 // A freshly confirmed name updates the greeting and unlocks the games.
-window.addEventListener(NAME_EVENT, () => {
+nameEvents.on(() => {
   paintGate();
   paintTabs();
 });

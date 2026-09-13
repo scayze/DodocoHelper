@@ -11,7 +11,7 @@ import { extractBoardFromFile } from "./extract.js";
 import type { GameInstance } from "../types.js";
 import { formatClock, todayUTC } from "../../leaderboard/api.js";
 import { announceWin, bindTimerPill, createRunTimer } from "../../leaderboard/report.js";
-import { BOARD_EVENT, type BoardDetail } from "../../leaderboard/view.js";
+import { boardEvents, type BoardDetail } from "../../leaderboard/view.js";
 import { fetchDailySeeds, mulberry32 } from "../daily.js";
 import {
   clampCrownsSettings,
@@ -574,9 +574,8 @@ function resumeClock(): void {
   if (puzzle && !puzzleSolved) activeTimer().resume();
 }
 
-function onBoardToggle(e: Event): void {
-  const detail = (e as CustomEvent<BoardDetail>).detail;
-  if (!detail || detail.game !== "crowns") return;
+function onBoardToggle(detail: BoardDetail): void {
+  if (detail.game !== "crowns") return;
   if (detail.showingBoard) pauseClock();
   else resumeClock();
 }
@@ -586,7 +585,7 @@ function attachListeners(): void {
   listenersAttached = true;
   hintButton.addEventListener("click", () => void revealHint());
   undoButton.addEventListener("click", undo);
-  window.addEventListener(BOARD_EVENT, onBoardToggle);
+  boardEvents.on(onBoardToggle);
   boardGrid.addEventListener("click", (e) => {
     const cell = (e.target as HTMLElement).closest<HTMLElement>("[data-row][data-col]");
     if (cell && boardGrid.contains(cell)) editCell(cell);

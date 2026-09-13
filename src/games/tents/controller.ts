@@ -1,7 +1,7 @@
 import type { GameInstance } from "../types.js";
 import { formatClock, todayUTC } from "../../leaderboard/api.js";
 import { announceWin, bindTimerPill, createRunTimer } from "../../leaderboard/report.js";
-import { BOARD_EVENT, type BoardDetail } from "../../leaderboard/view.js";
+import { boardEvents, type BoardDetail } from "../../leaderboard/view.js";
 import { fetchDailySeeds, mulberry32 } from "../daily.js";
 import {
   checkWin,
@@ -144,9 +144,8 @@ export function createTentsGame(): GameInstance {
     if (started && board && !board.over) activeTimer().resume();
   }
 
-  function onBoardToggle(e: Event): void {
-    const detail = (e as CustomEvent<BoardDetail>).detail;
-    if (!detail || detail.game !== "tents") return;
+  function onBoardToggle(detail: BoardDetail): void {
+    if (detail.game !== "tents") return;
     if (detail.showingBoard) pauseClock();
     else resumeClock();
   }
@@ -434,7 +433,7 @@ export function createTentsGame(): GameInstance {
   grid.addEventListener("click", onClick);
   grid.addEventListener("keydown", onKey);
   undoButton.addEventListener("click", undo);
-  window.addEventListener(BOARD_EVENT, onBoardToggle);
+  boardEvents.on(onBoardToggle);
   modeDailyBtn.addEventListener("click", () => setMode("daily"));
   modeEndlessBtn.addEventListener("click", () => setMode("endless"));
   regenBtn.addEventListener("click", () => {

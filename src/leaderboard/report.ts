@@ -7,6 +7,7 @@ import {
   submitScore,
 } from "./api.js";
 import { showToast } from "./toast.js";
+import { createEventHub } from "../events.js";
 
 export interface WinDetail {
   game: LeaderboardGameId;
@@ -19,7 +20,8 @@ export interface WinDetail {
   won?: boolean;
 }
 
-export const WIN_EVENT = "dodoco:win";
+/** Fired after a finished daily is submitted or queued (per game). */
+export const winEvents = createEventHub<WinDetail>();
 
 /** Start timestamp holder: call `start()` on new game, `elapsed()` on solve.
  * `tick()` drives a visible count-up clock (e.g. the meta-row timer pill);
@@ -32,7 +34,7 @@ export function createRunTimer(now: () => number = () => performance.now()): {
   stop(): void;
   pause(): void;
   resume(): void;
-  /** Detach the display interval without touching elapsed/stopped state. */
+  /** Detach a bound display callback without touching elapsed/stopped state. */
   untick(): void;
   elapsed(): number;
   tick(cb: (elapsedMs: number) => void): void;
@@ -44,10 +46,28 @@ export function createRunTimer(now: () => number = () => performance.now()): {
   /** Start of the current active span, or null while paused. */
   let runningSince: number | null = null;
   let interval: number | null = null;
+  /** Ticks the bound pill; null when no display is attached (see untick). */
+  let tickCb: ((elapsedMs: number) => void) | null = null;
   function clearTimerInterval(): void {
     if (interval !== null) {
       window.clearInterval(interval);
       interval = null;
+    }
+  }
+  /** Recreate the display interval only while a tick callback is bound and
+   * the span is actually running. Pause/stop clear it, so paused or finished
+   * games never keep painting (the old design ticked every 250ms forever).
+   */
+  function ensureInterval(): void {
+    clearTimerInterval();
+    if (tickCb !== null && live && !stopped && runningSince !== null) {
+      interval = window.setInterval(() => {
+        if (stopped) {
+          clearTimerInterval();
+          return;
+        }
+        tickCb?.(elapsed());
+      }, 250);
     }
   }
   function bankActive(): void {
@@ -68,6 +88,7 @@ export function createRunTimer(now: () => number = () => performance.now()): {
       stopped = false;
       banked = 0;
       runningSince = now();
+      ensureInterval();
     },
     stop(): void {
       if (!live || stopped) return;
@@ -78,38 +99,30 @@ export function createRunTimer(now: () => number = () => performance.now()): {
     pause(): void {
       if (!live || stopped || runningSince === null) return;
       bankActive();
+      clearTimerInterval();
     },
     resume(): void {
       if (!live || stopped || runningSince !== null) return;
       runningSince = now();
+      ensureInterval();
     },
     untick(): void {
+      tickCb = null;
       clearTimerInterval();
     },
     elapsed,
     tick(cb: (elapsedMs: number) => void): void {
-      clearTimerInterval();
+      tickCb = cb;
       cb(elapsed());
-      interval = window.setInterval(() => {
-        if (stopped) {
-          clearTimerInterval();
-          return;
-        }
-        cb(elapsed());
-      }, 250);
+      ensureInterval();
     },
   };
 }
 
-/** Which timer currently drives each pill: every game owns a daily and an
- * endless timer sharing one `#*-timer-value` span, so rebinding must silence
- * the previous writer. Otherwise the paused timer's interval keeps stamping
- * its frozen value over the active clock (stuck/flickering pill, clobbered
- * final time after a win).
+/** Bind a run timer to a `#*-timer-value` span; paints its current value.
+ * Only a running span ticks: start/resume (re)create the interval, pause/
+ * stop clear it, so a paused timer can never clobber a freshly bound one.
  */
-const pillOwners = new Map<string, ReturnType<typeof createRunTimer>>();
-
-/** Bind a run timer to a `#*-timer-value` span; shows `0:00` before start. */
 export function bindTimerPill(
   timer: ReturnType<typeof createRunTimer>,
   valueId: string,
@@ -117,10 +130,6 @@ export function bindTimerPill(
 ): void {
   const node = document.getElementById(valueId);
   if (!node) return;
-  const prev = pillOwners.get(valueId);
-  if (prev && prev !== timer) prev.untick();
-  pillOwners.set(valueId, timer);
-  node.textContent = format(0);
   timer.tick((ms) => {
     node.textContent = format(ms);
   });
@@ -142,21 +151,21 @@ export function announceResult(detail: WinDetail): void {
   };
   if (!hasValidName()) {
     queueWin(win);
-    window.dispatchEvent(new CustomEvent(WIN_EVENT, { detail: win }));
+    winEvents.dispatch(win);
     return;
   }
   const displayName = getDisplayName();
   void submitScore({ ...win, displayName })
     .then(({ status }) => {
       showToast(status === "duplicate" ? "Already submitted today." : "Score submitted.");
-      window.dispatchEvent(new CustomEvent(WIN_EVENT, { detail: win }));
+      winEvents.dispatch(win);
     })
     .catch((e: unknown) => {
       queueWin(win);
       showToast(
         isRetryableError(e) ? "No connection — score will retry." : "Submit failed — score queued.",
       );
-      window.dispatchEvent(new CustomEvent(WIN_EVENT, { detail: win }));
+      winEvents.dispatch(win);
     });
 }
 
