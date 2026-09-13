@@ -1,6 +1,9 @@
 /** Shared contract for every minigame plugged into the shell. */
 
-export type GameId = "crowns" | "minesweeper" | "seasons" | "tents";
+import { LEADERBOARD_GAMES } from "../leaderboard/types.js";
+
+/** Canonical game ids; single-sourced from the shared leaderboard list. */
+export type GameId = (typeof LEADERBOARD_GAMES)[number];
 
 /** Every top-level view the shell can show: the Home landing view plus each minigame. */
 export type ViewId = "home" | GameId;

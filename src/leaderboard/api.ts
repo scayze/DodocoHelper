@@ -8,11 +8,13 @@ import {
   type LeaderboardResponse,
   type ScoreSubmit,
 } from "./types.js";
+import { allDailyResultKeys } from "../games/daily-result.js";
+import { createEventHub } from "../events.js";
 
 const CLIENT_KEY = "dodoco:clientId";
 const NAME_KEY = "dodoco:displayName";
-/** Dispatched on window whenever the saved display name changes. */
-export const NAME_EVENT = "dodoco:name";
+/** Fired whenever the saved display name changes (shell repaints the gate). */
+export const nameEvents = createEventHub<void>();
 const QUEUE_KEY = "dodoco:pendingWins";
 /** Pre-queue single-slot key; folded into the queue on first read. */
 const LEGACY_KEY = "dodoco:pendingWin";
@@ -24,10 +26,7 @@ const DODOCO_KEYS = [
   NAME_KEY,
   QUEUE_KEY,
   LEGACY_KEY,
-  "dodoco:daily-result:crowns",
-  "dodoco:daily-result:minesweeper",
-  "dodoco:daily-result:seasons",
-  "dodoco:daily-result:tents",
+  ...allDailyResultKeys(),
 ] as const;
 
 /** Remove every dodoco-owned key so a visitor can "reregister" from scratch. */
@@ -113,7 +112,7 @@ export function setDisplayName(name: string): void {
     // Ignore storage failures; the name still applies to this session's submits.
   }
   if (typeof window !== "undefined") {
-    window.dispatchEvent(new Event(NAME_EVENT));
+    nameEvents.dispatch();
   }
 }
 

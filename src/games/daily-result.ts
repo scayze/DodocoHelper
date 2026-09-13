@@ -7,7 +7,7 @@
  * with the original result until midnight rollover.
  */
 
-import { isLeaderboardGame, isValidDay, type LeaderboardGameId } from "../leaderboard/types.js";
+import { LEADERBOARD_GAMES, isLeaderboardGame, isValidDay, type LeaderboardGameId } from "../leaderboard/types.js";
 
 export interface DailyResult {
   /** UTC day key `YYYY-MM-DD` of the finished daily. */
@@ -27,7 +27,7 @@ export function dailyResultKey(game: LeaderboardGameId): string {
 
 /** Every daily-result key owned by the site (for storage resets). */
 export function allDailyResultKeys(): string[] {
-  return (["crowns", "minesweeper", "seasons", "tents"] as const).map(dailyResultKey);
+  return LEADERBOARD_GAMES.map(dailyResultKey);
 }
 
 function isDailyResult(value: unknown): value is DailyResult {
