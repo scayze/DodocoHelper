@@ -10,6 +10,13 @@ export default defineConfig({
   plugins: [tailwindcss()],
   server: {
     proxy: {
+      // The app's apiUrl() builds endpoints under the base prefix, so dev
+      // calls land on /dodoco/api/* — rewrite them to /api/* for the API.
+      "/dodoco/api": {
+        target: "http://localhost:3001",
+        changeOrigin: true,
+        rewrite: (path) => path.replace(/^\/dodoco/, ""),
+      },
       "/api": "http://localhost:3001",
     },
   },
