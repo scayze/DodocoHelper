@@ -2,8 +2,9 @@ import { describe, it } from "node:test";
 import assert from "node:assert/strict";
 import { Readable } from "node:stream";
 import { formatClock } from "../src/leaderboard/api.js";
-import { hashSeed, localDailySeeds, mulberry32 } from "../src/games/daily.js";
-import { dailySeedsFor, fnv1a } from "../server/daily-seed.js";
+import { localDailySeeds, mulberry32 } from "../src/games/daily.js";
+import { fnv1a } from "../src/games/rng.js";
+import { SEED_SALT, dailySeedsFor } from "../server/daily-seed.js";
 import { openDb } from "../server/db.js";
 import { createHandler } from "../server/app.js";
 
@@ -58,8 +59,12 @@ describe("daily seeds", () => {
     }
   });
 
-  it("client hash and server hash agree on the shared FNV-1a core", () => {
-    assert.equal(hashSeed("2026-09-09:crowns"), fnv1a("2026-09-09:crowns"));
+  it("client and server daily seeds build on the same FNV-1a core", () => {
+    const day = "2026-09-09";
+    // Client offline fallback hashes the bare day+game key.
+    assert.equal(localDailySeeds(day).seeds.crowns, fnv1a(`${day}:crowns`));
+    // Server seeds salt the key; both sides must hash identically.
+    assert.equal(dailySeedsFor(day).seeds.crowns, fnv1a(`${SEED_SALT}:${day}:crowns`));
   });
 });
 

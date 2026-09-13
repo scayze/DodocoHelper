@@ -1,4 +1,5 @@
 import { LEADERBOARD_GAMES, type LeaderboardGameId } from "../src/leaderboard/types.js";
+import { fnv1a } from "../src/games/rng.js";
 
 export type DailySeeds = Record<LeaderboardGameId, number>;
 
@@ -12,17 +13,7 @@ export interface DailySeedResponse {
  * once; clients generate boards from these seeds, so rotation invalidates
  * any in-progress day.
  */
-const SEED_SALT = "dodoco-daily-v1";
-
-/** FNV-1a string hash to uint32 (mirrors the client's offline fallback). */
-export function fnv1a(text: string): number {
-  let h = 0x811c9dc5;
-  for (let i = 0; i < text.length; i++) {
-    h ^= text.charCodeAt(i);
-    h = Math.imul(h, 0x01000193);
-  }
-  return h >>> 0;
-}
+export const SEED_SALT = "dodoco-daily-v1";
 
 /**
  * Deterministic daily seeds: same day + same deploy => same seeds for every
