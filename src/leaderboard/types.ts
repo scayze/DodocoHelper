@@ -36,9 +36,31 @@ export interface ScoreSubmit {
   won: boolean;
 }
 
-/** Win-equivalent score per game (used to backfill pre-score rows). */
+/** How each game's `score` participates in validation and ranking. */
+export interface GameRules {
+  /** Ranking significance of `score`: absent (time-only), or lower/higher is better. */
+  metric: "time" | "lowerScore" | "higherScore";
+  /** False when a run can only finish by winning (crowns/tents). */
+  canLose: boolean;
+}
+
+/**
+ * Single source for per-game win/score semantics, shared by server
+ * validation (validate.ts), ranking (db.ts), and win-score defaults.
+ */
+export const GAME_RULES: Record<LeaderboardGameId, GameRules> = {
+  // Time-only (win-only) boards: score is fixed at 0, ranking by duration.
+  crowns: { metric: "time", canLose: false },
+  tents: { metric: "time", canLose: false },
+  // seasons: blocks left at the finish; 0 = solved. Losses still post.
+  seasons: { metric: "lowerScore", canLose: true },
+  // minesweeper: percent of safe cells cleared; 100 = solved. Losses post.
+  minesweeper: { metric: "higherScore", canLose: true },
+};
+
+/** The exact score that counts as a win (0 unless a percent-based board). */
 export function winScoreFor(game: LeaderboardGameId): number {
-  return game === "minesweeper" ? 100 : 0;
+  return GAME_RULES[game].metric === "higherScore" ? 100 : 0;
 }
 
 export function formatScore(game: LeaderboardGameId, score: number): string {

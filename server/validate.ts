@@ -1,9 +1,11 @@
 import {
   CLIENT_ID_RE,
+  GAME_RULES,
   MAX_DURATION_MS,
   MAX_NAME_LENGTH,
   MIN_NAME_LENGTH,
   isLeaderboardGame,
+  winScoreFor,
   type LeaderboardGameId,
   type ScoreSubmit,
 } from "../src/leaderboard/types.js";
@@ -60,9 +62,9 @@ export function validateSubmit(body: unknown):
     return { ok: false, error: "hintsUsed must be an integer between 0 and 10000." };
   }
   const game: LeaderboardGameId = b["game"];
-  // Primary metric (time is only the tiebreak for these games):
-  // seasons = blocks left, minesweeper = percent cleared 0..100.
-  // Crowns/tents are time-only boards: score must be absent or 0, won true.
+  // Win/score interplay is rules-driven (types.ts GAME_RULES): fail-capable
+  // games require won === (score === winScoreFor(game)); time-only boards
+  // are win-only with score 0.
   const scoreRaw = b["score"] === undefined ? 0 : b["score"];
   if (!isInt(scoreRaw) || scoreRaw < 0 || scoreRaw > 100) {
     return { ok: false, error: "score must be an integer between 0 and 100." };
@@ -71,16 +73,13 @@ export function validateSubmit(body: unknown):
   if (typeof wonRaw !== "boolean") {
     return { ok: false, error: "won must be a boolean." };
   }
-  if (game === "seasons") {
-    if (wonRaw !== (scoreRaw === 0)) {
-      return { ok: false, error: "seasons: won must match score === 0." };
-    }
-  } else if (game === "minesweeper") {
-    if (wonRaw !== (scoreRaw === 100)) {
-      return { ok: false, error: "minesweeper: won must match score === 100." };
+  if (GAME_RULES[game].canLose) {
+    const winScore = winScoreFor(game);
+    if (wonRaw !== (scoreRaw === winScore)) {
+      return { ok: false, error: `${game}: won must match score === ${winScore}.` };
     }
   } else if (!wonRaw || scoreRaw !== 0) {
-    return { ok: false, error: "crowns/tents boards are win-only: won must be true and score 0." };
+    return { ok: false, error: `${game} boards are win-only: won must be true and score 0.` };
   }
   return {
     ok: true,

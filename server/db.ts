@@ -1,7 +1,13 @@
 import { mkdirSync } from "node:fs";
 import { dirname } from "node:path";
 import { DatabaseSync } from "node:sqlite";
-import { dayKeyUTC, winScoreFor, type LeaderboardEntry } from "../src/leaderboard/types.js";
+import {
+  GAME_RULES,
+  dayKeyUTC,
+  winScoreFor,
+  type LeaderboardEntry,
+  type LeaderboardGameId,
+} from "../src/leaderboard/types.js";
 import type { ValidSubmit } from "./validate.js";
 
 export type Db = DatabaseSync;
@@ -142,15 +148,16 @@ export function getLeaderboard(
   day: string,
   limit: number,
 ): LeaderboardEntry[] {
-  // Primary metric first (time is only the tiebreak there):
-  // seasons = blocks left ASC, minesweeper = percent cleared DESC,
-  // crowns/tents = time-only boards, unchanged ordering.
-  const order =
-    game === "seasons"
-      ? "score ASC, duration_ms ASC, moves ASC, created_at ASC"
-      : game === "minesweeper"
-        ? "score DESC, duration_ms ASC, moves ASC, created_at ASC"
-        : "duration_ms ASC, moves ASC, created_at ASC";
+  // Primary metric first (time is only the tiebreak): per-game rank order
+  // is driven by GAME_RULES — blocks-left ASC, percent-cleared DESC, and
+  // time-only boards rank on duration alone.
+  // `game` is validated as a LeaderboardGameId by the caller (app.ts).
+  const metric = GAME_RULES[game as LeaderboardGameId].metric;
+  const order = metric === "lowerScore"
+    ? "score ASC, duration_ms ASC, moves ASC, created_at ASC"
+    : metric === "higherScore"
+      ? "score DESC, duration_ms ASC, moves ASC, created_at ASC"
+      : "duration_ms ASC, moves ASC, created_at ASC";
   const rows = db
     .prepare(
       `SELECT * FROM scores WHERE day = ? AND game = ?
