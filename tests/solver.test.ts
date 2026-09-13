@@ -6,6 +6,7 @@ import { solveAll, solvePuzzle, testAssumption, testAssumptionDetailed } from ".
 import { findHints } from "../src/games/crowns/hints.js";
 import { nextMark } from "../src/games/crowns/marks.js";
 import { generatePuzzle } from "../src/games/crowns/generator.js";
+import { mulberry32 } from "../src/games/daily.js";
 import type { NormalizedPuzzle } from "../src/games/crowns/types.js";
 
 // ---------------------------------------------------------------------------
@@ -354,7 +355,13 @@ describe("generatePuzzle", () => {
     assert.ok(result.solution);
   });
 
-  it("produces exactly N regions of size N", () => {
+  it("is deterministic for the same seeded random stream", () => {
+    const first = generatePuzzle(9, 2, 50, mulberry32(123456));
+    const second = generatePuzzle(9, 2, 50, mulberry32(123456));
+    assert.deepEqual(second.regions, first.regions);
+  });
+
+  it("produces connected regions with varied sizes", () => {
     const puzzle = generatePuzzle(9, 2);
     const counts = new Map<number, number>();
     for (const row of puzzle.regions) {
@@ -363,8 +370,33 @@ describe("generatePuzzle", () => {
       }
     }
     assert.equal(counts.size, 9);
-    for (const [, count] of counts) {
-      assert.equal(count, 9);
+    assert.equal([...counts.values()].reduce((sum, count) => sum + count, 0), 81);
+    assert.ok(new Set(counts.values()).size > 1, "regions should have varied sizes");
+    assert.ok(Math.min(...counts.values()) >= 5, "regions should not be too small");
+
+    for (const [region] of counts) {
+      const cells: Array<[number, number]> = [];
+      for (let r = 0; r < puzzle.size; r++) {
+        for (let c = 0; c < puzzle.size; c++) {
+          if (puzzle.regions[r][c] === region) cells.push([r, c]);
+        }
+      }
+      const seen = new Set([`${cells[0][0]},${cells[0][1]}`]);
+      const queue = [cells[0]];
+      while (queue.length > 0) {
+        const [r, c] = queue.shift()!;
+        for (const [dr, dc] of [[-1, 0], [1, 0], [0, -1], [0, 1]]) {
+          const nr = r + dr;
+          const nc = c + dc;
+          const key = `${nr},${nc}`;
+          if (nr >= 0 && nr < puzzle.size && nc >= 0 && nc < puzzle.size &&
+              puzzle.regions[nr][nc] === region && !seen.has(key)) {
+            seen.add(key);
+            queue.push([nr, nc]);
+          }
+        }
+      }
+      assert.equal(seen.size, cells.length, `region ${region} must be connected`);
     }
   });
 });

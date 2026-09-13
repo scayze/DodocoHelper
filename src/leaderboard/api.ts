@@ -308,6 +308,17 @@ export function isRetryableError(e: unknown): boolean {
   );
 }
 
+/**
+ * Absolute path for a leaderboard API endpoint, prefixed with the Vite `base`
+ * so calls stay under the deployed subpath (`/dodoco/api/...` in production,
+ * `/api/...` in dev). Never hardcode `/api/...` — an absolute path escapes
+ * the subpath: behind the Traefik prefix strip it lands on the wrong site.
+ */
+export function apiUrl(path: string): string {
+  const base = import.meta.env.BASE_URL || "/";
+  return `${base.replace(/\/+$/, "")}/api${path}`;
+}
+
 async function fetchJson(input: string, init?: RequestInit): Promise<unknown> {
   const ctrl = new AbortController();
   const timer = window.setTimeout(() => ctrl.abort(), 8000);
@@ -354,7 +365,7 @@ export async function fetchLeaderboard(
   limit = 20,
 ): Promise<LeaderboardResponse> {
   const params = new URLSearchParams({ game, day, limit: String(limit) });
-  const data = (await fetchJson(`/api/leaderboard?${params}`)) as LeaderboardResponse;
+  const data = (await fetchJson(apiUrl(`/leaderboard?${params}`))) as LeaderboardResponse;
   if (!data || typeof data !== "object" || !Array.isArray(data.entries)) {
     throw new Error(API_OFFLINE_MESSAGE);
   }
@@ -371,7 +382,7 @@ export async function submitScore(
     clientId: submit.clientId ?? getClientId(),
   };
   try {
-    const data = (await fetchJson("/api/scores", {
+    const data = (await fetchJson(apiUrl("/scores"), {
       method: "POST",
       headers: { "content-type": "application/json" },
       body: JSON.stringify(body),

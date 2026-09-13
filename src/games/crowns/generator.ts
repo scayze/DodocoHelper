@@ -2,6 +2,10 @@ import type { NormalizedPuzzle } from "./types.js";
 import { UNKNOWN } from "./types.js";
 import { solveAll } from "./solver.js";
 
+const UNASSIGNED = -1;
+const MIN_REGION_SIZE = 5;
+const PARTITION_ATTEMPTS = 80;
+
 function idx(n: number, r: number, c: number): number {
   return r * n + c;
 }
@@ -16,20 +20,30 @@ function neighbors4(n: number, r: number, c: number): Array<[number, number]> {
   return out;
 }
 
-/** Check if a region is connected via BFS */
+function shuffle<T>(values: T[], rand: () => number): T[] {
+  const out = values.slice();
+  for (let i = out.length - 1; i > 0; i--) {
+    const j = Math.floor(rand() * (i + 1));
+    [out[i], out[j]] = [out[j], out[i]];
+  }
+  return out;
+}
+
+/** Check if a region is connected via BFS. */
 function isConnected(grid: number[], n: number, regionId: number): boolean {
   const total = n * n;
   let start = -1;
   for (let i = 0; i < total; i++) {
-    if (grid[i] === regionId) { start = i; break; }
+    if (grid[i] === regionId) {
+      start = i;
+      break;
+    }
   }
   if (start === -1) return false;
 
-  const visited = new Set<number>();
+  const visited = new Set<number>([start]);
   const queue = [start];
-  visited.add(start);
   let count = 0;
-
   while (queue.length > 0) {
     const u = queue.shift()!;
     count++;
@@ -45,107 +59,215 @@ function isConnected(grid: number[], n: number, regionId: number): boolean {
   }
 
   let totalCells = 0;
-  for (let i = 0; i < total; i++) {
-    if (grid[i] === regionId) totalCells++;
-  }
+  for (const value of grid) if (value === regionId) totalCells++;
   return count === totalCells;
 }
 
+function regionCounts(grid: number[], regionCount: number): number[] {
+  const counts = new Array<number>(regionCount).fill(0);
+  for (const region of grid) {
+    if (region >= 0 && region < regionCount) counts[region]++;
+  }
+  return counts;
+}
+
 /**
- * Generate random connected regions of equal size by perturbing a regular grid.
- *
- * 1. Start with a sqrt(N) x sqrt(N) grid of sqrt(N) x sqrt(N) blocks
- * 2. Randomly move boundary cells between adjacent region pairs, maintaining:
- *    - Both regions remain connected
- *    - Both regions remain exactly size N
- * 3. Repeat for many rounds to randomize the layout
+ * Build a bounded, shuffled size profile. A few regions are deliberately
+ * smaller than the board width; the remaining cells are distributed to the
+ * other regions. This gives early region constraints without making tiny
+ * regions that cannot hold two non-adjacent crowns.
  */
-function generateRegions(n: number, rand: () => number = Math.random): number[][] | null {
-  const total = n * n;
-  const side = Math.round(Math.sqrt(n));
+function regionSizeProfile(n: number, rand: () => number): number[] {
+  const regionCount = n;
+  const minSize = Math.min(MIN_REGION_SIZE, n);
+  const smallCount = n >= 7 ? Math.max(2, Math.floor(n / 3)) : n >= 6 ? 2 : 0;
+  const sizes = new Array<number>(regionCount).fill(n);
+  let deficit = 0;
 
-  if (side * side !== n) return null;
+  for (let i = 0; i < smallCount; i++) {
+    const smallSize = Math.min(n, minSize + Math.floor(rand() * 2));
+    sizes[i] = smallSize;
+    deficit += n - smallSize;
+  }
 
-  // Initialize with regular blocks
-  const grid = new Array<number>(total);
+  const maxSize = n + Math.max(2, Math.ceil(n / 2));
+  while (deficit > 0) {
+    const eligible = [] as number[];
+    for (let i = smallCount; i < regionCount; i++) {
+      if (sizes[i] < maxSize) eligible.push(i);
+    }
+    if (eligible.length === 0) {
+      // This is only reachable for unusually small boards. Keep the profile
+      // valid rather than failing generation because of the soft upper bound.
+      const fallback = smallCount < regionCount ? smallCount : 0;
+      sizes[fallback]++;
+      deficit--;
+      continue;
+    }
+    const region = eligible[Math.floor(rand() * eligible.length)];
+    sizes[region]++;
+    deficit--;
+  }
+
+  return shuffle(sizes, rand);
+}
+
+function cellDistance(n: number, a: number, b: number): number {
+  const ar = Math.floor(a / n);
+  const ac = a % n;
+  const br = Math.floor(b / n);
+  const bc = b % n;
+  return Math.abs(ar - br) + Math.abs(ac - bc);
+}
+
+/** Pick spatially distributed seeds so regions do not all start in one area. */
+function chooseSeeds(n: number, regionCount: number, rand: () => number): number[] {
+  const cells = Array.from({ length: n * n }, (_, i) => i);
+  const seeds = [cells.splice(Math.floor(rand() * cells.length), 1)[0]];
+
+  while (seeds.length < regionCount) {
+    let bestDistance = -1;
+    const best: number[] = [];
+    for (const cell of cells) {
+      const distance = Math.min(...seeds.map((seed) => cellDistance(n, cell, seed)));
+      if (distance > bestDistance) {
+        bestDistance = distance;
+        best.length = 0;
+        best.push(cell);
+      } else if (distance === bestDistance) {
+        best.push(cell);
+      }
+    }
+    const chosen = best[Math.floor(rand() * best.length)];
+    seeds.push(chosen);
+    cells.splice(cells.indexOf(chosen), 1);
+  }
+  return seeds;
+}
+
+function frontierFor(grid: number[], n: number, regionId: number): number[] {
+  const frontier: number[] = [];
   for (let r = 0; r < n; r++) {
     for (let c = 0; c < n; c++) {
-      const br = Math.floor(r / side);
-      const bc = Math.floor(c / side);
-      grid[idx(n, r, c)] = br * side + bc;
-    }
-  }
-
-  // Many rounds of boundary cell swaps between adjacent regions
-  const rounds = n * n * 20;
-  for (let s = 0; s < rounds; s++) {
-    // Pick a random cell
-    const r = Math.floor(rand() * n);
-    const c = Math.floor(rand() * n);
-    const u = idx(n, r, c);
-    const regU = grid[u];
-
-    // Find a neighbor in a different region
-    const nbrs = neighbors4(n, r, c);
-    const diffNbrs = nbrs.filter(([nr, nc]) => grid[idx(n, nr, nc)] !== regU);
-    if (diffNbrs.length === 0) continue;
-    const [nr, nc] = diffNbrs[Math.floor(rand() * diffNbrs.length)];
-    const v = idx(n, nr, nc);
-    const regV = grid[v];
-
-    // Find another cell in regV that borders regU (not v itself)
-    // and another cell in regU that borders regV (not u itself)
-    // This avoids the "straight-line swap" disconnection problem
-    const regUBorder: number[] = [];
-    const regVBorder: number[] = [];
-    for (let i = 0; i < total; i++) {
-      if (grid[i] !== regU || i === u) continue;
-      const ir = Math.floor(i / n);
-      const ic = i % n;
-      for (const [nr2, nc2] of neighbors4(n, ir, ic)) {
-        if (grid[idx(n, nr2, nc2)] === regV) { regUBorder.push(i); break; }
+      const cell = idx(n, r, c);
+      if (grid[cell] !== UNASSIGNED) continue;
+      if (neighbors4(n, r, c).some(([nr, nc]) => grid[idx(n, nr, nc)] === regionId)) {
+        frontier.push(cell);
       }
     }
-    for (let i = 0; i < total; i++) {
-      if (grid[i] !== regV || i === v) continue;
-      const ir = Math.floor(i / n);
-      const ic = i % n;
-      for (const [nr2, nc2] of neighbors4(n, ir, ic)) {
-        if (grid[idx(n, nr2, nc2)] === regU) { regVBorder.push(i); break; }
+  }
+  return frontier;
+}
+
+/**
+ * Grow regions from distributed seeds until their target sizes are reached.
+ * Failed growth attempts are discarded; the caller retries with the same
+ * seeded random stream, preserving deterministic daily boards.
+ */
+function growPartition(n: number, targets: number[], rand: () => number): number[] | null {
+  const grid = new Array<number>(n * n).fill(UNASSIGNED);
+  const counts = new Array<number>(n).fill(0);
+  const seeds = chooseSeeds(n, n, rand);
+  for (let region = 0; region < n; region++) {
+    grid[seeds[region]] = region;
+    counts[region] = 1;
+  }
+
+  while (counts.some((count, region) => count < targets[region])) {
+    const choices: Array<{ region: number; frontier: number[]; urgency: number }> = [];
+    for (let region = 0; region < n; region++) {
+      if (counts[region] >= targets[region]) continue;
+      const frontier = frontierFor(grid, n, region);
+      if (frontier.length > 0) {
+        choices.push({
+          region,
+          frontier,
+          urgency: (targets[region] - counts[region]) / targets[region],
+        });
       }
     }
+    if (choices.length === 0) return null;
 
-    if (regUBorder.length === 0 || regVBorder.length === 0) continue;
+    const maxUrgency = Math.max(...choices.map((choice) => choice.urgency));
+    const urgent = choices.filter((choice) => choice.urgency >= maxUrgency - 0.08);
+    const choice = urgent[Math.floor(rand() * urgent.length)];
 
-    // Pick random boundary cells from each region
-    const swapU = regUBorder[Math.floor(rand() * regUBorder.length)];
-    const swapV = regVBorder[Math.floor(rand() * regVBorder.length)];
-
-    // Try the swap
-    grid[swapU] = regV;
-    grid[swapV] = regU;
-
-    if (!isConnected(grid, n, regU) || !isConnected(grid, n, regV)) {
-      // Revert
-      grid[swapU] = regU;
-      grid[swapV] = regV;
+    // Prefer cells that keep the region compact while retaining open frontier
+    // cells. Random tie-breaking keeps equal seeds reproducible but varied.
+    let bestScore = -Infinity;
+    let bestCells: number[] = [];
+    for (const cell of choice.frontier) {
+      const r = Math.floor(cell / n);
+      const c = cell % n;
+      const sameNeighbors = neighbors4(n, r, c).filter(
+        ([nr, nc]) => grid[idx(n, nr, nc)] === choice.region,
+      ).length;
+      const openNeighbors = neighbors4(n, r, c).filter(
+        ([nr, nc]) => grid[idx(n, nr, nc)] === UNASSIGNED,
+      ).length;
+      const score = sameNeighbors * 4 + openNeighbors + rand() * 0.5;
+      if (score > bestScore) {
+        bestScore = score;
+        bestCells = [cell];
+      } else if (score === bestScore) {
+        bestCells.push(cell);
+      }
     }
+    const selected = bestCells[Math.floor(rand() * bestCells.length)];
+    grid[selected] = choice.region;
+    counts[choice.region]++;
   }
 
-  // Verify all regions are size N
-  const sizes = new Array<number>(n).fill(0);
-  for (let i = 0; i < total; i++) sizes[grid[i]]++;
-  for (let i = 0; i < n; i++) {
-    if (sizes[i] !== n) return null;
+  const actual = regionCounts(grid, n);
+  if (actual.some((count, region) => count !== targets[region])) return null;
+  for (let region = 0; region < n; region++) {
+    if (!isConnected(grid, n, region)) return null;
   }
+  return grid;
+}
 
-  const result: number[][] = [];
-  for (let r = 0; r < n; r++) {
-    const row: number[] = [];
-    for (let c = 0; c < n; c++) row.push(grid[idx(n, r, c)]);
-    result.push(row);
+/** Reject a region that cannot contain two non-touching crowns. */
+function everyRegionCanHoldTwoCrowns(grid: number[], n: number): boolean {
+  for (let region = 0; region < n; region++) {
+    const cells: number[] = [];
+    for (let i = 0; i < grid.length; i++) if (grid[i] === region) cells.push(i);
+    let pairFound = false;
+    for (let i = 0; i < cells.length && !pairFound; i++) {
+      const ar = Math.floor(cells[i] / n);
+      const ac = cells[i] % n;
+      for (let j = i + 1; j < cells.length; j++) {
+        const br = Math.floor(cells[j] / n);
+        const bc = cells[j] % n;
+        if (Math.max(Math.abs(ar - br), Math.abs(ac - bc)) > 1) {
+          pairFound = true;
+          break;
+        }
+      }
+    }
+    if (!pairFound) return false;
   }
-  return result;
+  return true;
+}
+
+/**
+ * Generate random connected regions with deliberately varied sizes.
+ * The returned labels always contain exactly `n` regions and `n*n` cells.
+ */
+function generateRegions(n: number, rand: () => number = Math.random): number[][] | null {
+  if (n < 5) return null;
+
+  for (let attempt = 0; attempt < PARTITION_ATTEMPTS; attempt++) {
+    const targets = regionSizeProfile(n, rand);
+    const grid = growPartition(n, targets, rand);
+    if (!grid || !everyRegionCanHoldTwoCrowns(grid, n)) continue;
+
+    const result: number[][] = [];
+    for (let r = 0; r < n; r++) {
+      result.push(grid.slice(r * n, (r + 1) * n));
+    }
+    return result;
+  }
+  return null;
 }
 
 /**

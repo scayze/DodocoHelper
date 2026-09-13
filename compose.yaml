@@ -1,9 +1,19 @@
+# DodocoHelper — Crown puzzle solver + leaderboard API (Vite static site served by Caddy)
+# Public route: https://strey.dev/dodoco/ (path prefix on the existing strey.dev host)
+# Traefik matches Host(strey.dev) + PathPrefix(/dodoco), strips the prefix, and
+# forwards to Caddy :80. The app is built with vite base '/dodoco/' so its
+# absolute asset URLs resolve back through the /dodoco route.
+# Caddy proxies /api/* to the internal `api` service (leaderboard, SQLite).
+# Local modifications vs upstream scayze/DodocoHelper (uncommitted, keep on update):
+#   - frontend service renamed dodoco-solver -> dodoco (+ container_name), host
+#     port 8080:80 removed (Traefik-only), Traefik labels + web network added
+#   - api service: dropped nothing upstream, added web network, container_name,
+#     NO traefik labels (internal only, reached via Caddy /api/* proxy)
 services:
-  dodoco-solver:
+  dodoco:
     build: .
+    container_name: dodoco
     restart: unless-stopped
-    ports:
-      - "8080:80"
     depends_on:
       api:
         condition: service_started
@@ -13,11 +23,29 @@ services:
       timeout: 5s
       retries: 3
       start_period: 5s
+    networks:
+      - web
+    labels:
+      - traefik.enable=true
+      - traefik.docker.network=web
+      # Router — public strey.dev, but only for the /dodoco path prefix
+      - traefik.http.routers.dodoco.rule=Host(`strey.dev`) && PathPrefix(`/dodoco`)
+      - traefik.http.routers.dodoco.entrypoints=websecure
+      - traefik.http.routers.dodoco.tls=true
+      # Higher priority than the catch-all portfolio router (Host(strey.dev))
+      - traefik.http.routers.dodoco.priority=100
+      # Strip the /dodoco prefix so Caddy (which serves at root) resolves the app;
+      # /dodoco/api/* -> /api/* is then proxied by Caddy to the api service
+      - traefik.http.middlewares.dodoco-strip.stripprefix.prefixes=/dodoco
+      - traefik.http.routers.dodoco.middlewares=dodoco-strip
+      # Service
+      - traefik.http.services.dodoco.loadbalancer.server.port=80
 
   api:
     build:
       context: .
       dockerfile: Dockerfile.api
+    container_name: dodoco-api
     restart: unless-stopped
     environment:
       PORT: "3001"
@@ -30,6 +58,12 @@ services:
       timeout: 5s
       retries: 3
       start_period: 5s
+    networks:
+      - web
+
+networks:
+  web:
+    external: true
 
 volumes:
   leaderboard-data:

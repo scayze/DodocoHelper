@@ -73,7 +73,7 @@ export interface AppOptions {
 }
 
 export function createHandler(db: Db, opts: AppOptions = {}) {
-  const submitLimit = opts.submitLimit ?? createLimiter(5, 10 * 60_000);
+  const submitLimit = opts.submitLimit ?? createLimiter(30, 60_000);
   const getLimit = opts.getLimit ?? createLimiter(60, 60_000);
   const now = opts.now ?? ((): Date => new Date());
 

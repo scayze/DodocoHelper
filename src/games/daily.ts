@@ -1,5 +1,5 @@
 import { dayKeyUTC, type LeaderboardGameId } from "../leaderboard/types.js";
-import { todayUTC } from "../leaderboard/api.js";
+import { apiUrl, todayUTC } from "../leaderboard/api.js";
 
 export type DailySeeds = Record<LeaderboardGameId, number>;
 
@@ -61,7 +61,7 @@ export async function fetchDailySeeds(day: string = dayKeyUTC()): Promise<DailyS
     const timer = window.setTimeout(() => ctrl.abort(), 8000);
     let res: Response;
     try {
-      res = await fetch(`/api/daily-seed?day=${encodeURIComponent(day)}`, {
+      res = await fetch(apiUrl(`/daily-seed?day=${encodeURIComponent(day)}`), {
         signal: ctrl.signal,
       });
     } finally {
