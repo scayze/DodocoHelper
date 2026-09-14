@@ -1,0 +1,224 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <link rel="icon" type="image/svg+xml" href="/favicon.svg" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <meta name="theme-color" content="#f5edd8" />
+    <meta name="description" content="Dodoco Solver reads a crown puzzle screenshot and returns the solved board with every crown placed." />
+    <title>Dodoco Solver - Crown Puzzle Companion</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link href="https://fonts.googleapis.com/css2?family=Cinzel:wght@600;700&family=Outfit:wght@400;500;600;700&display=swap" rel="stylesheet" />
+    <style>
+      html {
+        background: #f5edd8;
+      }
+    </style>
+  </head>
+  <body>
+    <div class="parchment-page">
+      <main id="top" class="mx-auto flex h-full min-h-0 w-full max-w-6xl flex-1 flex-col justify-center px-[18px] sm:px-[26px]">
+        <header class="shrink-0 pt-[22px] pb-[2px] text-center md:pt-[26px] md:pb-[4px]">
+          <!-- Home + game tabs: Lucide home/crown/leaf/tent (ISC) + Phosphor bomb (MIT), inlined as SVG. -->
+          <nav id="primary-nav" aria-label="Primary" class="flex items-center justify-center gap-5 text-gold-600">
+            <button id="nav-home" type="button" class="mode-btn font-semibold text-gold-600" aria-label="Home" title="Home">
+              <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+                <path d="m3 9 9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z" />
+                <polyline points="9 22 9 12 15 12 15 22" />
+              </svg>
+            </button>
+            <span aria-hidden="true" class="h-6 w-[2px] shrink-0 bg-gold-600/30"></span>
+            <button id="game-crowns" type="button" class="mode-btn text-gold-600/50" aria-label="Crowns" title="Crowns">
+              <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+                <path d="M11.562 3.266a.5.5 0 0 1 .876 0L15.39 8.87a1 1 0 0 0 1.516.294L21.183 5.5a.5.5 0 0 1 .798.519l-2.834 10.246a1 1 0 0 1-.956.734H5.81a1 1 0 0 1-.957-.734L2.02 6.02a.5.5 0 0 1 .798-.519l4.276 3.664a1 1 0 0 0 1.516-.294z" />
+                <path d="M5 21h14" />
+              </svg>
+            </button>
+            <button id="game-minesweeper" type="button" class="mode-btn text-gold-600/50" aria-label="Minesweeper" title="Minesweeper">
+              <svg width="24" height="24" viewBox="0 0 256 256" fill="currentColor" aria-hidden="true">
+                <path
+                  d="M248,32h0a8,8,0,0,0-8,8,52.66,52.66,0,0,1-3.57,17.39C232.38,67.22,225.7,72,216,72c-11.06,0-18.85-9.76-29.49-24.65C176,32.66,164.12,16,144,16c-16.39,0-29,8.89-35.43,25a66.07,66.07,0,0,0-3.9,15H88A16,16,0,0,0,72,72v9.59A88,88,0,0,0,112,248h1.59A88,88,0,0,0,152,81.59V72a16,16,0,0,0-16-16H120.88a46.76,46.76,0,0,1,2.69-9.37C127.62,36.78,134.3,32,144,32c11.06,0,18.85,9.76,29.49,24.65C184,71.34,195.88,88,216,88c16.39,0,29-8.89,35.43-25A68.69,68.69,0,0,0,256,40,8,8,0,0,0,248,32ZM140.8,94a72,72,0,1,1-57.6,0A8,8,0,0,0,88,86.66V72h48V86.66A8,8,0,0,0,140.8,94ZM111.89,209.32A8,8,0,0,1,104,216a8.52,8.52,0,0,1-1.33-.11,57.5,57.5,0,0,1-46.57-46.57,8,8,0,1,1,15.78-2.64,41.29,41.29,0,0,0,33.43,33.43A8,8,0,0,1,111.89,209.32Z" />
+              </svg>
+            </button>
+            <button id="game-seasons" type="button" class="mode-btn text-gold-600/50" aria-label="Seasons" title="Seasons">
+              <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+                <path d="M11 20a10 10 0 0 0 10-10 25.9 25.9 0 0 0-1.04-7.281 1 1 0 0 0-1.755-.325C15.833 5.5 13 5.5 9.8 6.1A7 7 0 0 0 11 20" />
+                <path d="M2 21a5 5 0 0 1 2.911-4.544C7.613 15.212 8.351 15.24 11 13" />
+              </svg>
+            </button>
+            <button id="game-tents" type="button" class="mode-btn text-gold-600/50" aria-label="Tents &amp; Trees" title="Tents &amp; Trees">
+              <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+                <path d="M3.5 21 14 3" />
+                <path d="M20.5 21 10 3" />
+                <path d="M15.5 21 12 15l-3.5 6" />
+                <path d="M2 21h20" />
+              </svg>
+            </button>
+          </nav>
+          <h1 id="game-title" class="font-display mt-[7px] text-[26px] leading-none tracking-tight text-balance text-night-900 md:text-[2.2rem]">
+            Home
+          </h1>
+        </header>
+
+        <section id="home" class="grid min-h-0 w-full shrink-0 place-items-center py-[9px]">
+          <div class="mx-auto w-full" id="home-col">
+            <div id="home-panel" class="text-night-900" tabindex="-1">
+              <div id="lb-gate" class="flex flex-col items-center gap-[9px]">
+                <label for="lb-gate-name" class="flex flex-wrap items-center justify-center gap-x-[10px] gap-y-[9px] text-center font-display text-[26px] leading-none tracking-tight text-balance text-night-900 md:text-[2.2rem]">
+                  <span>My Name is</span>
+                  <input id="lb-gate-name" type="text" maxlength="20" autocomplete="nickname" placeholder="_____"
+                    aria-label="Your name"
+                    class="w-[180px] border-b-2 border-night-700/40 bg-transparent px-[6px] pb-[2px] text-center font-display text-[26px] leading-none tracking-tight text-night-900 placeholder:text-night-800/40 focus:border-gold-600 focus:outline-none md:text-[2.2rem]" />
+                  <button id="lb-gate-confirm" type="button" aria-label="Save name" title="Save name"
+                    class="btn-outline grid h-[48px] w-[48px] shrink-0 place-items-center rounded-full disabled:cursor-not-allowed disabled:opacity-50">
+                    <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+                      <path d="M20 6 9 17l-5-5" />
+                    </svg>
+                  </button>
+                </label>
+                <p id="lb-gate-status" class="min-h-[24px] text-center text-[15px] font-semibold leading-relaxed text-night-800/70" role="status" aria-live="polite"></p>
+              </div>
+            </div>
+          </div>
+        </section>
+
+        <section id="solver" class="grid min-h-0 w-full shrink-0 place-items-center pt-[2px] pb-[9px]">
+          <div id="result-area" class="hidden w-full min-h-0" aria-live="polite">
+            <div class="mx-auto w-full" id="stage-col">
+
+              <div id="panel-working" class="hidden" tabindex="-1">
+                <div class="grid w-full grid-cols-9 rounded-2xl bg-night-800" aria-hidden="true" id="skeleton-grid"></div>
+                <p class="mt-[13px] flex items-center justify-center gap-[9px] text-[15px] font-semibold text-night-800/70" role="status">
+                  <span class="inline-block h-[18px] w-[18px] animate-spin rounded-full border-2 border-gold-600 border-t-transparent" aria-hidden="true"></span>
+                  <span id="working-message">Dealing today&rsquo;s puzzle&hellip;</span>
+                </p>
+              </div>
+
+              <div id="panel-error" class="hidden rounded-2xl border border-red-800/30 bg-red-950/95 p-[26px]" role="alert" tabindex="-1">
+                <p class="flex items-center gap-2 font-semibold text-red-100">
+                  <svg width="22" height="22" viewBox="0 0 256 256" fill="currentColor" aria-hidden="true">
+                    <path d="M128,24A104,104,0,1,0,232,128,104.11,104.11,0,0,0,128,24Zm-8,48a8,8,0,0,1,16,0v56a8,8,0,0,1-16,0Zm8,104a16,16,0,1,1,16-16A16,16,0,0,1,128,176Z" />
+                  </svg>
+                  <span id="error-title">Something missed the mark.</span>
+                </p>
+                <p id="error-hint" class="mt-[9px] text-[15px] leading-relaxed text-red-200/85"></p>
+                <div class="mt-[18px]">
+                  <button id="retry-button" type="button" class="btn-gold h-[48px] rounded-full px-[22px] text-[15px] font-semibold">
+                    Try another image
+                  </button>
+                </div>
+              </div>
+
+              <div id="panel-ready" class="hidden rounded-2xl border border-night-700/15 bg-white/60 p-[18px] text-night-900 shadow-[0_16px_50px_rgba(60,45,10,0.12)] backdrop-blur-sm" tabindex="-1">
+                <div class="flex flex-col gap-[13px]">
+                  <div id="crowns-game-view" class="flex flex-col gap-[13px]">
+                  <div class="meta-row" aria-hidden="false">
+                    <span id="crowns-timer" class="meta-pill" role="timer" aria-label="Elapsed time">
+                      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+                        <circle cx="12" cy="13" r="8" />
+                        <path d="M12 9v4l2.5 2.5" />
+                        <path d="M9 2h6" />
+                      </svg>
+                      <span id="crowns-timer-value">0:00</span>
+                    </span>
+                    <div id="crowns-mode" class="mode-toggle" role="group" aria-label="Play mode">
+                      <button id="crowns-mode-daily" type="button" class="mode-toggle-btn is-active" aria-pressed="true">Daily</button>
+                      <span id="crowns-mode-sep" aria-hidden="true" class="mode-toggle-sep">|</span>
+                      <button id="crowns-mode-endless" type="button" class="mode-toggle-btn" aria-pressed="false">Endless</button>
+                    </div>
+                    <span id="hint-level" class="meta-pill is-counter"></span>
+                  </div>
+                  <div class="game-stage">
+                    <figure id="crowns-grid-wrap" class="min-w-0 flex-1">
+                      <div id="board-grid" role="grid" aria-label="Puzzle board with regions, marks, and crowns" class="grid w-full rounded-xl bg-[rgb(95,112,128)]"></div>
+                    </figure>
+                    <div id="crowns-lb-view" class="lb-overlay hidden flex-col gap-[13px]">
+                      <div class="flex items-center gap-[9px]">
+                        <button id="crowns-lb-prev" type="button" aria-label="Previous day" title="Previous day"
+                          class="btn-outline grid h-[36px] w-[36px] shrink-0 place-items-center rounded-full disabled:cursor-not-allowed disabled:opacity-50">
+                          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+                            <path d="m15 18-6-6 6-6" />
+                          </svg>
+                        </button>
+                        <div class="min-w-0 flex-1 text-center">
+                          <h2 class="text-[15px] font-bold uppercase tracking-[0.18em] text-gold-600">Leaderboard</h2>
+                          <p id="crowns-lb-day" class="mt-[4px] text-[15px] font-semibold leading-relaxed text-night-800/80">today</p>
+                        </div>
+                        <button id="crowns-lb-next" type="button" aria-label="Next day" title="Next day"
+                          class="btn-outline grid h-[36px] w-[36px] shrink-0 place-items-center rounded-full disabled:cursor-not-allowed disabled:opacity-50">
+                          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+                            <path d="m9 18 6-6-6-6" />
+                          </svg>
+                        </button>
+                      </div>
+                      <ol id="crowns-lb-list" class="lb-list flex flex-col gap-[9px]"></ol>
+                      <p id="crowns-lb-status" class="min-h-[24px] text-center text-[15px] font-semibold leading-relaxed text-night-800/70" role="status" aria-live="polite"></p>
+                    </div>
+                  </div>
+                  <p id="hint-message" class="min-h-[24px] whitespace-pre-line text-center text-[15px] font-semibold leading-relaxed text-night-800/80" role="status" aria-live="polite"></p>
+                  </div>
+                  <div id="crowns-settings" class="hidden flex-col gap-[9px] rounded-xl bg-white/70 px-[18px] py-[13px] shadow-sm">
+                    <label class="settings-row" for="crowns-set-size">
+                      <span>Board size</span>
+                      <input id="crowns-set-size" type="number" min="6" max="10" step="1" inputmode="numeric" />
+                    </label>
+                    <label class="settings-row" for="crowns-set-crowns">
+                      <span>Crowns per row / column / region</span>
+                      <input id="crowns-set-crowns" type="number" min="1" max="2" step="1" inputmode="numeric" />
+                    </label>
+                    <button id="crowns-screenshot" type="button" class="btn-outline h-[44px] rounded-full px-[22px] text-[15px] font-semibold">
+                      Solve from screenshot…
+                    </button>
+                    <input id="crowns-file-input" type="file" accept="image/png,image/jpeg,image/webp" class="sr-only" />
+                  </div>
+                  <div class="flex flex-row justify-between gap-[9px]">
+                    <button id="crowns-view-toggle" type="button" class="btn-outline game-btn h-[48px] w-[48px] rounded-full disabled:cursor-not-allowed disabled:opacity-50" aria-label="Show leaderboard" title="Show leaderboard" aria-expanded="false">
+                      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+                        <path d="M6 9H4.5a2.5 2.5 0 0 1 0-5H6" />
+                        <path d="M18 9h1.5a2.5 2.5 0 0 0 0-5H18" />
+                        <path d="M4 22h16" />
+                        <path d="M10 14.66V17c0 .55-.47.98-.97 1.21C7.85 18.75 7 20.24 7 22" />
+                        <path d="M14 14.66V17c0 .55.47.98.97 1.21C16.15 18.75 17 20.24 17 22" />
+                        <path d="M18 2H6v7a6 6 0 0 0 12 0V2Z" />
+                      </svg>
+                    </button>
+                    <button id="hint-button" type="button" class="btn-outline game-btn h-[48px] w-[48px] rounded-full disabled:cursor-not-allowed disabled:opacity-50" aria-label="Hint" title="Hint">
+                      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+                        <path d="M9 18h6" />
+                        <path d="M10 22h4" />
+                        <path d="M12 2a7 7 0 0 0-4 12.7c.6.5 1 1.4 1 2.3h6c0-.9.4-1.8 1-2.3A7 7 0 0 0 12 2z" />
+                      </svg>
+                    </button>
+                    <button id="undo-button" type="button" class="btn-outline game-btn h-[48px] w-[48px] rounded-full disabled:cursor-not-allowed disabled:opacity-50" aria-label="Undo" title="Undo" disabled>
+                      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+                        <path d="M3 7v6h6" />
+                        <path d="M21 17a9 9 0 0 0-9-9 9 9 0 0 0-6 2.3L3 13" />
+                      </svg>
+                    </button>
+                    <button id="crowns-settings-toggle" type="button" class="btn-outline game-btn hidden h-[48px] w-[48px] rounded-full disabled:cursor-not-allowed disabled:opacity-50" aria-label="Endless settings" title="Endless settings" aria-expanded="false">
+                      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+                        <circle cx="12" cy="12" r="3" />
+                        <path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 1 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 1 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 1 1-2.83-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 1 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 1 1 2.83-2.83l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 1 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 1 1 2.83 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 1 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z" />
+                      </svg>
+                    </button>
+                    <button id="crowns-regen" type="button" class="btn-outline game-btn hidden h-[48px] w-[48px] rounded-full disabled:cursor-not-allowed disabled:opacity-50" aria-label="New endless board" title="New endless board">
+                      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+                        <path d="M21 12a9 9 0 1 1-2.64-6.36" />
+                        <path d="M21 3v6h-6" />
+                      </svg>
+                    </button>
+                  </div>
+                </div>
+              </div>
+            </div>
+          </div>
+        </section>
+                <!-- GENERATED_GAME_PANELS -->
+
+      </main>
+    </div>
+    <div id="toast" class="hidden" role="status" aria-live="polite"></div>
+    <script type="module" src="/src/main.ts"></script>
+  </body>
+</html>
