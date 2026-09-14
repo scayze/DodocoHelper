@@ -89,9 +89,17 @@ describe("endless settings persistence", () => {
 describe("endless unlock", () => {
   it("is locked by default, unlocks for the stored day only", () => {
     installStorage();
-    assert.equal(isEndlessUnlocked("2026-09-11"), false);
-    setEndlessUnlocked("2026-09-11");
-    assert.equal(isEndlessUnlocked("2026-09-11"), true);
-    assert.equal(isEndlessUnlocked("2026-09-12"), false);
+    assert.equal(isEndlessUnlocked("crowns", "2026-09-11"), false);
+    setEndlessUnlocked("crowns", "2026-09-11");
+    assert.equal(isEndlessUnlocked("crowns", "2026-09-11"), true);
+    assert.equal(isEndlessUnlocked("crowns", "2026-09-12"), false);
+  });
+
+  it("is per-game — unlocking one game does not unlock another", () => {
+    installStorage();
+    setEndlessUnlocked("crowns", "2026-09-11");
+    assert.equal(isEndlessUnlocked("crowns", "2026-09-11"), true);
+    assert.equal(isEndlessUnlocked("minesweeper", "2026-09-11"), false);
+    assert.equal(isEndlessUnlocked("tents", "2026-09-11"), false);
   });
 });

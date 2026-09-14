@@ -113,10 +113,15 @@ body {
   display: none;
 }
 
-/* Daily/endless mode toggle: textual, centered in the timer row. */
+/* Daily/endless mode toggle: textual, pinned to the exact horizontal center
+   of the meta-row. The meta-row spans the same content box as the centered
+   game-stage below it, so the toggle always sits exactly above the game
+   field regardless of the timer/counter pill widths. */
 .mode-toggle {
+  position: absolute;
+  left: 50%;
+  transform: translateX(-50%);
   display: flex;
-  flex: 1 1 auto;
   align-items: center;
   justify-content: center;
   gap: 8px;
@@ -205,6 +210,7 @@ body {
 }
 
 .meta-row {
+  position: relative;
   display: flex;
   align-items: center;
   justify-content: space-between;

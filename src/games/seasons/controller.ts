@@ -37,7 +37,6 @@ export function createSeasonsGame(): GameInstance {
   const root = el("seasons");
   const grid = el("seasons-grid");
   const message = el<HTMLParagraphElement>("seasons-message");
-  const level = el("seasons-level");
   const timerValue = el("seasons-timer-value");
   const modeDailyBtn = el<HTMLButtonElement>("seasons-mode-daily");
   const modeEndlessBtn = el<HTMLButtonElement>("seasons-mode-endless");
@@ -187,7 +186,6 @@ export function createSeasonsGame(): GameInstance {
     if (dailyLocked && modeShell.mode === "daily") {
       const stored = loadDailyResult("seasons");
       if (stored) {
-        level.textContent = stored.won ? "Solved" : `${formatScore("seasons", stored.score)} left`;
         message.textContent =
           `Daily complete — ${formatScore("seasons", stored.score)} · ` +
           `${formatClock(stored.durationMs)}. Back tomorrow.`;
@@ -197,7 +195,6 @@ export function createSeasonsGame(): GameInstance {
       dailyLocked = false;
     }
     const left = remainingCount(board);
-    level.textContent = `${left} left`;
     if (board.over && board.won) {
       message.textContent = "Solved.";
       freezeClock();
@@ -213,7 +210,7 @@ export function createSeasonsGame(): GameInstance {
       resultReported = true;
       if (modeShell.mode === "daily" && dailyDay !== null) {
         // Finishing the daily (either way) reveals endless for the day.
-        setEndlessUnlocked(todayUTC());
+        setEndlessUnlocked("seasons", todayUTC());
         const durationMs = runTimer.elapsed();
         announceResult({
           game: "seasons",

@@ -89,7 +89,7 @@ export function createModeShell<TSlot>(config: ModeShellConfig<TSlot>): ModeShel
     elements.modeEndless.classList.toggle("is-active", isEndless);
     elements.modeEndless.setAttribute("aria-pressed", String(isEndless));
 
-    const unlocked = isEndlessUnlocked(todayUTC());
+    const unlocked = isEndlessUnlocked(config.id, todayUTC());
     const wasLocked = elements.modeEndless.classList.contains("hidden");
     elements.modeEndless.classList.toggle("hidden", !unlocked);
     elements.modeSeparator.classList.toggle("hidden", !unlocked);
@@ -129,7 +129,7 @@ export function createModeShell<TSlot>(config: ModeShellConfig<TSlot>): ModeShel
 
   function setMode(next: PlayMode): void {
     if (mode === next) return;
-    if (next === "endless" && !isEndlessUnlocked(todayUTC())) return;
+    if (next === "endless" && !isEndlessUnlocked(config.id, todayUTC())) return;
     if (next === "endless") {
       boardOpenBeforeEndless = !elements.leaderboardView.classList.contains("hidden");
     }

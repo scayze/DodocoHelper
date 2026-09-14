@@ -35,7 +35,6 @@ export function createTentsGame(): GameInstance {
   const root = el("tents");
   const grid = el("tents-grid");
   const message = el<HTMLParagraphElement>("tents-message");
-  const level = el("tents-level");
   const undoButton = el<HTMLButtonElement>("tents-undo-button");
   const timerValue = el("tents-timer-value");
   const modeDailyBtn = el<HTMLButtonElement>("tents-mode-daily");
@@ -105,7 +104,6 @@ export function createTentsGame(): GameInstance {
       board = null;
       undoStack = [];
       message.textContent = "";
-      level.textContent = "";
       undoButton.disabled = true;
       modeShell.ensureDaily();
     },
@@ -175,7 +173,6 @@ export function createTentsGame(): GameInstance {
 
   function setStatus(): void {
     if (!board) return;
-    level.textContent = `${tentsPlaced(board)}/${totalTents(board)} tents`;
     if (board.over && board.won) {
       message.textContent = "Solved.";
       freezeClock();
@@ -183,12 +180,19 @@ export function createTentsGame(): GameInstance {
         winReported = true;
         // Endless wins stay local: only daily wins reach the leaderboard.
         if (modeShell.mode === "daily") {
-          // Solving the daily reveals the endless button (rest of the day).
-          setEndlessUnlocked(todayUTC());
+          // Finishing the daily reveals the endless button (rest of the day).
+          setEndlessUnlocked("tents", todayUTC());
           announceWin({ game: "tents", durationMs: runTimer.elapsed(), moves: moveCount });
           modeShell.paintMode();
         }
       }
+    } else if (board.over && !board.won) {
+      // Loss: unlock endless for the rest of the day.
+      if (modeShell.mode === "daily") {
+        setEndlessUnlocked("tents", todayUTC());
+        modeShell.paintMode();
+      }
+      message.textContent = "";
     } else {
       message.textContent = "";
     }

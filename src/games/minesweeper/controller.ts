@@ -48,11 +48,21 @@ export function createMinesweeperGame(): GameInstance {
   const root = el("mines");
   const grid = el("mines-grid");
   const message = el<HTMLParagraphElement>("mines-message");
-  const level = el("mines-level");
   const timerValue = el("mines-timer-value");
+  /** Dynamically created pill showing remaining mines. Inserted into the meta-row. */
+  const level = document.createElement("span");
+  level.id = "mines-level";
+  level.className = "meta-pill is-counter";
+  level.setAttribute("aria-hidden", "true");
   const modeDailyBtn = el<HTMLButtonElement>("mines-mode-daily");
   const modeEndlessBtn = el<HTMLButtonElement>("mines-mode-endless");
   const modeSep = el("mines-mode-sep");
+  // The pill must be a sibling of the toggle in the real meta-row: the toggle
+  // floats centered over the board, so the pill pins to the top-right via the
+  // row's space-between layout. modeDailyBtn.parentElement is the toggle div,
+  // not the row.
+  const metaRow = el("mines-mode").parentElement;
+  if (metaRow) metaRow.appendChild(level);
   const settingsPanel = el("mines-settings");
   const settingsToggle = el<HTMLButtonElement>("mines-settings-toggle");
   const regenBtn = el<HTMLButtonElement>("mines-regen");
@@ -236,7 +246,8 @@ export function createMinesweeperGame(): GameInstance {
     if (dailyLocked && modeShell.mode === "daily") {
       const stored = loadDailyResult("minesweeper");
       if (stored) {
-        level.textContent = stored.won ? "Solved" : `${formatScore("minesweeper", stored.score)} cleared`;
+        const left = Math.max(0, board.mineCount - flaggedCount());
+        level.textContent = left === 1 ? "1 mine" : `${left} mines`;
         message.textContent =
           `Daily complete — ${formatScore("minesweeper", stored.score)} · ` +
           `${formatClock(stored.durationMs)}. Back tomorrow.`;
@@ -265,7 +276,7 @@ export function createMinesweeperGame(): GameInstance {
       // Endless results stay local: only daily results reach the leaderboard.
       if (modeShell.mode === "daily" && dailyDay !== null) {
         // Finishing the daily (either way) reveals endless for the day.
-        setEndlessUnlocked(todayUTC());
+        setEndlessUnlocked("minesweeper", todayUTC());
         const durationMs = runTimer.elapsed();
         const score = board.won ? 100 : clearedPercent();
         announceResult({

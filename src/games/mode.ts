@@ -126,23 +126,24 @@ export function saveEndlessSettings(game: GameId, settings: EndlessSettings): vo
 }
 
 /**
- * Endless unlock: solving today's daily reveals the endless button. Stored
- * as the UTC day string, so the unlock lasts the rest of the day and
- * re-locks at midnight rollover. Independent of leaderboard submits.
+ * Per-game endless unlock: finishing today's daily (win or loss) reveals
+ * the endless button for that game. Stored as the UTC day string per game,
+ * so the unlock lasts the rest of the day and re-locks at midnight rollover.
+ * Independent of leaderboard submits.
  */
-const UNLOCK_KEY = "dodoco:endless-unlocked";
+const UNLOCK_KEY_PREFIX = "dodoco:endless-unlocked:";
 
-export function isEndlessUnlocked(day: string): boolean {
+export function isEndlessUnlocked(gameId: GameId, day: string): boolean {
   try {
-    return localStorage.getItem(UNLOCK_KEY) === day;
+    return localStorage.getItem(`${UNLOCK_KEY_PREFIX}${gameId}`) === day;
   } catch {
     return false;
   }
 }
 
-export function setEndlessUnlocked(day: string): void {
+export function setEndlessUnlocked(gameId: GameId, day: string): void {
   try {
-    localStorage.setItem(UNLOCK_KEY, day);
+    localStorage.setItem(`${UNLOCK_KEY_PREFIX}${gameId}`, day);
   } catch {
     // Private mode etc: unlock simply lasts the session.
   }

@@ -46,7 +46,6 @@ function setWorkingMessage(text: string): void {
 }
 const hintButton = el<HTMLButtonElement>("hint-button");
 const hintMessage = el<HTMLParagraphElement>("hint-message");
-const hintLevel = el("hint-level");
 const undoButton = el<HTMLButtonElement>("undo-button");
 const timerValue = el("crowns-timer-value");
 const solverSection = el("solver");
@@ -184,7 +183,6 @@ function applyBoard(next: NormalizedPuzzle, solution: string[][], day: string | 
   if (modeShell.mode === "daily") daily = slot;
   else endless = slot;
   hintMessage.textContent = "";
-  hintLevel.textContent = modeShell.modeTag();
   const timer = modeShell.activeTimer();
   timer.start();
   if (typeof document !== "undefined" && document.hidden) timer.pause();
@@ -331,7 +329,6 @@ function restoreSlot(slot: Slot): void {
   paintBoard(boardGrid, slot.puzzle, new Set(), null, slot.puzzle.initial);
   boardGrid.setAttribute("aria-label", describeBoard());
   hintMessage.textContent = slot.solved ? "Solved." : "";
-  hintLevel.textContent = modeShell.modeTag();
   if (!slot.timerLive) {
     slot.timerLive = true;
     timer.start();
@@ -392,12 +389,11 @@ function checkPlaySolved(): void {
   puzzleSolved = true;
   activeHint = null;
   hintMessage.textContent = "Solved.";
-  hintLevel.textContent = modeShell.modeTag();
   freezeClock();
   // Endless wins stay local: only daily wins reach the leaderboard.
   if (modeShell.mode === "daily") {
     // Solving the daily reveals the endless button (rest of the day).
-    setEndlessUnlocked(todayUTC());
+    setEndlessUnlocked("crowns", todayUTC());
     announceWin({
       game: "crowns",
       durationMs: runTimer.elapsed(),
@@ -444,10 +440,8 @@ function recomputeEditedBoard(): void {
   boardGrid.setAttribute("aria-label", describeBoard());
   if (fullSolution) {
     hintMessage.textContent = "";
-    hintLevel.textContent = modeShell.modeTag();
   } else {
     hintMessage.textContent = "These marks cannot all be satisfied. Change a queen or cross to continue.";
-    hintLevel.textContent = modeShell.modeTag();
   }
   refreshHintButton();
 }
@@ -494,7 +488,6 @@ async function revealHint(): Promise<void> {
   activeHint = next;
   shownHints.add(hintId(next));
   hintMessage.textContent = next.text;
-  hintLevel.textContent = next.difficultyLabel === "Advanced" ? modeShell.modeTag() : `${next.difficultyLabel} · ${modeShell.modeTag()}`;
   paintBoard(boardGrid, puzzle, new Set(), activeHint);
   boardGrid.setAttribute("aria-label", describeBoard());
   refreshHintButton();
