@@ -10,18 +10,17 @@ import { validatePuzzleInput } from "./validator.js";
 import { extractBoardFromFile } from "./extract.js";
 import type { GameInstance } from "../types.js";
 import { formatClock, todayUTC } from "../../leaderboard/api.js";
-import { announceWin, bindTimerPill, createRunTimer } from "../../leaderboard/report.js";
+import { announceWin, createRunTimer } from "../../leaderboard/report.js";
 import { boardEvents, type BoardDetail } from "../../leaderboard/view.js";
-import { fetchDailySeeds, mulberry32 } from "../daily.js";
+import { mulberry32 } from "../daily.js";
 import {
   clampCrownsSettings,
-  isEndlessUnlocked,
   loadEndlessSettings,
   saveEndlessSettings,
   setEndlessUnlocked,
   type CrownsEndlessSettings,
-  type PlayMode,
 } from "../mode.js";
+import { createModeShell } from "../mode-shell.js";
 
 type Phase = "idle" | "working" | "ready" | "error";
 
@@ -59,8 +58,6 @@ const settingsToggle = el<HTMLButtonElement>("crowns-settings-toggle");
 const regenBtn = el<HTMLButtonElement>("crowns-regen");
 const viewToggle = el<HTMLButtonElement>("crowns-view-toggle");
 const lbView = el("crowns-lb-view");
-/** Board visibility stashed when leaving for endless (which has no board). */
-let boardOpenBeforeEndless = false;
 const setSizeInput = el<HTMLInputElement>("crowns-set-size");
 const setCrownsInput = el<HTMLInputElement>("crowns-set-crowns");
 const screenshotBtn = el<HTMLButtonElement>("crowns-screenshot");
@@ -78,10 +75,7 @@ let puzzleSolved = false;
 let dailyDay: string | null = null;
 const runTimer = createRunTimer();
 
-/** Session-only mode; every load boots into daily. */
-let mode: PlayMode = "daily";
 const endlessTimer = createRunTimer();
-let settingsOpen = false;
 let readingShot = false;
 /** Stashed per-mode play state; working vars above always mirror the active mode. */
 interface Slot {
@@ -98,15 +92,6 @@ interface Slot {
 let daily: Slot | null = null;
 let endless: Slot | null = null;
 
-function activeTimer(): ReturnType<typeof createRunTimer> {
-  return mode === "endless" ? endlessTimer : runTimer;
-}
-
-/** Daily/endless tag shown in the level pill. */
-function modeTag(): string {
-  return mode === "endless" ? "Endless" : "Daily";
-}
-
 function snapshot(): Slot | null {
   if (!puzzle || !fullSolution) return null;
   return {
@@ -122,13 +107,53 @@ function snapshot(): Slot | null {
   };
 }
 
-function stashActive(): void {
-  const slot = snapshot();
-  if (!slot) return;
-  if (mode === "daily") daily = slot;
-  else endless = slot;
+const modeShell = createModeShell<Slot>({
+  id: "crowns",
+  elements: {
+    modeDaily: modeDailyBtn,
+    modeEndless: modeEndlessBtn,
+    modeSeparator: modeSep,
+    settings: settingsPanel,
+    settingsToggle,
+    regenerate: regenBtn,
+    viewToggle,
+    leaderboardView: lbView,
+    level: hintLevel,
+    timerValue: "crowns-timer-value",
+  },
+  dailyTimer: runTimer,
+  endlessTimer,
+  getSlot: (selectedMode) => selectedMode === "daily" ? daily : endless,
+  setSlot: (selectedMode, slot) => {
+    if (selectedMode === "daily") daily = slot;
+    else endless = slot;
+  },
+  snapshot,
+  restoreSlot,
+  dealDaily,
+  dealEndless,
+  onEmptyDaily: () => {
+    puzzle = null;
+    fullSolution = null;
+    setWorkingMessage("Dealing today’s puzzle…");
+    setPhase("working");
+    modeShell.ensureDaily();
+  },
+  hasDaily: (day) => daily?.day === day,
+  canResume: () => puzzle !== null && !puzzleSolved,
+});
+
+function modeTag(): string {
+  return modeShell.modeTag();
 }
-/**
+
+function paintMode(): void {
+  modeShell.paintMode();
+}
+
+function ensureDaily(): void {
+  modeShell.ensureDaily();
+}/**
  * Whether availableHints holds fresh results for the current board.
  * Hints are computed lazily on Hint click (findHints runs a solver search
  * per unknown cell, far too slow to redo on every cell edit).
@@ -151,8 +176,8 @@ function setPhase(phase: Phase): void {
 }
 
 function freezeClock(): void {
-  activeTimer().stop();
-  timerValue.textContent = formatClock(activeTimer().elapsed());
+  modeShell.activeTimer().stop();
+  timerValue.textContent = formatClock(modeShell.activeTimer().elapsed());
 }
 
 /** Put a solved board into play for the active mode; restarts that mode's clock. */
@@ -167,14 +192,14 @@ function applyBoard(next: NormalizedPuzzle, solution: string[][], day: string | 
   puzzleSolved = false;
   dailyDay = day;
   const slot = snapshot();
-  if (mode === "daily") daily = slot;
+  if (modeShell.mode === "daily") daily = slot;
   else endless = slot;
   hintMessage.textContent = "";
-  hintLevel.textContent = modeTag();
-  const timer = activeTimer();
+  hintLevel.textContent = modeShell.modeTag();
+  const timer = modeShell.activeTimer();
   timer.start();
   if (typeof document !== "undefined" && document.hidden) timer.pause();
-  bindTimerPill(timer, "crowns-timer-value", formatClock);
+  modeShell.bindTimerPill();
   buildBoardGrid(boardGrid, next);
   paintBoard(boardGrid, next, new Set(), null);
   boardGrid.setAttribute("aria-label", describeBoard());
@@ -192,17 +217,17 @@ function dealDaily(day: string, seed: number): void {
     generated = generatePuzzle(9, 2, 50, mulberry32(seed));
     const solved = solvePuzzle(generated);
     if (solved.status !== "solved" || !solved.solution) {
-      if (mode === "daily") showError("Could not deal today's puzzle.", solved.errors.join(" "));
+      if (modeShell.mode === "daily") showError("Could not deal today's puzzle.", solved.errors.join(" "));
       return;
     }
     solution = solved.solution;
   } catch (e) {
-    if (mode === "daily") {
+    if (modeShell.mode === "daily") {
       showError("Could not deal today's puzzle.", e instanceof Error ? e.message : "Try again.");
     }
     return;
   }
-  if (mode !== "daily") {
+  if (modeShell.mode !== "daily") {
     // Parked while endless is showing; timer starts on return to daily.
     daily = {
       puzzle: generated,
@@ -221,15 +246,6 @@ function dealDaily(day: string, seed: number): void {
   setPhase("working");
   isWorking = true;
   applyBoard(generated, solution, day);
-}
-
-function ensureDaily(): void {
-  const day = todayUTC();
-  if (daily && daily.day === day) return;
-  void fetchDailySeeds(day).then(({ day: seedDay, seeds }) => {
-    if (daily && daily.day === seedDay) return;
-    dealDaily(seedDay, seeds.crowns);
-  });
 }
 
 /** Read settings inputs, clamp, persist, and echo the clamped values back. */
@@ -275,13 +291,13 @@ function dealEndless(): void {
 
 /** Load a screenshot board (from settings) as the endless board. */
 function dealScreenshot(file: File): void {
-  if (mode !== "endless" || isWorking || readingShot) return;
+  if (modeShell.mode !== "endless" || isWorking || readingShot) return;
   readingShot = true;
   regenBtn.disabled = true;
   hintMessage.textContent = "Reading screenshot…";
   void extractBoardFromFile(file)
     .then((res) => {
-      if (mode !== "endless") return;
+      if (modeShell.mode !== "endless") return;
       if (!res.ok || !res.puzzle) {
         hintMessage.textContent = `Could not read that image (${res.error ?? "no board found"}).`;
         return;
@@ -299,7 +315,7 @@ function dealScreenshot(file: File): void {
       applyBoard(checked.puzzle, solved.solution, null);
     })
     .catch((e: unknown) => {
-      if (mode === "endless") {
+      if (modeShell.mode === "endless") {
         hintMessage.textContent = `Could not read that image (${e instanceof Error ? e.message : "try again"}).`;
       }
     })
@@ -320,8 +336,8 @@ function restoreSlot(slot: Slot): void {
   undoStack = [...slot.undo];
   puzzleSolved = slot.solved;
   dailyDay = slot.day;
-  const timer = activeTimer();
-  bindTimerPill(timer, "crowns-timer-value", formatClock);
+  const timer = modeShell.activeTimer();
+  modeShell.bindTimerPill();
   buildBoardGrid(boardGrid, slot.puzzle);
   paintBoard(boardGrid, slot.puzzle, new Set(), null, slot.puzzle.initial);
   boardGrid.setAttribute("aria-label", describeBoard());
@@ -340,74 +356,6 @@ function restoreSlot(slot: Slot): void {
   setPhase("ready");
 }
 
-function paintSettings(): void {
-  const show = mode === "endless" && settingsOpen;
-  settingsPanel.classList.toggle("hidden", !show);
-  settingsPanel.classList.toggle("flex", show);
-  settingsToggle.setAttribute("aria-expanded", show ? "true" : "false");
-}
-
-function paintMode(): void {
-  const isEndless = mode === "endless";
-  modeDailyBtn.classList.toggle("is-active", !isEndless);
-  modeDailyBtn.setAttribute("aria-pressed", String(!isEndless));
-  modeEndlessBtn.classList.toggle("is-active", isEndless);
-  modeEndlessBtn.setAttribute("aria-pressed", String(isEndless));
-  // Endless spawns in (with a pop) once today's daily is completed.
-  const unlocked = isEndlessUnlocked(todayUTC());
-  const wasLocked = modeEndlessBtn.classList.contains("hidden");
-  modeEndlessBtn.classList.toggle("hidden", !unlocked);
-  modeSep.classList.toggle("hidden", !unlocked);
-  if (unlocked && wasLocked) {
-    for (const node of [modeEndlessBtn, modeSep]) {
-      node.classList.remove("unlock-pop");
-      void node.offsetWidth;
-      node.classList.add("unlock-pop");
-      node.addEventListener("animationend", () => node.classList.remove("unlock-pop"), {
-        once: true,
-      });
-    }
-  }
-  settingsToggle.classList.toggle("hidden", !isEndless);
-  regenBtn.classList.toggle("hidden", !isEndless);
-  // The leaderboard only tracks daily scores.
-  viewToggle.classList.toggle("hidden", isEndless);
-  if (isEndless && !lbView.classList.contains("hidden")) viewToggle.click();
-  paintSettings();
-}
-
-function setMode(next: PlayMode): void {
-  if (mode === next) return;
-  if (next === "endless" && !isEndlessUnlocked(todayUTC())) return;
-  if (next === "endless") {
-    // Endless has no board: remember whether it was showing so the trip
-    // back to daily restores it (paintMode auto-closes it below).
-    boardOpenBeforeEndless = !lbView.classList.contains("hidden");
-  }
-  stashActive();
-  activeTimer().pause();
-  mode = next;
-  settingsOpen = false;
-  const slot = mode === "daily" ? daily : endless;
-  if (slot) {
-    restoreSlot(slot);
-  } else if (mode === "endless") {
-    dealEndless();
-  } else {
-    puzzle = null;
-    fullSolution = null;
-    setWorkingMessage("Dealing today’s puzzle…");
-    setPhase("working");
-    ensureDaily();
-  }
-  paintMode();
-  if (next === "daily") {
-    if (boardOpenBeforeEndless && lbView.classList.contains("hidden")) {
-      viewToggle.click();
-    }
-    boardOpenBeforeEndless = false;
-  }
-}
 
 function showError(title: string, hint: string): void {
   errorTitle.textContent = title;
@@ -458,7 +406,7 @@ function checkPlaySolved(): void {
   hintLevel.textContent = modeTag();
   freezeClock();
   // Endless wins stay local: only daily wins reach the leaderboard.
-  if (mode === "daily") {
+  if (modeShell.mode === "daily") {
     // Solving the daily reveals the endless button (rest of the day).
     setEndlessUnlocked(todayUTC());
     announceWin({
@@ -565,14 +513,8 @@ async function revealHint(): Promise<void> {
 
 let listenersAttached = false;
 
-function pauseClock(): void {
-  runTimer.pause();
-  endlessTimer.pause();
-}
-
-function resumeClock(): void {
-  if (puzzle && !puzzleSolved) activeTimer().resume();
-}
+const pauseClock = modeShell.pauseClock;
+const resumeClock = modeShell.resumeClock;
 
 function onBoardToggle(detail: BoardDetail): void {
   if (detail.game !== "crowns") return;
@@ -608,15 +550,7 @@ function attachListeners(): void {
     }
   }
 
-  modeDailyBtn.addEventListener("click", () => setMode("daily"));
-  modeEndlessBtn.addEventListener("click", () => setMode("endless"));
-  regenBtn.addEventListener("click", () => {
-    if (mode === "endless") dealEndless();
-  });
-  settingsToggle.addEventListener("click", () => {
-    settingsOpen = !settingsOpen;
-    paintSettings();
-  });
+  modeShell.attachListeners();
   setSizeInput.addEventListener("change", readSettings);
   setCrownsInput.addEventListener("change", readSettings);
   screenshotBtn.addEventListener("click", () => fileInput.click());
@@ -636,17 +570,17 @@ export function createCrownsGame(): GameInstance {
     id: "crowns",
     mount(): void {
       solverSection.classList.remove("hidden");
-      const slot = mode === "daily" ? daily : endless;
+      const slot = modeShell.mode === "daily" ? daily : endless;
       if (slot) {
         restoreSlot(slot);
-      } else if (mode === "endless") {
+      } else if (modeShell.mode === "endless") {
         dealEndless();
       } else {
         setWorkingMessage("Dealing today’s puzzle…");
         setPhase("working");
         ensureDaily();
       }
-      paintMode();
+      modeShell.paintMode();
     },
     unmount(): void {
       pauseClock();

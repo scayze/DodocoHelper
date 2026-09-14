@@ -1,19 +1,18 @@
 import type { GameInstance } from "../types.js";
 import { formatClock, todayUTC } from "../../leaderboard/api.js";
 import { formatScore } from "../../leaderboard/types.js";
-import { announceResult, bindTimerPill, createRunTimer } from "../../leaderboard/report.js";
+import { announceResult, createRunTimer } from "../../leaderboard/report.js";
 import { boardEvents, type BoardDetail } from "../../leaderboard/view.js";
 import { isDailyComplete, loadDailyResult, saveDailyResult } from "../daily-result.js";
-import { fetchDailySeeds, mulberry32 } from "../daily.js";
+import { mulberry32 } from "../daily.js";
 import {
   clampMinesSettings,
-  isEndlessUnlocked,
   loadEndlessSettings,
   saveEndlessSettings,
   setEndlessUnlocked,
   type MinesEndlessSettings,
-  type PlayMode,
 } from "../mode.js";
+import { createModeShell, type ModeShell } from "../mode-shell.js";
 import {
   chord,
   createBoard,
@@ -59,8 +58,6 @@ export function createMinesweeperGame(): GameInstance {
   const regenBtn = el<HTMLButtonElement>("mines-regen");
   const viewToggle = el<HTMLButtonElement>("mines-view-toggle");
   const lbView = el("mines-lb-view");
-  /** Board visibility stashed when leaving for endless (which has no board). */
-  let boardOpenBeforeEndless = false;
   const setSizeInput = el<HTMLInputElement>("mines-set-size");
   const setMinesInput = el<HTMLInputElement>("mines-set-mines");
 
@@ -80,10 +77,7 @@ export function createMinesweeperGame(): GameInstance {
   /** True once today's daily is finished (locks the board across reloads). */
   let dailyLocked = false;
 
-  /** Session-only mode; every load boots into daily. */
-  let mode: PlayMode = "daily";
   const endlessTimer = createRunTimer();
-  let settingsOpen = false;
   /** Stashed per-mode play state; working vars above always mirror the active mode. */
   interface Slot {
     board: MineBoard;
@@ -97,13 +91,9 @@ export function createMinesweeperGame(): GameInstance {
   let daily: Slot | null = null;
   let endless: Slot | null = null;
 
-  function activeTimer(): ReturnType<typeof createRunTimer> {
-    return mode === "endless" ? endlessTimer : runTimer;
-  }
-
-  function stashActive(): void {
-    if (!started) return;
-    const slot: Slot = {
+  function snapshot(): Slot | null {
+    if (!started) return null;
+    return {
       board,
       rand: boardRand,
       opening: openingHint,
@@ -112,9 +102,52 @@ export function createMinesweeperGame(): GameInstance {
       day: dailyDay,
       timerLive: true,
     };
-    if (mode === "daily") daily = slot;
-    else endless = slot;
   }
+
+  const modeShell: ModeShell = createModeShell<Slot>({
+    id: "minesweeper",
+    elements: {
+      modeDaily: modeDailyBtn,
+      modeEndless: modeEndlessBtn,
+      modeSeparator: modeSep,
+      settings: settingsPanel,
+      settingsToggle,
+      regenerate: regenBtn,
+      viewToggle,
+      leaderboardView: lbView,
+      level,
+      timerValue: "mines-timer-value",
+    },
+    dailyTimer: runTimer,
+    endlessTimer,
+    getSlot: (selectedMode) => selectedMode === "daily" ? daily : endless,
+    setSlot: (selectedMode, slot) => {
+      if (selectedMode === "daily") daily = slot;
+      else endless = slot;
+    },
+    snapshot,
+    restoreSlot: activateSlot,
+    dealDaily,
+    dealEndless,
+    onEmptyDaily: () => {
+      started = false;
+      buildGrid();
+      paint();
+      setStatus();
+      modeShell.ensureDaily();
+    },
+    hasDaily: (day) => daily?.day === day,
+    canResume: (): boolean => !(dailyLocked && modeShell.mode === "daily") && started && !board.over,
+  });
+
+  function activeTimer(): ReturnType<typeof createRunTimer> {
+    return modeShell.activeTimer();
+  }
+
+  function paintMode(): void {
+    modeShell.paintMode();
+  }
+
   let pressTimer: number | null = null;
   let pressCell: HTMLElement | null = null;
   /** Pointer type of the last press; right-click (mouse) never suppresses clicks. */
@@ -151,7 +184,7 @@ export function createMinesweeperGame(): GameInstance {
         cell.classList.toggle("is-mine", revealed && isMine);
         // Opening hint marking: daily only, until the first reveal.
         const showHint =
-          mode === "daily" &&
+          modeShell.mode === "daily" &&
           !revealed &&
           !flagged &&
           !board.over &&
@@ -193,15 +226,8 @@ export function createMinesweeperGame(): GameInstance {
     timerValue.textContent = formatClock(activeTimer().elapsed());
   }
 
-  function pauseClock(): void {
-    runTimer.pause();
-    endlessTimer.pause();
-  }
-
-  function resumeClock(): void {
-    if (dailyLocked && mode === "daily") return;
-    if (started && !board.over) activeTimer().resume();
-  }
+  const pauseClock = modeShell.pauseClock;
+  const resumeClock = modeShell.resumeClock;
 
   function onBoardToggle(detail: BoardDetail): void {
     if (detail.game !== "minesweeper") return;
@@ -216,7 +242,7 @@ export function createMinesweeperGame(): GameInstance {
   }
 
   function setStatus(): void {
-    if (dailyLocked && mode === "daily") {
+    if (dailyLocked && modeShell.mode === "daily") {
       const stored = loadDailyResult("minesweeper");
       if (stored) {
         level.textContent = stored.won ? "Solved" : `${formatScore("minesweeper", stored.score)} cleared`;
@@ -246,7 +272,7 @@ export function createMinesweeperGame(): GameInstance {
     if (!resultReported) {
       resultReported = true;
       // Endless results stay local: only daily results reach the leaderboard.
-      if (mode === "daily" && dailyDay !== null) {
+      if (modeShell.mode === "daily" && dailyDay !== null) {
         // Finishing the daily (either way) reveals endless for the day.
         setEndlessUnlocked(todayUTC());
         const durationMs = runTimer.elapsed();
@@ -273,7 +299,7 @@ export function createMinesweeperGame(): GameInstance {
   /** Lock a finished daily so reloads keep the result instead of redealing play. */
   function refreshDailyLock(): void {
     dailyLocked =
-      mode === "daily" && dailyDay !== null && isDailyComplete("minesweeper", dailyDay);
+      modeShell.mode === "daily" && dailyDay !== null && isDailyComplete("minesweeper", dailyDay);
     if (dailyLocked) {
       resultReported = true;
       activeTimer().stop();
@@ -308,7 +334,7 @@ export function createMinesweeperGame(): GameInstance {
     const rand = mulberry32(seed);
     const { mines, opening } = generateMines(9, 15, rand);
     const fresh = createPreplacedBoard(9, 15, mines);
-    if (mode !== "daily") {
+    if (modeShell.mode !== "daily") {
       // Parked while endless is showing; timer starts on return to daily.
       daily = { board: fresh, rand, opening, started: true, resultReported: false, day, timerLive: false };
       return;
@@ -323,21 +349,12 @@ export function createMinesweeperGame(): GameInstance {
     daily = { board, rand: boardRand, opening, started, resultReported, day, timerLive: true };
     runTimer.start();
     if (typeof document !== "undefined" && document.hidden) runTimer.pause();
-    bindTimerPill(runTimer, "mines-timer-value", formatClock);
+    modeShell.bindTimerPill();
     clearPress();
     buildGrid();
     paint();
     setStatus();
     refreshDailyLock();
-  }
-
-  function ensureDaily(): void {
-    const day = todayUTC();
-    if (daily && daily.started && daily.day === day) return;
-    void fetchDailySeeds(day).then(({ day: seedDay, seeds }) => {
-      if (daily && daily.started && daily.day === seedDay) return;
-      dealDaily(seedDay, seeds.minesweeper);
-    });
   }
 
   /** Read settings inputs, clamp, persist, and echo the clamped values back. */
@@ -370,7 +387,7 @@ export function createMinesweeperGame(): GameInstance {
     endless = { board, rand: boardRand, opening, started, resultReported, day: null, timerLive: true };
     endlessTimer.start();
     if (typeof document !== "undefined" && document.hidden) endlessTimer.pause();
-    bindTimerPill(endlessTimer, "mines-timer-value", formatClock);
+    modeShell.bindTimerPill();
     clearPress();
     buildGrid();
     paint();
@@ -386,8 +403,8 @@ export function createMinesweeperGame(): GameInstance {
     started = slot.started;
     resultReported = slot.resultReported;
     dailyLocked = false;
-    const timer = activeTimer();
-    bindTimerPill(timer, "mines-timer-value", formatClock);
+    const timer = modeShell.activeTimer();
+    modeShell.bindTimerPill();
     clearPress();
     buildGrid();
     paint();
@@ -402,74 +419,6 @@ export function createMinesweeperGame(): GameInstance {
     refreshDailyLock();
   }
 
-  function paintSettings(): void {
-    const show = mode === "endless" && settingsOpen;
-    settingsPanel.classList.toggle("hidden", !show);
-    settingsPanel.classList.toggle("flex", show);
-    settingsToggle.setAttribute("aria-expanded", show ? "true" : "false");
-  }
-
-  function paintMode(): void {
-    const isEndless = mode === "endless";
-    modeDailyBtn.classList.toggle("is-active", !isEndless);
-    modeDailyBtn.setAttribute("aria-pressed", String(!isEndless));
-    modeEndlessBtn.classList.toggle("is-active", isEndless);
-    modeEndlessBtn.setAttribute("aria-pressed", String(isEndless));
-    // Endless spawns in (with a pop) once today's daily is completed.
-    const unlocked = isEndlessUnlocked(todayUTC());
-    const wasLocked = modeEndlessBtn.classList.contains("hidden");
-    modeEndlessBtn.classList.toggle("hidden", !unlocked);
-    modeSep.classList.toggle("hidden", !unlocked);
-    if (unlocked && wasLocked) {
-      for (const node of [modeEndlessBtn, modeSep]) {
-        node.classList.remove("unlock-pop");
-        void node.offsetWidth;
-        node.classList.add("unlock-pop");
-        node.addEventListener("animationend", () => node.classList.remove("unlock-pop"), {
-          once: true,
-        });
-      }
-    }
-    settingsToggle.classList.toggle("hidden", !isEndless);
-    regenBtn.classList.toggle("hidden", !isEndless);
-    // The leaderboard only tracks daily scores.
-    viewToggle.classList.toggle("hidden", isEndless);
-    if (isEndless && !lbView.classList.contains("hidden")) viewToggle.click();
-    paintSettings();
-  }
-
-  function setMode(next: PlayMode): void {
-    if (mode === next) return;
-    if (next === "endless" && !isEndlessUnlocked(todayUTC())) return;
-    if (next === "endless") {
-      // Endless has no board: remember whether it was showing so the trip
-      // back to daily restores it (paintMode auto-closes it below).
-      boardOpenBeforeEndless = !lbView.classList.contains("hidden");
-    }
-    stashActive();
-    activeTimer().pause();
-    mode = next;
-    settingsOpen = false;
-    const slot = mode === "daily" ? daily : endless;
-    if (slot && slot.started) {
-      activateSlot(slot);
-    } else if (mode === "endless") {
-      dealEndless();
-    } else {
-      started = false;
-      buildGrid();
-      paint();
-      setStatus();
-      ensureDaily();
-    }
-    paintMode();
-    if (next === "daily") {
-      if (boardOpenBeforeEndless && lbView.classList.contains("hidden")) {
-        viewToggle.click();
-      }
-      boardOpenBeforeEndless = false;
-    }
-  }
 
   function cellCoords(cell: HTMLElement): [number, number] | null {
     const r = Number(cell.dataset.row);
@@ -480,7 +429,7 @@ export function createMinesweeperGame(): GameInstance {
 
   function flagCell(cell: HTMLElement): void {
     if (!started || board.over) return;
-    if (dailyLocked && mode === "daily") return;
+    if (dailyLocked && modeShell.mode === "daily") return;
     const coords = cellCoords(cell);
     if (!coords) return;
     const [r, c] = coords;
@@ -501,7 +450,7 @@ export function createMinesweeperGame(): GameInstance {
 
   function activateCell(cell: HTMLElement): void {
     if (!started || board.over) return;
-    if (dailyLocked && mode === "daily") return;
+    if (dailyLocked && modeShell.mode === "daily") return;
     const coords = cellCoords(cell);
     if (!coords) return;
     const [r, c] = coords;
@@ -535,7 +484,7 @@ export function createMinesweeperGame(): GameInstance {
   /** Double-click / double-tap on a satisfied number opens its neighbors. */
   function chordCell(cell: HTMLElement): void {
     if (!started || board.over) return;
-    if (dailyLocked && mode === "daily") return;
+    if (dailyLocked && modeShell.mode === "daily") return;
     const coords = cellCoords(cell);
     if (!coords) return;
     const hitMine = chord(board, coords[0], coords[1], boardRand);
@@ -627,15 +576,7 @@ export function createMinesweeperGame(): GameInstance {
   grid.addEventListener("pointercancel", clearPress);
   grid.addEventListener("pointerleave", clearPress);
   boardEvents.on(onBoardToggle);
-  modeDailyBtn.addEventListener("click", () => setMode("daily"));
-  modeEndlessBtn.addEventListener("click", () => setMode("endless"));
-  regenBtn.addEventListener("click", () => {
-    if (mode === "endless") dealEndless();
-  });
-  settingsToggle.addEventListener("click", () => {
-    settingsOpen = !settingsOpen;
-    paintSettings();
-  });
+  modeShell.attachListeners();
   setSizeInput.addEventListener("change", readSettings);
   setMinesInput.addEventListener("change", readSettings);
   fillSettingsInputs(loadEndlessSettings("minesweeper"));
@@ -645,7 +586,7 @@ export function createMinesweeperGame(): GameInstance {
     mount(): void {
       root.classList.remove("hidden");
       document.getElementById("top")?.classList.add("has-result");
-      if (mode === "endless") {
+      if (modeShell.mode === "endless") {
         if (endless && endless.started) {
           paint();
           setStatus();
@@ -657,16 +598,16 @@ export function createMinesweeperGame(): GameInstance {
         buildGrid();
         paint();
         setStatus();
-        ensureDaily();
+        modeShell.ensureDaily();
       } else if (daily.day !== todayUTC()) {
-        ensureDaily();
+        modeShell.ensureDaily();
       } else {
         paint();
         setStatus();
         refreshDailyLock();
         resumeClock();
       }
-      paintMode();
+      modeShell.paintMode();
     },
     unmount(): void {
       pauseClock();
