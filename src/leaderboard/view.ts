@@ -253,16 +253,13 @@ export function initGameLeaderboard(game: LeaderboardGameId, prefix: string): vo
           const rank = document.createElement("span");
           rank.className = "w-[28px] shrink-0 text-center text-[15px] font-bold text-gold-600";
           rank.textContent = String(index + 1);
-          const avatar = document.createElement("span");
-          avatar.className = "h-[32px] w-[32px] shrink-0 rounded-full bg-gold-600/20";
-          avatar.setAttribute("aria-hidden", "true");
           const name = document.createElement("span");
           name.className = "min-w-0 flex-1 truncate text-[15px] font-semibold";
           name.textContent = entry.displayName;
           const time = document.createElement("span");
           time.className = "shrink-0 text-[15px] font-bold tabular-nums";
           time.textContent = formatDuration(entry.durationMs);
-          li.append(rank, avatar, name, time);
+          li.append(rank, name, time);
           const scoreText = formatScore(game, entry.score ?? winScoreFor(game));
           if (scoreText) {
             const score = document.createElement("span");
