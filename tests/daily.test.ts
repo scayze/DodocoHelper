@@ -2,7 +2,7 @@ import { describe, it } from "node:test";
 import assert from "node:assert/strict";
 import { Readable } from "node:stream";
 import { formatClock } from "../src/leaderboard/api.js";
-import { localDailySeeds, mulberry32 } from "../src/games/daily.js";
+import { localDailySeeds, mulberry32, timeUntilNextDaily, dailyCompleteMessage } from "../src/games/daily.js";
 import { fnv1a } from "../src/games/rng.js";
 import { SEED_SALT, dailySeedsFor } from "../server/daily-seed.js";
 import { openDb } from "../server/db.js";
@@ -21,6 +21,32 @@ describe("formatClock", () => {
   it("rolls hours as h:mm:ss", () => {
     assert.equal(formatClock(3_600_000), "1:00:00");
     assert.equal(formatClock(3_723_000), "1:02:03");
+  });
+});
+
+describe("timeUntilNextDaily", () => {
+  it("counts down to the next UTC midnight in XXh MMm", () => {
+    assert.equal(timeUntilNextDaily(new Date("2026-09-09T12:00:00Z")), "12h 00m");
+    assert.equal(timeUntilNextDaily(new Date("2026-09-09T23:45:30Z")), "00h 14m");
+    assert.equal(timeUntilNextDaily(new Date("2026-09-09T00:00:00Z")), "24h 00m");
+  });
+
+  it("handles month and year rollovers", () => {
+    assert.equal(
+      timeUntilNextDaily(new Date("2026-09-30T22:15:00Z")),
+      "01h 45m",
+    );
+    assert.equal(
+      timeUntilNextDaily(new Date("2026-12-31T18:30:00Z")),
+      "05h 30m",
+    );
+  });
+
+  it("dailyCompleteMessage embeds the countdown for all finishes", () => {
+    assert.equal(
+      dailyCompleteMessage(new Date("2026-09-09T12:00:00Z")),
+      "Daily complete. Next one in 12h 00m.",
+    );
   });
 });
 

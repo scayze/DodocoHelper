@@ -9,6 +9,8 @@ import {
   type ScoreSubmit,
 } from "./types.js";
 import { allDailyResultKeys } from "../games/daily-result.js";
+import { allBoardStateKeys } from "../games/persist.js";
+import { allEndlessKeys } from "../games/mode.js";
 import { createEventHub } from "../events.js";
 
 const CLIENT_KEY = "dodoco:clientId";
@@ -27,6 +29,8 @@ const DODOCO_KEYS = [
   QUEUE_KEY,
   LEGACY_KEY,
   ...allDailyResultKeys(),
+  ...allBoardStateKeys(),
+  ...allEndlessKeys(),
 ] as const;
 
 /** Remove every dodoco-owned key so a visitor can "reregister" from scratch. */

@@ -12,7 +12,7 @@ import type { GameInstance } from "../types.js";
 import { formatClock, todayUTC } from "../../leaderboard/api.js";
 import { announceWin, createRunTimer } from "../../leaderboard/report.js";
 import { boardEvents, type BoardDetail } from "../../leaderboard/view.js";
-import { mulberry32 } from "../daily.js";
+import { dailyCompleteMessage, mulberry32 } from "../daily.js";
 import {
   clampCrownsSettings,
   loadEndlessSettings,
@@ -21,6 +21,8 @@ import {
   type CrownsEndlessSettings,
 } from "../mode.js";
 import { createModeShell } from "../mode-shell.js";
+import { loadBoardState, saveBoardState } from "../persist.js";
+import { isCrownsStored, type CrownsStored } from "./stored.js";
 
 type Phase = "idle" | "working" | "ready" | "error";
 
@@ -91,6 +93,21 @@ interface Slot {
 let daily: Slot | null = null;
 let endless: Slot | null = null;
 
+/** Rebuild a full slot from its stored slice (Set back, day/timer from envelope). */
+function storedCrownsSlot(raw: CrownsStored, day: string | null, timerLive: boolean): Slot {
+  return {
+    puzzle: raw.puzzle,
+    solution: raw.solution,
+    hints: raw.hints,
+    hintsComputed: raw.hintsComputed,
+    shown: new Set(raw.shown),
+    undo: raw.undo,
+    solved: raw.solved,
+    day,
+    timerLive,
+  };
+}
+
 function snapshot(): Slot | null {
   if (!puzzle || !fullSolution) return null;
   return {
@@ -125,6 +142,7 @@ const modeShell = createModeShell<Slot>({
   setSlot: (selectedMode, slot) => {
     if (selectedMode === "daily") daily = slot;
     else endless = slot;
+    persistActive();
   },
   snapshot,
   restoreSlot,
@@ -168,6 +186,26 @@ function freezeClock(): void {
   timerValue.textContent = formatClock(modeShell.activeTimer().elapsed());
 }
 
+/** Persist the active board so a reload can restore it (played state only). */
+function persistActive(): void {
+  const slot = snapshot();
+  if (!slot) return;
+  saveBoardState("crowns", modeShell.mode, {
+    day: slot.day,
+    elapsedMs: modeShell.activeTimer().elapsed(),
+    timerLive: true,
+    state: {
+      puzzle: slot.puzzle,
+      solution: slot.solution,
+      hints: slot.hints,
+      hintsComputed: slot.hintsComputed,
+      shown: [...slot.shown],
+      undo: slot.undo,
+      solved: slot.solved,
+    },
+  });
+}
+
 /** Put a solved board into play for the active mode; restarts that mode's clock. */
 function applyBoard(next: NormalizedPuzzle, solution: string[][], day: string | null): void {
   puzzle = next;
@@ -193,6 +231,7 @@ function applyBoard(next: NormalizedPuzzle, solution: string[][], day: string | 
   refreshHintButton();
   isWorking = false;
   setPhase("ready");
+  persistActive();
 }
 
 /** Deal the fixed daily board (seed from server, generated client-side). */
@@ -328,7 +367,11 @@ function restoreSlot(slot: Slot): void {
   buildBoardGrid(boardGrid, slot.puzzle);
   paintBoard(boardGrid, slot.puzzle, new Set(), null, slot.puzzle.initial);
   boardGrid.setAttribute("aria-label", describeBoard());
-  hintMessage.textContent = slot.solved ? "Solved." : "";
+  hintMessage.textContent = slot.solved
+    ? modeShell.mode === "daily"
+      ? dailyCompleteMessage()
+      : "Solved."
+    : "";
   if (!slot.timerLive) {
     slot.timerLive = true;
     timer.start();
@@ -388,7 +431,8 @@ function checkPlaySolved(): void {
   }
   puzzleSolved = true;
   activeHint = null;
-  hintMessage.textContent = "Solved.";
+  hintMessage.textContent =
+    modeShell.mode === "daily" ? dailyCompleteMessage() : "Solved.";
   freezeClock();
   // Endless wins stay local: only daily wins reach the leaderboard.
   if (modeShell.mode === "daily") {
@@ -411,6 +455,7 @@ function undo(): void {
   const last = undoStack.pop()!;
   puzzle.initial[last.r][last.c] = last.prev;
   recomputeEditedBoard();
+  persistActive();
 }
 
 function hintId(hint: Hint): string {
@@ -457,6 +502,7 @@ function editCell(cell: HTMLElement): void {
   recomputeEditedBoard();
   checkPlaySolved();
   cell.focus({ preventScroll: true });
+  persistActive();
 }
 
 async function revealHint(): Promise<void> {
@@ -476,9 +522,11 @@ async function revealHint(): Promise<void> {
     if (availableHints.length === 0) {
       hintMessage.textContent = "No guaranteed deduction is available from the current board.";
       refreshHintButton();
+      persistActive();
       return;
     }
     hintMessage.textContent = "";
+    persistActive();
   }
   const next = availableHints.find((hint) => !shownHints.has(hintId(hint)));
   if (!next) {
@@ -491,6 +539,7 @@ async function revealHint(): Promise<void> {
   paintBoard(boardGrid, puzzle, new Set(), activeHint);
   boardGrid.setAttribute("aria-label", describeBoard());
   refreshHintButton();
+  persistActive();
 }
 
 let listenersAttached = false;
@@ -548,10 +597,30 @@ function attachListeners(): void {
 
 export function createCrownsGame(): GameInstance {
   attachListeners();
+  // Restore boards persisted locally across reloads. The daily board is
+  // bound to its UTC day: a new day deals a new seed, so a stored day other
+  // than today is cleared and dropped (mount then deals a fresh board).
+  {
+    const today = todayUTC();
+    const storedDaily = loadBoardState<CrownsStored>("crowns", "daily", isCrownsStored, today);
+    if (storedDaily) {
+      daily = storedCrownsSlot(storedDaily.state, today, storedDaily.timerLive);
+      runTimer.restoreElapsed(storedDaily.elapsedMs);
+    }
+    const storedEndless = loadBoardState<CrownsStored>("crowns", "endless", isCrownsStored, today);
+    if (storedEndless) {
+      endless = storedCrownsSlot(storedEndless.state, null, storedEndless.timerLive);
+      endlessTimer.restoreElapsed(storedEndless.elapsedMs);
+    }
+  }
   return {
     id: "crowns",
     mount(): void {
       solverSection.classList.remove("hidden");
+      if (modeShell.mode === "daily" && daily && daily.day !== todayUTC()) {
+        // Midnight rollover: the in-memory daily belongs to yesterday's seed.
+        daily = null;
+      }
       const slot = modeShell.mode === "daily" ? daily : endless;
       if (slot) {
         restoreSlot(slot);

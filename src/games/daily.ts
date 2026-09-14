@@ -34,6 +34,25 @@ function isDailySeedResponse(value: unknown): value is DailySeedResponse {
 }
 
 /**
+ * Time until the next UTC daily starts (midnight rollover), formatted as
+ * `XXh MMm` (e.g. "09h 05m") for the finished-daily message.
+ */
+export function timeUntilNextDaily(at: Date = new Date()): string {
+  const ms =
+    Date.UTC(at.getUTCFullYear(), at.getUTCMonth(), at.getUTCDate() + 1) -
+    at.getTime();
+  const pad = (n: number): string => String(n).padStart(2, "0");
+  return `${pad(Math.max(0, Math.floor(ms / 3_600_000)))}h ${pad(
+    Math.max(0, Math.floor((ms % 3_600_000) / 60_000)),
+  )}m`;
+}
+
+/** Message shown under a finished daily board until the next day's rollover. */
+export function dailyCompleteMessage(at: Date = new Date()): string {
+  return `Daily complete. Next one in ${timeUntilNextDaily(at)}.`;
+}
+
+/**
  * Daily seeds: server-provided, board generated client-side. Falls back to
  * locally derived seeds when the API is unreachable so the game still works
  * offline (leaderboard submit path is unaffected).

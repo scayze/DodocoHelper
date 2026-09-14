@@ -34,6 +34,10 @@ export function createRunTimer(now: () => number = () => performance.now()): {
   stop(): void;
   pause(): void;
   resume(): void;
+  /** Restore a persisted run: live at `ms` banked, paused. The active span
+   * starts on the next resume() (e.g. the shell's resumeClock on mount), so
+   * only viewed time after reload counts. Finished games just call stop(). */
+  restoreElapsed(ms: number): void;
   elapsed(): number;
   tick(cb: (elapsedMs: number) => void): void;
 } {
@@ -103,6 +107,13 @@ export function createRunTimer(now: () => number = () => performance.now()): {
       if (!live || stopped || runningSince !== null) return;
       runningSince = now();
       ensureInterval();
+    },
+    restoreElapsed(ms: number): void {
+      clearTimerInterval();
+      live = true;
+      stopped = false;
+      banked = Math.max(1, Math.round(ms));
+      runningSince = null;
     },
     elapsed,
     tick(cb: (elapsedMs: number) => void): void {

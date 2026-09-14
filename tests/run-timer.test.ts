@@ -80,6 +80,46 @@ describe("run timer pause/resume", () => {
   });
 });
 
+describe("run timer restore from persisted state", () => {
+  it("restores a run banked and paused until the next resume", () => {
+    const clock = fakeClock();
+    const timer = createRunTimer(clock.now);
+    timer.restoreElapsed(30_000);
+    assert.equal(timer.elapsed(), 30_000);
+    // Not actively viewed yet: time must not count until resume.
+    clock.advance(60_000);
+    assert.equal(timer.elapsed(), 30_000);
+    timer.resume();
+    clock.advance(5_000);
+    assert.equal(timer.elapsed(), 35_000);
+  });
+
+  it("stop() banks a restored value for finished boards, which never resume", () => {
+    const clock = fakeClock();
+    const timer = createRunTimer(clock.now);
+    timer.restoreElapsed(9_000);
+    timer.stop();
+    clock.advance(99_000);
+    assert.equal(timer.elapsed(), 9_000);
+    timer.resume();
+    clock.advance(1_000);
+    assert.equal(timer.elapsed(), 9_000);
+  });
+
+  it("start() resets a restored timer; a zero restore still reports at least 1ms", () => {
+    const clock = fakeClock();
+    const timer = createRunTimer(clock.now);
+    timer.restoreElapsed(40_000);
+    timer.start();
+    assert.equal(timer.elapsed(), 1);
+    clock.advance(250);
+    assert.equal(timer.elapsed(), 250);
+    const fresh = createRunTimer(clock.now);
+    fresh.restoreElapsed(0);
+    assert.equal(fresh.elapsed(), 1);
+  });
+});
+
 describe("timer pill binding", () => {
   it("silences the previous timer when another binds to the same pill", () => {
     const g = globalThis as Record<string, unknown>;

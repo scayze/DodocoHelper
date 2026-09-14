@@ -2,7 +2,7 @@ import type { GameInstance } from "../types.js";
 import { formatClock, todayUTC } from "../../leaderboard/api.js";
 import { announceWin, createRunTimer } from "../../leaderboard/report.js";
 import { boardEvents, type BoardDetail } from "../../leaderboard/view.js";
-import { mulberry32 } from "../daily.js";
+import { dailyCompleteMessage, mulberry32 } from "../daily.js";
 import {
   checkWin,
   createBoard,
@@ -24,6 +24,8 @@ import {
   type TentsEndlessSettings,
 } from "../mode.js";
 import { createModeShell } from "../mode-shell.js";
+import { loadBoardState, saveBoardState } from "../persist.js";
+import { isTentsStored, type TentsStored } from "./stored.js";
 
 function el<T extends HTMLElement>(id: string): T {
   const node = document.getElementById(id);
@@ -70,6 +72,37 @@ export function createTentsGame(): GameInstance {
   let daily: Slot | null = null;
   let endless: Slot | null = null;
 
+  // Restore boards persisted across reloads. The daily is bound to its UTC
+  // day: a new day deals a new seed, so stored days other than today are
+  // cleared and dropped (mount then deals a fresh board).
+  {
+    const today = todayUTC();
+    const storedDaily = loadBoardState<TentsStored>("tents", "daily", isTentsStored, today);
+    if (storedDaily) {
+      daily = {
+        board: storedDaily.state.board,
+        moveCount: storedDaily.state.moveCount,
+        undoStack: storedDaily.state.undoStack,
+        winReported: storedDaily.state.winReported,
+        day: today,
+        timerLive: storedDaily.timerLive,
+      };
+      runTimer.restoreElapsed(storedDaily.elapsedMs);
+    }
+    const storedEndless = loadBoardState<TentsStored>("tents", "endless", isTentsStored, today);
+    if (storedEndless) {
+      endless = {
+        board: storedEndless.state.board,
+        moveCount: storedEndless.state.moveCount,
+        undoStack: storedEndless.state.undoStack,
+        winReported: storedEndless.state.winReported,
+        day: null,
+        timerLive: storedEndless.timerLive,
+      };
+      endlessTimer.restoreElapsed(storedEndless.elapsedMs);
+    }
+  }
+
   function snapshot(): Slot | null {
     if (!started || !board) return null;
     return { board, moveCount, undoStack, winReported, day: dailyDay, timerLive: true };
@@ -94,6 +127,7 @@ export function createTentsGame(): GameInstance {
     setSlot: (selectedMode, slot) => {
       if (selectedMode === "daily") daily = slot;
       else endless = slot;
+      persistActive();
     },
     snapshot,
     restoreSlot: activateSlot,
@@ -174,7 +208,8 @@ export function createTentsGame(): GameInstance {
   function setStatus(): void {
     if (!board) return;
     if (board.over && board.won) {
-      message.textContent = "Solved.";
+      message.textContent =
+        modeShell.mode === "daily" ? dailyCompleteMessage() : "Solved.";
       freezeClock();
       if (!winReported) {
         winReported = true;
@@ -192,7 +227,8 @@ export function createTentsGame(): GameInstance {
         setEndlessUnlocked("tents", todayUTC());
         modeShell.paintMode();
       }
-      message.textContent = "";
+      message.textContent =
+        modeShell.mode === "daily" ? dailyCompleteMessage() : "Game Over!";
     } else {
       message.textContent = "";
     }
@@ -267,6 +303,7 @@ export function createTentsGame(): GameInstance {
     buildGrid();
     paint();
     setStatus();
+    persistActive();
   }
 
   /** Read settings inputs, clamp, persist, and echo the clamped values back. */
@@ -279,6 +316,23 @@ export function createTentsGame(): GameInstance {
 
   function fillSettingsInputs(s: TentsEndlessSettings): void {
     setSizeInput.value = String(s.size);
+  }
+
+  /** Persist the active board so a reload can restore it (played state only). */
+  function persistActive(): void {
+    const slot = snapshot();
+    if (!slot) return;
+    saveBoardState("tents", modeShell.mode, {
+      day: slot.day,
+      elapsedMs: modeShell.activeTimer().elapsed(),
+      timerLive: true,
+      state: {
+        board: slot.board,
+        moveCount: slot.moveCount,
+        undoStack: slot.undoStack,
+        winReported: slot.winReported,
+      },
+    });
   }
 
   /** Deal a fresh endless board from the current settings; restarts the endless clock. */
@@ -304,6 +358,7 @@ export function createTentsGame(): GameInstance {
     buildGrid();
     paint();
     setStatus();
+    persistActive();
   }
 
   /** Show the stored slot's board; start or resume its timer as appropriate. */
@@ -346,6 +401,7 @@ export function createTentsGame(): GameInstance {
     paint();
     setStatus();
     cell.focus({ preventScroll: true });
+    persistActive();
   }
 
   function undo(): void {
@@ -359,6 +415,7 @@ export function createTentsGame(): GameInstance {
       | HTMLElement
       | undefined;
     node?.focus({ preventScroll: true });
+    persistActive();
   }
 
   function onClick(e: MouseEvent): void {
@@ -400,6 +457,9 @@ export function createTentsGame(): GameInstance {
         modeShell.ensureDaily();
       } else if (daily.day !== todayUTC()) {
         modeShell.ensureDaily();
+      } else if (board !== daily.board) {
+        // Freshly restored daily: sync the live globals to the stored slot.
+        activateSlot(daily);
       } else {
         paint();
         setStatus();

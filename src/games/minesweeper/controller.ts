@@ -1,10 +1,9 @@
 import type { GameInstance } from "../types.js";
 import { formatClock, todayUTC } from "../../leaderboard/api.js";
-import { formatScore } from "../../leaderboard/types.js";
 import { announceResult, createRunTimer } from "../../leaderboard/report.js";
 import { boardEvents, type BoardDetail } from "../../leaderboard/view.js";
 import { isDailyComplete, loadDailyResult, saveDailyResult } from "../daily-result.js";
-import { mulberry32 } from "../daily.js";
+import { dailyCompleteMessage, mulberry32 } from "../daily.js";
 import {
   clampMinesSettings,
   loadEndlessSettings,
@@ -13,6 +12,8 @@ import {
   type MinesEndlessSettings,
 } from "../mode.js";
 import { createModeShell, type ModeShell } from "../mode-shell.js";
+import { loadBoardState, saveBoardState } from "../persist.js";
+import { isMineStored, type MineStored } from "./stored.js";
 import {
   chord,
   createBoard,
@@ -24,7 +25,7 @@ import {
   type MineBoard,
 } from "./logic.js";
 import { generateMines } from "./generator.js";
-import type { Opening } from "./solver.js";
+import { computeAdjacent, type Opening } from "./solver.js";
 
 function el<T extends HTMLElement>(id: string): T {
   const node = document.getElementById(id);
@@ -43,7 +44,6 @@ const NUMBER_COLORS = [
   "#5b5b5b",
   "#223154",
 ];
-
 export function createMinesweeperGame(): GameInstance {
   const root = el("mines");
   const grid = el("mines-grid");
@@ -101,6 +101,47 @@ export function createMinesweeperGame(): GameInstance {
   let daily: Slot | null = null;
   let endless: Slot | null = null;
 
+  // Restore boards persisted across reloads. The daily is bound to its UTC
+  // day: a new day deals a new seed, so stored days other than today are
+  // cleared and dropped (mount then deals a fresh board). `rand` is not
+  // serializable and is only used for off-hint mine relocation, so a fresh
+  // Math.random is fine on restore.
+  {
+    const today = todayUTC();
+    const storedDaily = loadBoardState<MineStored>("minesweeper", "daily", isMineStored, today);
+    if (storedDaily) {
+      // Adjacent counts are derived from the mine layout, so recompute them
+      // from the (authoritative) mines grid rather than trusting storage.
+      const board = storedDaily.state.board;
+      board.adjacent = computeAdjacent(board.mines, board.size);
+      daily = {
+        board,
+        rand: Math.random,
+        opening: storedDaily.state.opening,
+        started: storedDaily.state.started,
+        resultReported: storedDaily.state.resultReported,
+        day: today,
+        timerLive: storedDaily.timerLive,
+      };
+      runTimer.restoreElapsed(storedDaily.elapsedMs);
+    }
+    const storedEndless = loadBoardState<MineStored>("minesweeper", "endless", isMineStored, today);
+    if (storedEndless) {
+      const board = storedEndless.state.board;
+      board.adjacent = computeAdjacent(board.mines, board.size);
+      endless = {
+        board,
+        rand: Math.random,
+        opening: storedEndless.state.opening,
+        started: storedEndless.state.started,
+        resultReported: storedEndless.state.resultReported,
+        day: null,
+        timerLive: storedEndless.timerLive,
+      };
+      endlessTimer.restoreElapsed(storedEndless.elapsedMs);
+    }
+  }
+
   function snapshot(): Slot | null {
     if (!started) return null;
     return {
@@ -133,6 +174,7 @@ export function createMinesweeperGame(): GameInstance {
     setSlot: (selectedMode, slot) => {
       if (selectedMode === "daily") daily = slot;
       else endless = slot;
+      persistActive();
     },
     snapshot,
     restoreSlot: activateSlot,
@@ -248,9 +290,7 @@ export function createMinesweeperGame(): GameInstance {
       if (stored) {
         const left = Math.max(0, board.mineCount - flaggedCount());
         level.textContent = left === 1 ? "1 mine" : `${left} mines`;
-        message.textContent =
-          `Daily complete — ${formatScore("minesweeper", stored.score)} · ` +
-          `${formatClock(stored.durationMs)}. Back tomorrow.`;
+        message.textContent = dailyCompleteMessage();
         freezeClock();
         return;
       }
@@ -259,10 +299,12 @@ export function createMinesweeperGame(): GameInstance {
     const left = Math.max(0, board.mineCount - flaggedCount());
     level.textContent = left === 1 ? "1 mine" : `${left} mines`;
     if (board.over && board.won) {
-      message.textContent = "Solved.";
+      message.textContent =
+        modeShell.mode === "daily" ? dailyCompleteMessage() : "Solved.";
       freezeClock();
     } else if (board.over) {
-      message.textContent = "Boom — that one had a mine.";
+      message.textContent =
+        modeShell.mode === "daily" ? dailyCompleteMessage() : "Game Over!";
       freezeClock();
     } else {
       message.textContent = "";
@@ -357,6 +399,7 @@ export function createMinesweeperGame(): GameInstance {
     paint();
     setStatus();
     refreshDailyLock();
+    persistActive();
   }
 
   /** Read settings inputs, clamp, persist, and echo the clamped values back. */
@@ -374,6 +417,23 @@ export function createMinesweeperGame(): GameInstance {
   function fillSettingsInputs(s: MinesEndlessSettings): void {
     setSizeInput.value = String(s.size);
     setMinesInput.value = String(s.mines);
+  }
+
+  /** Persist the active board so a reload can restore it (played state only). */
+  function persistActive(): void {
+    const slot = snapshot();
+    if (!slot) return;
+    saveBoardState("minesweeper", modeShell.mode, {
+      day: slot.day,
+      elapsedMs: modeShell.activeTimer().elapsed(),
+      timerLive: true,
+      state: {
+        board: slot.board,
+        opening: slot.opening,
+        started: slot.started,
+        resultReported: slot.resultReported,
+      },
+    });
   }
 
   /** Deal a fresh endless board (pre-generated, guaranteed-solvable). */
@@ -394,6 +454,7 @@ export function createMinesweeperGame(): GameInstance {
     buildGrid();
     paint();
     setStatus();
+    persistActive();
   }
 
   /** Show the stored slot's board; start or resume its timer as appropriate. */
@@ -443,6 +504,7 @@ export function createMinesweeperGame(): GameInstance {
     paint();
     setStatus();
     cell.focus({ preventScroll: true });
+    persistActive();
   }
 
   /** True when this cell was (un)flagged a moment ago by the other press path. */
@@ -469,11 +531,13 @@ export function createMinesweeperGame(): GameInstance {
       paint();
       setStatus();
       cell.focus({ preventScroll: true });
+      persistActive();
       return;
     }
     paint();
     setStatus();
     cell.focus({ preventScroll: true });
+    persistActive();
   }
 
   /** Expose every mine after a loss so the board tells the story. */
@@ -494,6 +558,7 @@ export function createMinesweeperGame(): GameInstance {
     paint();
     setStatus();
     cell.focus({ preventScroll: true });
+    persistActive();
   }
 
   function clearPress(): void {
@@ -603,6 +668,9 @@ export function createMinesweeperGame(): GameInstance {
         modeShell.ensureDaily();
       } else if (daily.day !== todayUTC()) {
         modeShell.ensureDaily();
+      } else if (board !== daily.board) {
+        // Freshly restored daily: sync the live globals to the stored slot.
+        activateSlot(daily);
       } else {
         paint();
         setStatus();

@@ -1,10 +1,9 @@
 import type { GameInstance } from "../types.js";
 import { formatClock, todayUTC } from "../../leaderboard/api.js";
-import { formatScore } from "../../leaderboard/types.js";
 import { announceResult, createRunTimer } from "../../leaderboard/report.js";
 import { boardEvents, type BoardDetail } from "../../leaderboard/view.js";
 import { isDailyComplete, loadDailyResult, saveDailyResult } from "../daily-result.js";
-import { mulberry32 } from "../daily.js";
+import { dailyCompleteMessage, mulberry32 } from "../daily.js";
 import { generateRandomLevel } from "./generator.js";
 import { SEASON_ICONS } from "./icons.js";
 import {
@@ -23,6 +22,8 @@ import {
   type SeasonsEndlessSettings,
 } from "../mode.js";
 import { createModeShell, type ModeShell } from "../mode-shell.js";
+import { loadBoardState, saveBoardState } from "../persist.js";
+import { isSeasonsStored, type SeasonsStored } from "./stored.js";
 
 function el<T extends HTMLElement>(id: string): T {
   const node = document.getElementById(id);
@@ -70,6 +71,35 @@ export function createSeasonsGame(): GameInstance {
   let daily: Slot | null = null;
   let endless: Slot | null = null;
 
+  // Restore boards persisted across reloads. The daily is bound to its UTC
+  // day: a new day deals a new seed, so stored days other than today are
+  // cleared and dropped (mount then deals a fresh board).
+  {
+    const today = todayUTC();
+    const storedDaily = loadBoardState<SeasonsStored>("seasons", "daily", isSeasonsStored, today);
+    if (storedDaily) {
+      daily = {
+        board: storedDaily.state.board,
+        moveCount: storedDaily.state.moveCount,
+        resultReported: storedDaily.state.resultReported,
+        day: today,
+        timerLive: storedDaily.timerLive,
+      };
+      runTimer.restoreElapsed(storedDaily.elapsedMs);
+    }
+    const storedEndless = loadBoardState<SeasonsStored>("seasons", "endless", isSeasonsStored, today);
+    if (storedEndless) {
+      endless = {
+        board: storedEndless.state.board,
+        moveCount: storedEndless.state.moveCount,
+        resultReported: storedEndless.state.resultReported,
+        day: null,
+        timerLive: storedEndless.timerLive,
+      };
+      endlessTimer.restoreElapsed(storedEndless.elapsedMs);
+    }
+  }
+
   function snapshot(): Slot | null {
     if (!started) return null;
     return { board, moveCount, resultReported, day: dailyDay, timerLive: true };
@@ -94,6 +124,7 @@ export function createSeasonsGame(): GameInstance {
     setSlot: (selectedMode, slot) => {
       if (selectedMode === "daily") daily = slot;
       else endless = slot;
+      persistActive();
     },
     snapshot,
     restoreSlot: activateSlot,
@@ -186,9 +217,7 @@ export function createSeasonsGame(): GameInstance {
     if (dailyLocked && modeShell.mode === "daily") {
       const stored = loadDailyResult("seasons");
       if (stored) {
-        message.textContent =
-          `Daily complete — ${formatScore("seasons", stored.score)} · ` +
-          `${formatClock(stored.durationMs)}. Back tomorrow.`;
+        message.textContent = dailyCompleteMessage();
         freezeClock();
         return;
       }
@@ -196,10 +225,12 @@ export function createSeasonsGame(): GameInstance {
     }
     const left = remainingCount(board);
     if (board.over && board.won) {
-      message.textContent = "Solved.";
+      message.textContent =
+        modeShell.mode === "daily" ? dailyCompleteMessage() : "Solved.";
       freezeClock();
     } else if (board.over) {
-      message.textContent = "Game Over!";
+      message.textContent =
+        modeShell.mode === "daily" ? dailyCompleteMessage() : "Game Over!";
       freezeClock();
     } else {
       message.textContent = "";
@@ -294,6 +325,7 @@ export function createSeasonsGame(): GameInstance {
     paint();
     setStatus();
     refreshDailyLock();
+    persistActive();
   }
 
   /** Read settings inputs, clamp, persist, and echo the clamped values back. */
@@ -306,6 +338,18 @@ export function createSeasonsGame(): GameInstance {
 
   function fillSettingsInputs(s: SeasonsEndlessSettings): void {
     setSizeInput.value = String(s.size);
+  }
+
+  /** Persist the active board so a reload can restore it (played state only). */
+  function persistActive(): void {
+    const slot = snapshot();
+    if (!slot) return;
+    saveBoardState("seasons", modeShell.mode, {
+      day: slot.day,
+      elapsedMs: modeShell.activeTimer().elapsed(),
+      timerLive: true,
+      state: { board: slot.board, moveCount: slot.moveCount, resultReported: slot.resultReported },
+    });
   }
 
   /** Deal a fresh endless board from the current settings; restarts the endless clock. */
@@ -331,6 +375,7 @@ export function createSeasonsGame(): GameInstance {
     buildGrid();
     paint();
     setStatus();
+    persistActive();
   }
 
   /** Show the stored slot's board; start or resume its timer as appropriate. */
@@ -435,6 +480,7 @@ export function createSeasonsGame(): GameInstance {
     paint();
     setStatus();
     cell.focus({ preventScroll: true });
+    persistActive();
     animating = true;
     const epoch = moveEpoch;
     void playMove(first).then(() => {
@@ -543,6 +589,9 @@ export function createSeasonsGame(): GameInstance {
         modeShell.ensureDaily();
       } else if (daily.day !== todayUTC()) {
         modeShell.ensureDaily();
+      } else if (board !== daily.board) {
+        // Freshly restored daily: sync the live globals to the stored slot.
+        activateSlot(daily);
       } else {
         clearPreview();
         paint();

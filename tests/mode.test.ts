@@ -5,6 +5,7 @@ import {
   MINES_DEFAULTS,
   SEASONS_DEFAULTS,
   TENTS_DEFAULTS,
+  allEndlessKeys,
   clampCrownsSettings,
   clampInt,
   clampMinesSettings,
@@ -101,5 +102,21 @@ describe("endless unlock", () => {
     assert.equal(isEndlessUnlocked("crowns", "2026-09-11"), true);
     assert.equal(isEndlessUnlocked("minesweeper", "2026-09-11"), false);
     assert.equal(isEndlessUnlocked("tents", "2026-09-11"), false);
+  });
+});
+
+describe("allEndlessKeys", () => {
+  it("lists every settings and unlock key so resets can wipe them", () => {
+    installStorage();
+    assert.deepEqual(allEndlessKeys(), [
+      "dodoco:endless:crowns",
+      "dodoco:endless-unlocked:crowns",
+      "dodoco:endless:minesweeper",
+      "dodoco:endless-unlocked:minesweeper",
+      "dodoco:endless:seasons",
+      "dodoco:endless-unlocked:seasons",
+      "dodoco:endless:tents",
+      "dodoco:endless-unlocked:tents",
+    ]);
   });
 });

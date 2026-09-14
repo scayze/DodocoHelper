@@ -62,3 +62,7 @@ coverage/
 .cache/
 tmp/
 temp/
+
+# E2E harness build output
+harness/out/
+harness/src/

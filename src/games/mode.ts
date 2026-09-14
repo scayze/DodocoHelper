@@ -4,6 +4,7 @@
  * endless *settings* persist (localStorage `dodoco:endless:<game>`).
  */
 
+import { LEADERBOARD_GAMES } from "../leaderboard/types.js";
 import type { GameId } from "./types.js";
 
 export type PlayMode = "daily" | "endless";
@@ -132,6 +133,16 @@ export function saveEndlessSettings(game: GameId, settings: EndlessSettings): vo
  * Independent of leaderboard submits.
  */
 const UNLOCK_KEY_PREFIX = "dodoco:endless-unlocked:";
+
+/** Every endless-owned key (settings + per-day unlock) for storage resets. */
+export function allEndlessKeys(): string[] {
+  const keys: string[] = [];
+  for (const game of LEADERBOARD_GAMES) {
+    keys.push(`${KEY_PREFIX}${game}`);
+    keys.push(`${UNLOCK_KEY_PREFIX}${game}`);
+  }
+  return keys;
+}
 
 export function isEndlessUnlocked(gameId: GameId, day: string): boolean {
   try {
