@@ -34,8 +34,6 @@ export function createRunTimer(now: () => number = () => performance.now()): {
   stop(): void;
   pause(): void;
   resume(): void;
-  /** Detach a bound display callback without touching elapsed/stopped state. */
-  untick(): void;
   elapsed(): number;
   tick(cb: (elapsedMs: number) => void): void;
 } {
@@ -46,7 +44,7 @@ export function createRunTimer(now: () => number = () => performance.now()): {
   /** Start of the current active span, or null while paused. */
   let runningSince: number | null = null;
   let interval: number | null = null;
-  /** Ticks the bound pill; null when no display is attached (see untick). */
+  /** Ticks the bound pill; null when no display is bound (see tick). */
   let tickCb: ((elapsedMs: number) => void) | null = null;
   function clearTimerInterval(): void {
     if (interval !== null) {
@@ -105,10 +103,6 @@ export function createRunTimer(now: () => number = () => performance.now()): {
       if (!live || stopped || runningSince !== null) return;
       runningSince = now();
       ensureInterval();
-    },
-    untick(): void {
-      tickCb = null;
-      clearTimerInterval();
     },
     elapsed,
     tick(cb: (elapsedMs: number) => void): void {

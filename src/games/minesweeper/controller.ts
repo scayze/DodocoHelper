@@ -115,7 +115,6 @@ export function createMinesweeperGame(): GameInstance {
       regenerate: regenBtn,
       viewToggle,
       leaderboardView: lbView,
-      level,
       timerValue: "mines-timer-value",
     },
     dailyTimer: runTimer,
@@ -139,14 +138,6 @@ export function createMinesweeperGame(): GameInstance {
     hasDaily: (day) => daily?.day === day,
     canResume: (): boolean => !(dailyLocked && modeShell.mode === "daily") && started && !board.over,
   });
-
-  function activeTimer(): ReturnType<typeof createRunTimer> {
-    return modeShell.activeTimer();
-  }
-
-  function paintMode(): void {
-    modeShell.paintMode();
-  }
 
   let pressTimer: number | null = null;
   let pressCell: HTMLElement | null = null;
@@ -222,8 +213,8 @@ export function createMinesweeperGame(): GameInstance {
   }
 
   function freezeClock(): void {
-    activeTimer().stop();
-    timerValue.textContent = formatClock(activeTimer().elapsed());
+    modeShell.activeTimer().stop();
+    timerValue.textContent = formatClock(modeShell.activeTimer().elapsed());
   }
 
   const pauseClock = modeShell.pauseClock;
@@ -291,7 +282,7 @@ export function createMinesweeperGame(): GameInstance {
           durationMs,
           moves: board.revealedCount,
         });
-        paintMode();
+        modeShell.paintMode();
       }
     }
   }
@@ -302,7 +293,7 @@ export function createMinesweeperGame(): GameInstance {
       modeShell.mode === "daily" && dailyDay !== null && isDailyComplete("minesweeper", dailyDay);
     if (dailyLocked) {
       resultReported = true;
-      activeTimer().stop();
+      modeShell.activeTimer().stop();
       setStatus();
     }
   }

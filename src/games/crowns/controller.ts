@@ -118,7 +118,6 @@ const modeShell = createModeShell<Slot>({
     regenerate: regenBtn,
     viewToggle,
     leaderboardView: lbView,
-    level: hintLevel,
     timerValue: "crowns-timer-value",
   },
   dailyTimer: runTimer,
@@ -143,17 +142,7 @@ const modeShell = createModeShell<Slot>({
   canResume: () => puzzle !== null && !puzzleSolved,
 });
 
-function modeTag(): string {
-  return modeShell.modeTag();
-}
-
-function paintMode(): void {
-  modeShell.paintMode();
-}
-
-function ensureDaily(): void {
-  modeShell.ensureDaily();
-}/**
+/**
  * Whether availableHints holds fresh results for the current board.
  * Hints are computed lazily on Hint click (findHints runs a solver search
  * per unknown cell, far too slow to redo on every cell edit).
@@ -342,7 +331,7 @@ function restoreSlot(slot: Slot): void {
   paintBoard(boardGrid, slot.puzzle, new Set(), null, slot.puzzle.initial);
   boardGrid.setAttribute("aria-label", describeBoard());
   hintMessage.textContent = slot.solved ? "Solved." : "";
-  hintLevel.textContent = modeTag();
+  hintLevel.textContent = modeShell.modeTag();
   if (!slot.timerLive) {
     slot.timerLive = true;
     timer.start();
@@ -403,7 +392,7 @@ function checkPlaySolved(): void {
   puzzleSolved = true;
   activeHint = null;
   hintMessage.textContent = "Solved.";
-  hintLevel.textContent = modeTag();
+  hintLevel.textContent = modeShell.modeTag();
   freezeClock();
   // Endless wins stay local: only daily wins reach the leaderboard.
   if (modeShell.mode === "daily") {
@@ -415,7 +404,7 @@ function checkPlaySolved(): void {
       moves: undoStack.length,
       hintsUsed: shownHints.size,
     });
-    paintMode();
+    modeShell.paintMode();
   }
   paintBoard(boardGrid, puzzle, new Set(), null, puzzle.initial);  boardGrid.setAttribute("aria-label", describeBoard());
   refreshHintButton();
@@ -455,10 +444,10 @@ function recomputeEditedBoard(): void {
   boardGrid.setAttribute("aria-label", describeBoard());
   if (fullSolution) {
     hintMessage.textContent = "";
-    hintLevel.textContent = modeTag();
+    hintLevel.textContent = modeShell.modeTag();
   } else {
     hintMessage.textContent = "These marks cannot all be satisfied. Change a queen or cross to continue.";
-    hintLevel.textContent = modeTag();
+    hintLevel.textContent = modeShell.modeTag();
   }
   refreshHintButton();
 }
@@ -505,7 +494,7 @@ async function revealHint(): Promise<void> {
   activeHint = next;
   shownHints.add(hintId(next));
   hintMessage.textContent = next.text;
-  hintLevel.textContent = next.difficultyLabel === "Advanced" ? modeTag() : `${next.difficultyLabel} · ${modeTag()}`;
+  hintLevel.textContent = next.difficultyLabel === "Advanced" ? modeShell.modeTag() : `${next.difficultyLabel} · ${modeShell.modeTag()}`;
   paintBoard(boardGrid, puzzle, new Set(), activeHint);
   boardGrid.setAttribute("aria-label", describeBoard());
   refreshHintButton();
@@ -578,7 +567,7 @@ export function createCrownsGame(): GameInstance {
       } else {
         setWorkingMessage("Dealing today’s puzzle…");
         setPhase("working");
-        ensureDaily();
+        modeShell.ensureDaily();
       }
       modeShell.paintMode();
     },

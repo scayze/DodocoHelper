@@ -87,7 +87,6 @@ export function createSeasonsGame(): GameInstance {
       regenerate: regenBtn,
       viewToggle,
       leaderboardView: lbView,
-      level,
       timerValue: "seasons-timer-value",
     },
     dailyTimer: runTimer,
@@ -111,10 +110,6 @@ export function createSeasonsGame(): GameInstance {
     hasDaily: (day) => daily?.day === day,
     canResume: (): boolean => !(dailyLocked && modeShell.mode === "daily") && started && !board.over,
   });
-
-  function activeTimer(): ReturnType<typeof createRunTimer> {
-    return modeShell.activeTimer();
-  }
 
   /**
    * Tile id -> chip element. Slots (grid buttons) stay put and keep focus;
@@ -175,8 +170,8 @@ export function createSeasonsGame(): GameInstance {
   }
 
   function freezeClock(): void {
-    activeTimer().stop();
-    timerValue.textContent = formatClock(activeTimer().elapsed());
+    modeShell.activeTimer().stop();
+    timerValue.textContent = formatClock(modeShell.activeTimer().elapsed());
   }
 
   const pauseClock = modeShell.pauseClock;
@@ -245,7 +240,7 @@ export function createSeasonsGame(): GameInstance {
       modeShell.mode === "daily" && dailyDay !== null && isDailyComplete("seasons", dailyDay);
     if (dailyLocked) {
       resultReported = true;
-      activeTimer().stop();
+      modeShell.activeTimer().stop();
       setStatus();
     }
   }

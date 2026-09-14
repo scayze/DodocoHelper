@@ -13,7 +13,6 @@ export interface ModeShellElements {
   regenerate: HTMLButtonElement;
   viewToggle: HTMLButtonElement;
   leaderboardView: HTMLElement;
-  level: HTMLElement;
   timerValue: string;
 }
 
@@ -37,7 +36,6 @@ export interface ModeShellConfig<TSlot> {
 export interface ModeShell {
   readonly id: GameId;
   readonly mode: PlayMode;
-  readonly settingsOpen: boolean;
   readonly dailyTimer: ReturnType<typeof createRunTimer>;
   readonly endlessTimer: ReturnType<typeof createRunTimer>;
   activeTimer(): ReturnType<typeof createRunTimer>;
@@ -186,9 +184,6 @@ export function createModeShell<TSlot>(config: ModeShellConfig<TSlot>): ModeShel
     id: config.id,
     get mode() {
       return mode;
-    },
-    get settingsOpen() {
-      return settingsOpen;
     },
     dailyTimer: config.dailyTimer,
     endlessTimer: config.endlessTimer,

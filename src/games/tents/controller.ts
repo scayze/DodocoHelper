@@ -87,7 +87,6 @@ export function createTentsGame(): GameInstance {
       regenerate: regenBtn,
       viewToggle,
       leaderboardView: lbView,
-      level,
       timerValue: "tents-timer-value",
     },
     dailyTimer: runTimer,

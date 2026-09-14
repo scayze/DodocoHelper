@@ -2,9 +2,9 @@ import { LEADERBOARD_GAMES, dayKeyUTC, type LeaderboardGameId } from "../leaderb
 import { apiUrl, todayUTC } from "../leaderboard/api.js";
 import { fnv1a } from "./rng.js";
 
-// Back-compat re-exports: board generators import the RNG from here. The
-// single implementations live in rng.ts (server compiles that module too).
-export { fnv1a as hashSeed, mulberry32 } from "./rng.js";
+// Back-compat re-export: board generators import the RNG from here. The
+// single implementation lives in rng.ts (server compiles that module too).
+export { mulberry32 } from "./rng.js";
 
 export type DailySeeds = Record<LeaderboardGameId, number>;
 
