@@ -756,7 +756,7 @@ export function deduceRegionFit(st: State, tg: Targets): RuleOutcome {
 // contradictions (multi-row pigeonhole).
 
 const MAX_BAND_ROWS = 3;
-const BAND_NODE_BUDGET = 40_000;
+const BAND_NODE_BUDGET = 12_000;
 
 export function deduceBand(st: State, tg: Targets): RuleOutcome {
   for (let size = 2; size <= MAX_BAND_ROWS; size++) {
@@ -1150,12 +1150,15 @@ export interface DeduceResult {
 
 /** Solve by pure human deductions (no guessing).
  *  On success returns all deduction rounds.
+ *  `maxMs` optionally bounds the wall time (generation uses it); exceeding the
+ *  budget reports the state as unresolved rather than solved.
  */
-export function solveByDeduction(st: State, tg: Targets, allowSearch = false, searchBudget = 5000): DeduceResult {
+export function solveByDeduction(st: State, tg: Targets, allowSearch = false, searchBudget = 5000, maxMs = 0): DeduceResult {
   const steps: Step[][] = [];
   let hardest = "propagate";
+  const start = Date.now();
 
-  while (true) {
+  while (maxMs === 0 || Date.now() - start < maxMs) {
     // Propagate to closure
     const before = st.grid.slice();
     const witness = propagate(st, tg);
@@ -1195,6 +1198,8 @@ export function solveByDeduction(st: State, tg: Targets, allowSearch = false, se
 
     return { solved: false, contradiction: false, steps, hardest };
   }
+
+  return { solved: false, contradiction: false, steps, hardest };
 }
 
 // ---------------------------------------------------------------------------

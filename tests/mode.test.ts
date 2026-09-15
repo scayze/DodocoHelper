@@ -54,10 +54,10 @@ describe("endless settings clampers", () => {
     assert.deepEqual(clampMinesSettings({ size: 99, mines: -5 }), { size: 12, mines: 1 });
   });
 
-  it("clamps crowns size and crowns-per-unit", () => {
-    assert.deepEqual(clampCrownsSettings({ size: 9, crowns: 2 }), { size: 9, crowns: 2 });
-    assert.deepEqual(clampCrownsSettings({ size: 4, crowns: 5 }), { size: 6, crowns: 2 });
-    assert.deepEqual(clampCrownsSettings({ size: 6, crowns: 1 }), { size: 6, crowns: 1 });
+  it("clamps crowns size to the playable span", () => {
+    assert.deepEqual(clampCrownsSettings({ size: 9 }), { size: 9 });
+    assert.deepEqual(clampCrownsSettings({ size: 4 }), { size: 9 });
+    assert.deepEqual(clampCrownsSettings({ size: 15 }), { size: 10 });
   });
 
   it("clamps seasons and tents sizes", () => {
@@ -77,15 +77,15 @@ describe("endless settings persistence", () => {
     assert.deepEqual(loadEndlessSettings("tents"), TENTS_DEFAULTS);
     saveEndlessSettings("minesweeper", { size: 12, mines: 30 });
     assert.deepEqual(loadEndlessSettings("minesweeper"), { size: 12, mines: 30 });
-    saveEndlessSettings("crowns", { size: 8, crowns: 2 });
-    assert.deepEqual(loadEndlessSettings("crowns"), { size: 8, crowns: 2 });
+    saveEndlessSettings("crowns", { size: 10 });
+    assert.deepEqual(loadEndlessSettings("crowns"), { size: 10 });
   });
 
-  it("repairs stored crowns settings that carry the legacy difficulty field", () => {
+  it("repairs stored crowns settings that carry legacy fields", () => {
     const store = installStorage();
-    // Settings saved by an older build carried a difficulty option.
+    // Settings saved by an older build carried crowns-per-unit and difficulty.
     store.set("dodoco:endless:crowns", JSON.stringify({ size: 7, crowns: 1, difficulty: "easy" }));
-    assert.deepEqual(loadEndlessSettings("crowns"), { size: 7, crowns: 1 });
+    assert.deepEqual(loadEndlessSettings("crowns"), { size: 9 });
   });
 
   it("repairs corrupt or out-of-range stored values", () => {

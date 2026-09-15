@@ -16,7 +16,6 @@ export interface MinesEndlessSettings {
 
 export interface CrownsEndlessSettings {
   size: number;
-  crowns: number;
 }
 
 export interface SeasonsEndlessSettings {
@@ -36,13 +35,16 @@ export type EndlessSettings =
 const KEY_PREFIX = "dodoco:endless:";
 
 export const MINES_DEFAULTS: MinesEndlessSettings = { size: 9, mines: 15 };
-export const CROWNS_DEFAULTS: CrownsEndlessSettings = { size: 9, crowns: 2 };
+export const CROWNS_DEFAULTS: CrownsEndlessSettings = { size: 9 };
 export const SEASONS_DEFAULTS: SeasonsEndlessSettings = { size: 10 };
 export const TENTS_DEFAULTS: TentsEndlessSettings = { size: 8 };
 
 export const LIMITS = {
   mines: { size: [6, 12], mines: [1, 60] },
-  crowns: { size: [6, 10], crowns: [1, 2] },
+  // Crowns are always 2 per row/column/region: boards with other counts are
+  // never fully deductible from an empty grid, so the no-prefill generator
+  // cannot produce them.
+  crowns: { size: [9, 10] },
   seasons: { size: [6, 12] },
   tents: { size: [5, 10] },
 } as const;
@@ -58,7 +60,6 @@ export function clampInt(raw: unknown, min: number, max: number, fallback: numbe
 export interface RawSettings {
   size?: unknown;
   mines?: unknown;
-  crowns?: unknown;
 }
 
 export function clampMinesSettings(raw: RawSettings): MinesEndlessSettings {
@@ -72,7 +73,6 @@ export function clampMinesSettings(raw: RawSettings): MinesEndlessSettings {
 export function clampCrownsSettings(raw: RawSettings): CrownsEndlessSettings {
   return {
     size: clampInt(raw.size, LIMITS.crowns.size[0], LIMITS.crowns.size[1], CROWNS_DEFAULTS.size),
-    crowns: clampInt(raw.crowns, LIMITS.crowns.crowns[0], LIMITS.crowns.crowns[1], CROWNS_DEFAULTS.crowns),
   };
 }
 

@@ -438,7 +438,7 @@ describe("deduction engine", () => {
     };
     let verified = 0;
     for (let seed = 1; seed <= 12; seed++) {
-      const regions = generateRegions(6, mulberry32(9000 + seed));
+      const regions = generateRegions(6, 1, mulberry32(9000 + seed));
       if (!regions) continue;
       const rand = mulberry32(seed * 31);
       const initial = Array.from({ length: 6 }, () => Array(6).fill("?"));
@@ -508,7 +508,7 @@ describe("deduction engine", () => {
 
 describe("generatePuzzle", () => {
   it("produces a blank, human-deductible 9x9 puzzle with a unique solution", () => {
-    const puzzle = generatePuzzle(9, 2);
+    const puzzle = generatePuzzle(9, 2, 1200, mulberry32(42));
     assert.equal(puzzle.size, 9);
     assert.equal(puzzle.regions.length, 9);
     assert.equal(puzzle.regions[0].length, 9);
@@ -535,17 +535,17 @@ describe("generatePuzzle", () => {
     const results = new Set<string>();
     // Several calls; they must not all be identical.
     for (let i = 0; i < 4; i++) {
-      results.add(JSON.stringify(generatePuzzle(9, 2).regions));
+      results.add(JSON.stringify(generatePuzzle(9, 2, 1200, mulberry32([1, 2, 42, 99][i])).regions));
     }
     assert.ok(results.size > 1, "should produce different layouts across calls");
   });
 
   it("can generate a blank human-deductible board with a unique solution", () => {
-    const easy = generatePuzzle(5, 1, 400, mulberry32(42));
+    const easy = generatePuzzle(9, 2, 1200, mulberry32(7));
     assert.equal(solveAll(easy, { limit: 2 }).length, 1, "unique solution expected");
     assert.ok(
-      easy.initial.flat().every((c) => c === "?" || c === "C"),
-      "generated boards must not prefill crosses",
+      easy.initial.flat().every((c) => c === "?"),
+      "generated boards are never prefilled with crowns",
     );
     const { state, tg } = buildInitialState(easy);
     for (let r = 0; r < easy.size; r++) {
@@ -557,7 +557,7 @@ describe("generatePuzzle", () => {
   });
 
   it("round-trips through solvePuzzle (null palette is accepted)", () => {
-    const puzzle = generatePuzzle(9, 2);
+    const puzzle = generatePuzzle(9, 2, 1200, mulberry32(99));
     assert.equal(puzzle.palette, null);
     const result = solvePuzzle(puzzle);
     assert.equal(result.status, "solved");
@@ -565,13 +565,13 @@ describe("generatePuzzle", () => {
   });
 
   it("is deterministic for the same seeded random stream", () => {
-    const first = generatePuzzle(9, 2, 50, mulberry32(123456));
-    const second = generatePuzzle(9, 2, 50, mulberry32(123456));
+    const first = generatePuzzle(9, 2, 1200, mulberry32(123456));
+    const second = generatePuzzle(9, 2, 1200, mulberry32(123456));
     assert.deepEqual(second.regions, first.regions);
   });
 
   it("produces connected regions with varied sizes", () => {
-    const puzzle = generatePuzzle(9, 2);
+    const puzzle = generatePuzzle(9, 2, 1200, mulberry32(1));
     const counts = new Map<number, number>();
     for (const row of puzzle.regions) {
       for (const id of row) {

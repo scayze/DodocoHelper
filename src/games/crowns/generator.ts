@@ -1,6 +1,6 @@
 import type { NormalizedPuzzle } from "./types.js";
-import { CROWN, UNKNOWN } from "./types.js";
-import { solveAll, buildInitialState, tryPlaceCrown, solveByDeduction, U, type State, type Targets } from "./solver.js";
+import { UNKNOWN } from "./types.js";
+import { solveAll, buildInitialState, solveByDeduction, U } from "./solver.js";
 
 const UNASSIGNED = -1;
 const MIN_REGION_SIZE = 5;
@@ -226,11 +226,13 @@ function growPartition(n: number, targets: number[], rand: () => number): number
   return grid;
 }
 
-/** Reject a region that cannot contain two non-touching crowns. */
-function everyRegionCanHoldTwoCrowns(grid: number[], n: number): boolean {
+/** Reject a region that cannot contain `crowns` non-touching crowns. */
+function everyRegionCanHoldCrowns(grid: number[], n: number, crowns: number): boolean {
   for (let region = 0; region < n; region++) {
     const cells: number[] = [];
     for (let i = 0; i < grid.length; i++) if (grid[i] === region) cells.push(i);
+    if (cells.length < crowns) return false;
+    if (crowns === 1) continue;
     let pairFound = false;
     for (let i = 0; i < cells.length && !pairFound; i++) {
       const ar = Math.floor(cells[i] / n);
@@ -252,14 +254,15 @@ function everyRegionCanHoldTwoCrowns(grid: number[], n: number): boolean {
 /**
  * Generate random connected regions with deliberately varied sizes.
  * The returned labels always contain exactly `n` regions and `n*n` cells.
+ * Every region must be able to hold `crownsPerUnit` non-touching crowns.
  */
-export function generateRegions(n: number, rand: () => number = Math.random): number[][] | null {
+export function generateRegions(n: number, crownsPerUnit = 2, rand: () => number = Math.random): number[][] | null {
   if (n < 5) return null;
 
   for (let attempt = 0; attempt < PARTITION_ATTEMPTS; attempt++) {
     const targets = regionSizeProfile(n, rand);
     const grid = growPartition(n, targets, rand);
-    if (!grid || !everyRegionCanHoldTwoCrowns(grid, n)) continue;
+    if (!grid || !everyRegionCanHoldCrowns(grid, n, crownsPerUnit)) continue;
 
     const result: number[][] = [];
     for (let r = 0; r < n; r++) {
@@ -288,36 +291,17 @@ function toPuzzleInput(
   };
 }
 
-function countCrowns(initial: string[][]): number {
-  let count = 0;
-  for (const row of initial) for (const v of row) if (v === "C") count++;
-  return count;
-}
-
-/** Build a state from the puzzle's given crowns (no crosses are ever given). */
-function loadGivens(puzzle: NormalizedPuzzle): { state: State; tg: Targets; ok: boolean } {
-  const { state, tg } = buildInitialState(puzzle);
-  const n = state.n;
-  for (let r = 0; r < n; r++) {
-    for (let c = 0; c < n; c++) {
-      if (puzzle.initial[r][c] === CROWN && !tryPlaceCrown(state, tg, r, c)) {
-        return { state, tg, ok: false };
-      }
-    }
-  }
-  return { state, tg, ok: true };
-}
-
 function blankInitial(size: number): string[][] {
   return Array.from({ length: size }, () => Array(size).fill(UNKNOWN) as string[]);
 }
 
-/** Run the full human-deduction cascade on the EMPTY board of a region map. */
+/** Run the full human-deduction cascade on the EMPTY board of a region map,
+ *  bounded to a wall-clock budget so a single candidate can never stall generation. */
 function cascadeScore(regions: number[][], crownsPerUnit: number): { solved: boolean; resolved: number; hardest: string } {
   const n = regions.length;
   const puzzle: NormalizedPuzzle = toPuzzleInput(regions, blankInitial(n), crownsPerUnit);
   const { state, tg } = buildInitialState(puzzle);
-  const res = solveByDeduction(state, tg, false);
+  const res = solveByDeduction(state, tg, false, 5000, 700);
   return {
     solved: res.solved,
     resolved: n * n - state.grid.filter((v) => v === U).length,
@@ -356,66 +340,37 @@ function mutateRegions(regions: number[][], rand: () => number): number[][] | nu
   return null;
 }
 
-/** Fallback: keep deduce-solvable while stripping every possible given crown. */
-function minimizeGivens(regions: number[][], crownsPerUnit: number, rand: () => number): NormalizedPuzzle {
-  const n = regions.length;
-  const blank = toPuzzleInput(regions, blankInitial(n), crownsPerUnit);
-  const found = solveAll(blank, { limit: 1, rand });
-  const solution = found[0].grid;
-  // Only solution CROWNS are given; every other cell starts unknown.
-  const initial: string[][] = solution.map((row) => row.map((v) => (v === CROWN ? CROWN : UNKNOWN)));
-  let puzzle: NormalizedPuzzle = toPuzzleInput(regions, initial, crownsPerUnit);
-
-  const givens: Array<[number, number]> = [];
-  for (let r = 0; r < n; r++) {
-    for (let c = 0; c < n; c++) {
-      if (solution[r][c] === CROWN) givens.push([r, c]);
-    }
-  }
-  shuffle(givens, rand);
-
-  for (const [r, c] of givens) {
-    if (countCrowns(initial) <= 1) break;
-    initial[r][c] = UNKNOWN;
-    const unique = solveAll(puzzle, { limit: 2 }).length === 1;
-    const loaded = loadGivens(puzzle);
-    const deduceOk = loaded.ok && solveByDeduction(loaded.state, loaded.tg, false).solved;
-    if (!unique || !deduceOk) initial[r][c] = CROWN; // put it back
-  }
-  return puzzle;
-}
-
-/** G1-style generation: grow random layouts, then keep local border mutations
- *  only while they advance the blank-board deduction cascade. Accepts the first
- *  layout whose EMPTY board is fully solvable by the human rules (no pre-filled
- *  marks at all). Falls back to a minimal-given, deduce-solvable board when the
- *  search budget runs out. */
+/**
+ * G1-style generation: grow random layouts, then keep local border mutations
+ * only while they advance the blank-board deduction cascade. Accepts the first
+ * layout whose EMPTY board fully solves by the human rules — the returned board
+ * is never prefilled. Progress persists across fresh candidates and the search
+ * budget grows with the board size; when it runs out we fail loudly rather than
+ * revealing any marks.
+ */
 export function generatePuzzle(
   size = 9,
   crownsPerUnit = 2,
-  maxAttempts = 50,
+  maxAttempts = 1200,
   rand: () => number = Math.random,
 ): NormalizedPuzzle {
-  const MUTATIONS_PER_CANDIDATE = 50;
-  const deadline = Date.now() + 4200; // hard worst-case bound across all candidates
-  let bestFallback: { regions: number[][]; resolved: number } | null = null;
+  const MUTATIONS_PER_CANDIDATE = 60;
+  // Size-aware budget; the largest boards get extra patience.
+  const deadline = Date.now() + 2200 + 75 * size * size + (size >= 10 ? 8000 : 0);
 
   for (let attempt = 0; attempt < maxAttempts && Date.now() < deadline; attempt++) {
-    const regions = generateRegions(size, rand);
+    const regions = generateRegions(size, crownsPerUnit, rand);
     if (!regions) continue;
-    const blankPuzzle = toPuzzleInput(regions, blankInitial(size), crownsPerUnit);
 
     const base = cascadeScore(regions, crownsPerUnit);
     if (base.solved) {
-      if (solveAll(blankPuzzle, { limit: 2 }).length === 1) return blankPuzzle;
+      const blank = toPuzzleInput(regions, blankInitial(size), crownsPerUnit);
+      if (solveAll(blank, { limit: 2 }).length === 1) return blank;
       continue;
     }
-    // Only solvable layouts may serve as the fallback (minimal-givens) seed.
-    if (solveAll(blankPuzzle, { limit: 1, rand }).length > 0) {
-      if (!bestFallback || base.resolved > bestFallback.resolved) bestFallback = { regions, resolved: base.resolved };
-    }
-    let best = { regions, resolved: base.resolved };
 
+    // Climb local border mutations from this fresh candidate.
+    let best = { regions, resolved: base.resolved };
     for (let m = 0; m < MUTATIONS_PER_CANDIDATE && Date.now() < deadline; m++) {
       const mutated = mutateRegions(best.regions, rand);
       if (!mutated) continue;
@@ -429,18 +384,5 @@ export function generatePuzzle(
     }
   }
 
-  if (!bestFallback) {
-    // Rarely-solvable dense combos (e.g. 10x10 with 2 crowns/unit) may need
-    // more samples than the fast G1 window allows: keep sampling, then fall
-    // back to a minimal-given deduce-solvable board.
-    const hardDeadline = Date.now() + 8000;
-    for (let attempt = 0; Date.now() < hardDeadline; attempt++) {
-      const regions = generateRegions(size, rand);
-      if (!regions) continue;
-      const blank = toPuzzleInput(regions, blankInitial(size), crownsPerUnit);
-      if (solveAll(blank, { limit: 1, rand }).length > 0) return minimizeGivens(regions, crownsPerUnit, rand);
-    }
-    throw new Error(`Failed to generate a solvable puzzle after ${maxAttempts} attempts`);
-  }
-  return minimizeGivens(bestFallback.regions, crownsPerUnit, rand);
+  throw new Error(`No blank-deductible board found after ${maxAttempts} attempts`);
 }

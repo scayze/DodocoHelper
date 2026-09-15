@@ -17,7 +17,7 @@ import { mulberry32 } from "../src/games/rng.js";
 
 describe("crowns stored boards", () => {
   it("accepts a real played daily (undo) and rejects tampering", () => {
-    const puzzle = generatePuzzle(9, 2, 50, mulberry32(42));
+    const puzzle = generatePuzzle(9, 2, 1200, mulberry32(42));
     const solved = solvePuzzle(puzzle);
     assert.equal(solved.status, "solved");
     const undo = [{ r: 0, c: 0, prev: puzzle.initial[0][0] }];

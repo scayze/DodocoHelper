@@ -60,7 +60,6 @@ const regenBtn = el<HTMLButtonElement>("crowns-regen");
 const viewToggle = el<HTMLButtonElement>("crowns-view-toggle");
 const lbView = el("crowns-lb-view");
 const setSizeInput = el<HTMLInputElement>("crowns-set-size");
-const setCrownsInput = el<HTMLInputElement>("crowns-set-crowns");
 const screenshotBtn = el<HTMLButtonElement>("crowns-screenshot");
 const fileInput = el<HTMLInputElement>("crowns-file-input");
 
@@ -226,7 +225,7 @@ function dealDaily(day: string, seed: number): void {
   let generated: NormalizedPuzzle;
   let solution: string[][];
   try {
-    generated = generatePuzzle(9, 2, 50, mulberry32(seed));
+    generated = generatePuzzle(9, 2, 1200, mulberry32(seed));
     const solved = solvePuzzle(generated);
     if (solved.status !== "solved" || !solved.solution) {
       if (modeShell.mode === "daily") showError("Could not deal today's puzzle.", solved.errors.join(" "));
@@ -259,19 +258,14 @@ function dealDaily(day: string, seed: number): void {
 
 /** Read settings inputs, clamp, persist, and echo the clamped values back. */
 function readSettings(): CrownsEndlessSettings {
-  const clamped = clampCrownsSettings({
-    size: setSizeInput.value,
-    crowns: setCrownsInput.value,
-  });
+  const clamped = clampCrownsSettings({ size: setSizeInput.value });
   saveEndlessSettings("crowns", clamped);
   setSizeInput.value = String(clamped.size);
-  setCrownsInput.value = String(clamped.crowns);
   return clamped;
 }
 
 function fillSettingsInputs(s: CrownsEndlessSettings): void {
   setSizeInput.value = String(s.size);
-  setCrownsInput.value = String(s.crowns);
 }
 
 /** Deal a fresh endless board from the current settings; restarts the endless clock. */
@@ -282,7 +276,7 @@ function dealEndless(): void {
   setPhase("working");
   isWorking = true;
   try {
-    const generated = generatePuzzle(s.size, s.crowns, 50, Math.random);
+    const generated = generatePuzzle(s.size, 2, 1200, Math.random);
     const solved = solvePuzzle(generated);
     if (solved.status !== "solved" || !solved.solution) {
       hintMessage.textContent = "Could not find a pure-logic board — try different settings.";
@@ -558,7 +552,6 @@ function attachListeners(): void {
 
   modeShell.attachListeners();
   setSizeInput.addEventListener("change", readSettings);
-  setCrownsInput.addEventListener("change", readSettings);
   screenshotBtn.addEventListener("click", () => fileInput.click());
   fileInput.addEventListener("change", () => {
     const file = fileInput.files?.[0];
