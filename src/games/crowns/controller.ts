@@ -12,6 +12,7 @@ import type { GameInstance } from "../types.js";
 import { formatClock, todayUTC } from "../../leaderboard/api.js";
 import { announceWin, createRunTimer } from "../../leaderboard/report.js";
 import { boardEvents, type BoardDetail } from "../../leaderboard/view.js";
+import { settingsEvents, type SettingsDetail } from "../mode-shell.js";
 import { dailyCompleteMessage, mulberry32 } from "../daily.js";
 import {
   clampCrownsSettings,
@@ -54,6 +55,7 @@ const solverSection = el("solver");
 const modeDailyBtn = el<HTMLButtonElement>("crowns-mode-daily");
 const modeEndlessBtn = el<HTMLButtonElement>("crowns-mode-endless");
 const modeSep = el("crowns-mode-sep");
+const gridWrap = el("crowns-grid-wrap");
 const settingsPanel = el("crowns-settings");
 const settingsToggle = el<HTMLButtonElement>("crowns-settings-toggle");
 const regenBtn = el<HTMLButtonElement>("crowns-regen");
@@ -128,6 +130,7 @@ const modeShell = createModeShell<Slot>({
     regenerate: regenBtn,
     viewToggle,
     leaderboardView: lbView,
+    gridWrap,
     timerValue: "crowns-timer-value",
   },
   dailyTimer: runTimer,
@@ -538,7 +541,13 @@ const resumeClock = modeShell.resumeClock;
 function onBoardToggle(detail: BoardDetail): void {
   if (detail.game !== "crowns") return;
   if (detail.showingBoard) pauseClock();
-  else resumeClock();
+  else if (settingsPanel.classList.contains("hidden")) resumeClock();
+}
+
+function onSettingsToggle(detail: SettingsDetail): void {
+  if (detail.game !== "crowns") return;
+  if (detail.settingsOpen) pauseClock();
+  else if (lbView.classList.contains("hidden")) resumeClock();
 }
 
 function attachListeners(): void {
@@ -547,6 +556,7 @@ function attachListeners(): void {
   hintButton.addEventListener("click", revealHint);
   undoButton.addEventListener("click", undo);
   boardEvents.on(onBoardToggle);
+  settingsEvents.on(onSettingsToggle);
   boardGrid.addEventListener("click", (e) => {
     const cell = (e.target as HTMLElement).closest<HTMLElement>("[data-row][data-col]");
     if (cell && boardGrid.contains(cell)) editCell(cell);

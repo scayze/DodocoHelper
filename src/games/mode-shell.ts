@@ -1,8 +1,18 @@
 import { formatClock, todayUTC } from "../leaderboard/api.js";
 import { createRunTimer, bindTimerPill as bindPill } from "../leaderboard/report.js";
+import { boardEvents, type BoardDetail } from "../leaderboard/view.js";
+import { createEventHub, type EventHub } from "../events.js";
 import { fetchDailySeeds } from "./daily.js";
 import { isEndlessUnlocked, type PlayMode } from "./mode.js";
 import type { GameId } from "./types.js";
+
+/** Fired when endless settings opens/closes (mirrors boardEvents for the clock). */
+export interface SettingsDetail {
+  game: GameId;
+  settingsOpen: boolean;
+}
+
+export const settingsEvents: EventHub<SettingsDetail> = createEventHub<SettingsDetail>();
 
 export interface ModeShellElements {
   modeDaily: HTMLButtonElement;
@@ -13,6 +23,8 @@ export interface ModeShellElements {
   regenerate: HTMLButtonElement;
   viewToggle: HTMLButtonElement;
   leaderboardView: HTMLElement;
+  /** Grid figure swapped with the settings overlay; keeps the stage height. */
+  gridWrap: HTMLElement;
   timerValue: string;
 }
 
@@ -60,6 +72,7 @@ export function createModeShell<TSlot>(config: ModeShellConfig<TSlot>): ModeShel
   const { elements } = config;
   let mode: PlayMode = "daily";
   let settingsOpen = false;
+  let notifiedSettingsOpen = false;
   let boardOpenBeforeEndless = false;
   let listenersAttached = false;
 
@@ -79,7 +92,46 @@ export function createModeShell<TSlot>(config: ModeShellConfig<TSlot>): ModeShel
     const show = mode === "endless" && settingsOpen;
     elements.settings.classList.toggle("hidden", !show);
     elements.settings.classList.toggle("flex", show);
+    // In-stage swap like the leaderboard: the figure holds the stage height
+    // (invisible + inert) so the overlay matches the grid box pixel-for-pixel.
+    // OR-aware: paintMode runs in daily too (e.g. endless-unlock repaint),
+    // so never un-hide the grid while the board overlay is open.
+    const boardShowing = !elements.leaderboardView.classList.contains("hidden");
+    const hideGrid = show || boardShowing;
+    elements.gridWrap.classList.toggle("invisible", hideGrid);
+    elements.gridWrap.toggleAttribute("inert", hideGrid);
     elements.settingsToggle.setAttribute("aria-expanded", show ? "true" : "false");
+    if (show !== notifiedSettingsOpen) {
+      notifiedSettingsOpen = show;
+      // No programmatic focus on open: focusing a number input would summon
+      // the mobile keyboard. It opens only when the user taps a field.
+      settingsEvents.dispatch({ game: config.id, settingsOpen: show });
+    }
+  }
+
+  function setSettingsOpen(open: boolean): void {
+    if (open && !elements.leaderboardView.classList.contains("hidden")) {
+      // Mutually exclusive overlays: opening settings closes the board first
+      // (its close resumes the clock; the settings-open below re-pauses it).
+      elements.viewToggle.click();
+    }
+    if (settingsOpen === open) {
+      // Still repaint: mode switches can leave the DOM out of sync.
+      paintSettings();
+      return;
+    }
+    settingsOpen = open;
+    paintSettings();
+  }
+
+  function onBoardEvent(detail: BoardDetail): void {
+    if (detail.game !== config.id) return;
+    if (detail.showingBoard && settingsOpen) {
+      // Opening the board closes settings first; the board-open keeps the
+      // clock paused so no resume slips through.
+      settingsOpen = false;
+      paintSettings();
+    }
   }
 
   function paintMode(): void {
@@ -175,9 +227,9 @@ export function createModeShell<TSlot>(config: ModeShellConfig<TSlot>): ModeShel
       if (mode === "endless") config.dealEndless();
     });
     elements.settingsToggle.addEventListener("click", () => {
-      settingsOpen = !settingsOpen;
-      paintSettings();
+      setSettingsOpen(!settingsOpen);
     });
+    boardEvents.on(onBoardEvent);
   }
 
   return {

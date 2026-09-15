@@ -750,6 +750,17 @@ nav[aria-label="Primary"] .mode-btn svg {
   overflow: hidden;
 }
 
+/* Endless settings overlay: same in-stage swap as the leaderboard. The panel
+   covers exactly the grid's box (same stage, same size) so opening it never
+   grows or shrinks the panel. The grid figure stays in flow but invisible to
+   hold the height. Short content is centered vertically in the grid box. */
+.settings-overlay {
+  position: absolute;
+  inset: 0;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+}
+
 .lb-overlay > div:first-child,
 .lb-overlay > p {
   flex-shrink: 0;

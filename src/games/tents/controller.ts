@@ -2,6 +2,7 @@ import type { GameInstance } from "../types.js";
 import { formatClock, todayUTC } from "../../leaderboard/api.js";
 import { announceWin, createRunTimer } from "../../leaderboard/report.js";
 import { boardEvents, type BoardDetail } from "../../leaderboard/view.js";
+import { settingsEvents, type SettingsDetail } from "../mode-shell.js";
 import { dailyCompleteMessage, mulberry32 } from "../daily.js";
 import {
   checkWin,
@@ -42,6 +43,7 @@ export function createTentsGame(): GameInstance {
   const modeDailyBtn = el<HTMLButtonElement>("tents-mode-daily");
   const modeEndlessBtn = el<HTMLButtonElement>("tents-mode-endless");
   const modeSep = el("tents-mode-sep");
+  const gridWrap = el("tents-grid-wrap");
   const settingsPanel = el("tents-settings");
   const settingsToggle = el<HTMLButtonElement>("tents-settings-toggle");
   const regenBtn = el<HTMLButtonElement>("tents-regen");
@@ -120,6 +122,7 @@ export function createTentsGame(): GameInstance {
       regenerate: regenBtn,
       viewToggle,
       leaderboardView: lbView,
+      gridWrap,
       timerValue: "tents-timer-value",
     },
     dailyTimer: runTimer,
@@ -199,7 +202,13 @@ export function createTentsGame(): GameInstance {
   function onBoardToggle(detail: BoardDetail): void {
     if (detail.game !== "tents") return;
     if (detail.showingBoard) pauseClock();
-    else resumeClock();
+    else if (settingsPanel.classList.contains("hidden")) resumeClock();
+  }
+
+  function onSettingsToggle(detail: SettingsDetail): void {
+    if (detail.game !== "tents") return;
+    if (detail.settingsOpen) pauseClock();
+    else if (lbView.classList.contains("hidden")) resumeClock();
   }
 
   function refreshUndo(): void {
@@ -440,6 +449,7 @@ export function createTentsGame(): GameInstance {
   grid.addEventListener("keydown", onKey);
   undoButton.addEventListener("click", undo);
   boardEvents.on(onBoardToggle);
+  settingsEvents.on(onSettingsToggle);
   modeShell.attachListeners();
   setSizeInput.addEventListener("change", readSettings);
   setTreesInput.addEventListener("change", readSettings);

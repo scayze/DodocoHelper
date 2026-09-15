@@ -154,18 +154,25 @@
                       <ol id="crowns-lb-list" class="lb-list flex flex-col gap-[9px]"></ol>
                       <p id="crowns-lb-status" class="min-h-[24px] text-center text-[15px] font-semibold leading-relaxed text-night-800/70" role="status" aria-live="polite"></p>
                     </div>
+                    <div id="crowns-settings" class="settings-overlay hidden flex-col gap-[9px] rounded-xl bg-white/70 px-[18px] py-[13px] shadow-sm">
+                      <div class="flex items-center gap-[9px]">
+                        <span class="h-[36px] w-[36px] shrink-0" aria-hidden="true"></span>
+                        <div class="min-w-0 flex-1 text-center">
+                          <h2 class="text-[15px] font-bold uppercase tracking-[0.18em] text-gold-600">Settings</h2>
+                        </div>
+                        <span class="h-[36px] w-[36px] shrink-0" aria-hidden="true"></span>
+                      </div>
+                      <label class="settings-row" for="crowns-set-size">
+                        <span>Board size</span>
+                        <input id="crowns-set-size" type="number" min="9" max="10" step="1" inputmode="numeric" />
+                      </label>
+                      <button id="crowns-screenshot" type="button" class="btn-outline h-[44px] rounded-full px-[22px] text-[15px] font-semibold">
+                        Solve from screenshot…
+                      </button>
+                      <input id="crowns-file-input" type="file" accept="image/png,image/jpeg,image/webp" class="sr-only" />
+                    </div>
                   </div>
                   <p id="hint-message" class="min-h-[24px] whitespace-pre-line text-center text-[15px] font-semibold leading-relaxed text-night-800/80" role="status" aria-live="polite"></p>
-                  </div>
-                  <div id="crowns-settings" class="hidden flex-col gap-[9px] rounded-xl bg-white/70 px-[18px] py-[13px] shadow-sm">
-                    <label class="settings-row" for="crowns-set-size">
-                      <span>Board size</span>
-                      <input id="crowns-set-size" type="number" min="9" max="10" step="1" inputmode="numeric" />
-                    </label>
-                    <button id="crowns-screenshot" type="button" class="btn-outline h-[44px] rounded-full px-[22px] text-[15px] font-semibold">
-                      Solve from screenshot…
-                    </button>
-                    <input id="crowns-file-input" type="file" accept="image/png,image/jpeg,image/webp" class="sr-only" />
                   </div>
                   <div class="flex flex-row justify-between gap-[9px]">
                     <button id="crowns-view-toggle" type="button" class="btn-outline game-btn h-[48px] w-[48px] rounded-full disabled:cursor-not-allowed disabled:opacity-50" aria-label="Show leaderboard" title="Show leaderboard" aria-expanded="false">

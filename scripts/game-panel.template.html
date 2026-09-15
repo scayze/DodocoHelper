@@ -44,14 +44,21 @@
                   <ol id="seasons-lb-list" class="lb-list flex flex-col gap-[9px]"></ol>
                   <p id="seasons-lb-status" class="min-h-[24px] text-center text-[15px] font-semibold leading-relaxed text-night-800/70" role="status" aria-live="polite"></p>
                   </div>
+                  <div id="seasons-settings" class="settings-overlay hidden flex-col gap-[9px] rounded-xl bg-white/70 px-[18px] py-[13px] shadow-sm">
+                    <div class="flex items-center gap-[9px]">
+                      <span class="h-[36px] w-[36px] shrink-0" aria-hidden="true"></span>
+                      <div class="min-w-0 flex-1 text-center">
+                        <h2 class="text-[15px] font-bold uppercase tracking-[0.18em] text-gold-600">Settings</h2>
+                      </div>
+                      <span class="h-[36px] w-[36px] shrink-0" aria-hidden="true"></span>
+                    </div>
+                    <label class="settings-row" for="seasons-set-size">
+                      <span>Board size</span>
+                      <input id="seasons-set-size" type="number" min="6" max="12" step="1" inputmode="numeric" />
+                    </label>
+                  </div>
                 </div>
                 <p id="seasons-message" class="min-h-[24px] whitespace-pre-line text-center text-[15px] font-semibold leading-relaxed text-night-800/80" role="status" aria-live="polite"></p>
-                </div>
-                <div id="seasons-settings" class="hidden flex-col gap-[9px] rounded-xl bg-white/70 px-[18px] py-[13px] shadow-sm">
-                  <label class="settings-row" for="seasons-set-size">
-                    <span>Board size</span>
-                    <input id="seasons-set-size" type="number" min="6" max="12" step="1" inputmode="numeric" />
-                  </label>
                 </div>
                 <div class="flex flex-row justify-between gap-[9px]">
                   <button id="seasons-view-toggle" type="button" class="btn-outline game-btn h-[48px] w-[48px] rounded-full disabled:cursor-not-allowed disabled:opacity-50" aria-label="Show leaderboard" title="Show leaderboard" aria-expanded="false">

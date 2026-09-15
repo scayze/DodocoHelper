@@ -2,6 +2,7 @@ import type { GameInstance } from "../types.js";
 import { formatClock, todayUTC } from "../../leaderboard/api.js";
 import { announceResult, createRunTimer } from "../../leaderboard/report.js";
 import { boardEvents, type BoardDetail } from "../../leaderboard/view.js";
+import { settingsEvents, type SettingsDetail } from "../mode-shell.js";
 import { isDailyComplete, loadDailyResult, saveDailyResult } from "../daily-result.js";
 import { dailyCompleteMessage, mulberry32 } from "../daily.js";
 import {
@@ -63,6 +64,7 @@ export function createMinesweeperGame(): GameInstance {
   // not the row.
   const metaRow = el("mines-mode").parentElement;
   if (metaRow) metaRow.appendChild(level);
+  const gridWrap = el("mines-grid-wrap");
   const settingsPanel = el("mines-settings");
   const settingsToggle = el<HTMLButtonElement>("mines-settings-toggle");
   const regenBtn = el<HTMLButtonElement>("mines-regen");
@@ -166,6 +168,7 @@ export function createMinesweeperGame(): GameInstance {
       regenerate: regenBtn,
       viewToggle,
       leaderboardView: lbView,
+      gridWrap,
       timerValue: "mines-timer-value",
     },
     dailyTimer: runTimer,
@@ -275,7 +278,15 @@ export function createMinesweeperGame(): GameInstance {
   function onBoardToggle(detail: BoardDetail): void {
     if (detail.game !== "minesweeper") return;
     if (detail.showingBoard) pauseClock();
-    else resumeClock();
+    // Resume only when the settings overlay is closed too.
+    else if (settingsPanel.classList.contains("hidden")) resumeClock();
+  }
+
+  function onSettingsToggle(detail: SettingsDetail): void {
+    if (detail.game !== "minesweeper") return;
+    if (detail.settingsOpen) pauseClock();
+    // Resume only when the leaderboard overlay is closed too.
+    else if (lbView.classList.contains("hidden")) resumeClock();
   }
 
   /** Percent of safe cells revealed (100 when solved). */
@@ -643,6 +654,7 @@ export function createMinesweeperGame(): GameInstance {
   grid.addEventListener("pointercancel", clearPress);
   grid.addEventListener("pointerleave", clearPress);
   boardEvents.on(onBoardToggle);
+  settingsEvents.on(onSettingsToggle);
   modeShell.attachListeners();
   setSizeInput.addEventListener("change", readSettings);
   setMinesInput.addEventListener("change", readSettings);

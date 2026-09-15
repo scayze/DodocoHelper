@@ -49,6 +49,15 @@ const games = [
   },
 ];
 
+const settingsHeader = `
+                  <div class="flex items-center gap-[9px]">
+                    <span class="h-[36px] w-[36px] shrink-0" aria-hidden="true"></span>
+                    <div class="min-w-0 flex-1 text-center">
+                      <h2 class="text-[15px] font-bold uppercase tracking-[0.18em] text-gold-600">Settings</h2>
+                    </div>
+                    <span class="h-[36px] w-[36px] shrink-0" aria-hidden="true"></span>
+                  </div>`;
+
 const undoButton = (id) => `
                   <button id="${id}-undo-button" type="button" class="btn-outline game-btn h-[48px] w-[48px] rounded-full disabled:cursor-not-allowed disabled:opacity-50" aria-label="Undo" title="Undo" disabled>
                     <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
@@ -62,12 +71,14 @@ function renderPanel(game) {
     .replaceAll("seasons", game.id)
     .replaceAll("Seasons", game.label);
 
-  const settingsStart = panel.indexOf(`                <div id="${game.id}-settings"`);
-  const settingsEnd = panel.indexOf("\n                </div>", settingsStart);
+  const settingsStart = panel.indexOf(`                  <div id="${game.id}-settings"`);
+  // Anchor on the settings close + stage close pair: the header row inside
+  // ends with an 18-space </div> too, so a single-close search would stop early.
+  const settingsEnd = panel.indexOf("\n                  </div>\n                </div>", settingsStart);
   if (settingsStart < 0 || settingsEnd < 0) {
     throw new Error(`Could not locate settings panel for ${game.id}`);
   }
-  panel = `${panel.slice(0, settingsStart)}                <div id="${game.id}-settings" class="hidden flex-col gap-[9px] rounded-xl bg-white/70 px-[18px] py-[13px] shadow-sm">${game.settings}\n                </div>${panel.slice(settingsEnd + "\n                </div>".length)}`;
+  panel = `${panel.slice(0, settingsStart)}                  <div id="${game.id}-settings" class="settings-overlay hidden flex-col gap-[9px] rounded-xl bg-white/70 px-[18px] py-[13px] shadow-sm">${settingsHeader}${game.settings}\n                  </div>${panel.slice(settingsEnd + "\n                  </div>".length)}`;
 
   if (game.undo) {
     const settingsToggle = panel.indexOf(`                  <button id="${game.id}-settings-toggle"`);

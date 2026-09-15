@@ -2,6 +2,7 @@ import type { GameInstance } from "../types.js";
 import { formatClock, todayUTC } from "../../leaderboard/api.js";
 import { announceResult, createRunTimer } from "../../leaderboard/report.js";
 import { boardEvents, type BoardDetail } from "../../leaderboard/view.js";
+import { settingsEvents, type SettingsDetail } from "../mode-shell.js";
 import { isDailyComplete, loadDailyResult, saveDailyResult } from "../daily-result.js";
 import { dailyCompleteMessage, mulberry32 } from "../daily.js";
 import { generateRandomLevel } from "./generator.js";
@@ -42,6 +43,7 @@ export function createSeasonsGame(): GameInstance {
   const modeDailyBtn = el<HTMLButtonElement>("seasons-mode-daily");
   const modeEndlessBtn = el<HTMLButtonElement>("seasons-mode-endless");
   const modeSep = el("seasons-mode-sep");
+  const gridWrap = el("seasons-grid-wrap");
   const settingsPanel = el("seasons-settings");
   const settingsToggle = el<HTMLButtonElement>("seasons-settings-toggle");
   const regenBtn = el<HTMLButtonElement>("seasons-regen");
@@ -116,6 +118,7 @@ export function createSeasonsGame(): GameInstance {
       regenerate: regenBtn,
       viewToggle,
       leaderboardView: lbView,
+      gridWrap,
       timerValue: "seasons-timer-value",
     },
     dailyTimer: runTimer,
@@ -210,7 +213,13 @@ export function createSeasonsGame(): GameInstance {
   function onBoardToggle(detail: BoardDetail): void {
     if (detail.game !== "seasons") return;
     if (detail.showingBoard) pauseClock();
-    else resumeClock();
+    else if (settingsPanel.classList.contains("hidden")) resumeClock();
+  }
+
+  function onSettingsToggle(detail: SettingsDetail): void {
+    if (detail.game !== "seasons") return;
+    if (detail.settingsOpen) pauseClock();
+    else if (lbView.classList.contains("hidden")) resumeClock();
   }
 
   function setStatus(): void {
@@ -566,6 +575,7 @@ export function createSeasonsGame(): GameInstance {
   grid.addEventListener("focusin", previewFromEvent);
   grid.addEventListener("focusout", clearPreview);
   boardEvents.on(onBoardToggle);
+  settingsEvents.on(onSettingsToggle);
   modeShell.attachListeners();  setSizeInput.addEventListener("change", readSettings);
   fillSettingsInputs(loadEndlessSettings("seasons"));
 
