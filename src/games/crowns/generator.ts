@@ -1,10 +1,42 @@
 import type { NormalizedPuzzle } from "./types.js";
 import { UNKNOWN } from "./types.js";
-import { solveAll, buildInitialState, solveByDeduction, U } from "./solver.js";
+import { buildInitialState, solveByDeduction, stateToGrid, U } from "./solver.js";
 
 const UNASSIGNED = -1;
 const MIN_REGION_SIZE = 5;
 const PARTITION_ATTEMPTS = 80;
+
+type Topology = { neighbors4: number[][]; neighbors8: number[][] };
+const topologyCache = new Map<number, Topology>();
+
+function topologyFor(n: number): Topology {
+  const cached = topologyCache.get(n);
+  if (cached) return cached;
+  const neighbors4: number[][] = [];
+  const neighbors8: number[][] = [];
+  for (let r = 0; r < n; r++) {
+    for (let c = 0; c < n; c++) {
+      const four: number[] = [];
+      const eight: number[] = [];
+      for (let dr = -1; dr <= 1; dr++) {
+        for (let dc = -1; dc <= 1; dc++) {
+          if (dr === 0 && dc === 0) continue;
+          const nr = r + dr;
+          const nc = c + dc;
+          if (nr < 0 || nr >= n || nc < 0 || nc >= n) continue;
+          const cell = nr * n + nc;
+          eight.push(cell);
+          if (dr === 0 || dc === 0) four.push(cell);
+        }
+      }
+      neighbors4.push(four);
+      neighbors8.push(eight);
+    }
+  }
+  const topology = { neighbors4, neighbors8 };
+  topologyCache.set(n, topology);
+  return topology;
+}
 
 function idx(n: number, r: number, c: number): number {
   return r * n + c;
@@ -61,14 +93,6 @@ function isConnected(grid: number[], n: number, regionId: number): boolean {
   let totalCells = 0;
   for (const value of grid) if (value === regionId) totalCells++;
   return count === totalCells;
-}
-
-function regionCounts(grid: number[], regionCount: number): number[] {
-  const counts = new Array<number>(regionCount).fill(0);
-  for (const region of grid) {
-    if (region >= 0 && region < regionCount) counts[region]++;
-  }
-  return counts;
 }
 
 /**
@@ -145,20 +169,6 @@ function chooseSeeds(n: number, regionCount: number, rand: () => number): number
   return seeds;
 }
 
-function frontierFor(grid: number[], n: number, regionId: number): number[] {
-  const frontier: number[] = [];
-  for (let r = 0; r < n; r++) {
-    for (let c = 0; c < n; c++) {
-      const cell = idx(n, r, c);
-      if (grid[cell] !== UNASSIGNED) continue;
-      if (neighbors4(n, r, c).some(([nr, nc]) => grid[idx(n, nr, nc)] === regionId)) {
-        frontier.push(cell);
-      }
-    }
-  }
-  return frontier;
-}
-
 /**
  * Grow regions from distributed seeds until their target sizes are reached.
  * Failed growth attempts are discarded; the caller retries with the same
@@ -167,17 +177,27 @@ function frontierFor(grid: number[], n: number, regionId: number): number[] {
 function growPartition(n: number, targets: number[], rand: () => number): number[] | null {
   const grid = new Array<number>(n * n).fill(UNASSIGNED);
   const counts = new Array<number>(n).fill(0);
+  const topology = topologyFor(n);
+  const frontiers = Array.from({ length: n }, () => new Set<number>());
   const seeds = chooseSeeds(n, n, rand);
-  for (let region = 0; region < n; region++) {
-    grid[seeds[region]] = region;
-    counts[region] = 1;
-  }
+
+  const addToFrontier = (region: number, cell: number) => {
+    if (grid[cell] === UNASSIGNED) frontiers[region].add(cell);
+  };
+  const assign = (region: number, cell: number) => {
+    grid[cell] = region;
+    counts[region]++;
+    for (const frontier of frontiers) frontier.delete(cell);
+    for (const neighbor of topology.neighbors4[cell]) addToFrontier(region, neighbor);
+  };
+
+  for (let region = 0; region < n; region++) assign(region, seeds[region]);
 
   while (counts.some((count, region) => count < targets[region])) {
     const choices: Array<{ region: number; frontier: number[]; urgency: number }> = [];
     for (let region = 0; region < n; region++) {
       if (counts[region] >= targets[region]) continue;
-      const frontier = frontierFor(grid, n, region);
+      const frontier = [...frontiers[region]];
       if (frontier.length > 0) {
         choices.push({
           region,
@@ -192,19 +212,15 @@ function growPartition(n: number, targets: number[], rand: () => number): number
     const urgent = choices.filter((choice) => choice.urgency >= maxUrgency - 0.08);
     const choice = urgent[Math.floor(rand() * urgent.length)];
 
-    // Prefer cells that keep the region compact while retaining open frontier
-    // cells. Random tie-breaking keeps equal seeds reproducible but varied.
     let bestScore = -Infinity;
     let bestCells: number[] = [];
     for (const cell of choice.frontier) {
-      const r = Math.floor(cell / n);
-      const c = cell % n;
-      const sameNeighbors = neighbors4(n, r, c).filter(
-        ([nr, nc]) => grid[idx(n, nr, nc)] === choice.region,
-      ).length;
-      const openNeighbors = neighbors4(n, r, c).filter(
-        ([nr, nc]) => grid[idx(n, nr, nc)] === UNASSIGNED,
-      ).length;
+      let sameNeighbors = 0;
+      let openNeighbors = 0;
+      for (const neighbor of topology.neighbors4[cell]) {
+        if (grid[neighbor] === choice.region) sameNeighbors++;
+        else if (grid[neighbor] === UNASSIGNED) openNeighbors++;
+      }
       const score = sameNeighbors * 4 + openNeighbors + rand() * 0.5;
       if (score > bestScore) {
         bestScore = score;
@@ -213,15 +229,11 @@ function growPartition(n: number, targets: number[], rand: () => number): number
         bestCells.push(cell);
       }
     }
-    const selected = bestCells[Math.floor(rand() * bestCells.length)];
-    grid[selected] = choice.region;
-    counts[choice.region]++;
+    assign(choice.region, bestCells[Math.floor(rand() * bestCells.length)]);
   }
 
-  const actual = regionCounts(grid, n);
-  if (actual.some((count, region) => count !== targets[region])) return null;
   for (let region = 0; region < n; region++) {
-    if (!isConnected(grid, n, region)) return null;
+    if (counts[region] !== targets[region] || !isConnected(grid, n, region)) return null;
   }
   return grid;
 }
@@ -295,17 +307,27 @@ function blankInitial(size: number): string[][] {
   return Array.from({ length: size }, () => Array(size).fill(UNKNOWN) as string[]);
 }
 
-/** Run the full human-deduction cascade on the EMPTY board of a region map,
- *  bounded to a wall-clock budget so a single candidate can never stall generation. */
-function cascadeScore(regions: number[][], crownsPerUnit: number): { solved: boolean; resolved: number; hardest: string } {
+/** Run the human-deduction cascade on the empty board of a region map.
+ * Generation does not need interactive step explanations, so the solver skips
+ * constructing them while retaining the exact same deduction rules. */
+interface CascadeScore {
+  solved: boolean;
+  resolved: number;
+  hardest: string;
+  solution?: string[][];
+}
+
+function cascadeScore(regions: number[][], crownsPerUnit: number): CascadeScore {
   const n = regions.length;
   const puzzle: NormalizedPuzzle = toPuzzleInput(regions, blankInitial(n), crownsPerUnit);
   const { state, tg } = buildInitialState(puzzle);
-  const res = solveByDeduction(state, tg, false, 5000, 700);
+  const res = solveByDeduction(state, tg, false, 5000, 0, false);
+  const resolved = n * n - state.grid.filter((v) => v === U).length;
   return {
     solved: res.solved,
-    resolved: n * n - state.grid.filter((v) => v === U).length,
+    resolved,
     hardest: res.hardest,
+    solution: res.solved ? stateToGrid(state).grid : undefined,
   };
 }
 
@@ -348,41 +370,57 @@ function mutateRegions(regions: number[][], rand: () => number): number[][] | nu
  * budget grows with the board size; when it runs out we fail loudly rather than
  * revealing any marks.
  */
+export interface GeneratedPuzzle {
+  puzzle: NormalizedPuzzle;
+  solution: string[][];
+}
+
+/** Generate until a blank board is completely solved by the deduction rules.
+ * `maxAttempts` is retained for source compatibility but is no longer used as
+ * a timeout or fallback limit: generation has no time-based failure path. */
+export function generatePuzzleWithSolution(
+  size = 9,
+  crownsPerUnit = 2,
+  _maxAttempts = 1200,
+  rand: () => number = Math.random,
+): GeneratedPuzzle {
+  const MUTATIONS_PER_CANDIDATE = 60;
+
+  for (;;) {
+    const regions = generateRegions(size, crownsPerUnit, rand);
+    if (!regions) continue;
+
+    const base = cascadeScore(regions, crownsPerUnit);
+    if (base.solved && base.solution) {
+      return {
+        puzzle: toPuzzleInput(regions, blankInitial(size), crownsPerUnit),
+        solution: base.solution,
+      };
+    }
+
+    // Climb local border mutations from this fresh candidate.
+    let best = { regions, resolved: base.resolved };
+    for (let m = 0; m < MUTATIONS_PER_CANDIDATE; m++) {
+      const mutated = mutateRegions(best.regions, rand);
+      if (!mutated) continue;
+      const sc = cascadeScore(mutated, crownsPerUnit);
+      if (sc.solved && sc.solution) {
+        return {
+          puzzle: toPuzzleInput(mutated, blankInitial(size), crownsPerUnit),
+          solution: sc.solution,
+        };
+      }
+      if (sc.resolved > best.resolved) best = { regions: mutated, resolved: sc.resolved };
+    }
+  }
+}
+
+/** Compatibility wrapper for callers that only need the puzzle. */
 export function generatePuzzle(
   size = 9,
   crownsPerUnit = 2,
   maxAttempts = 1200,
   rand: () => number = Math.random,
 ): NormalizedPuzzle {
-  const MUTATIONS_PER_CANDIDATE = 60;
-  // Size-aware budget; the largest boards get extra patience.
-  const deadline = Date.now() + 2200 + 75 * size * size + (size >= 10 ? 8000 : 0);
-
-  for (let attempt = 0; attempt < maxAttempts && Date.now() < deadline; attempt++) {
-    const regions = generateRegions(size, crownsPerUnit, rand);
-    if (!regions) continue;
-
-    const base = cascadeScore(regions, crownsPerUnit);
-    if (base.solved) {
-      const blank = toPuzzleInput(regions, blankInitial(size), crownsPerUnit);
-      if (solveAll(blank, { limit: 2 }).length === 1) return blank;
-      continue;
-    }
-
-    // Climb local border mutations from this fresh candidate.
-    let best = { regions, resolved: base.resolved };
-    for (let m = 0; m < MUTATIONS_PER_CANDIDATE && Date.now() < deadline; m++) {
-      const mutated = mutateRegions(best.regions, rand);
-      if (!mutated) continue;
-      const sc = cascadeScore(mutated, crownsPerUnit);
-      if (sc.solved) {
-        const blank = toPuzzleInput(mutated, blankInitial(size), crownsPerUnit);
-        if (solveAll(blank, { limit: 2 }).length === 1) return blank;
-        continue;
-      }
-      if (sc.resolved > best.resolved) best = { regions: mutated, resolved: sc.resolved };
-    }
-  }
-
-  throw new Error(`No blank-deductible board found after ${maxAttempts} attempts`);
+  return generatePuzzleWithSolution(size, crownsPerUnit, maxAttempts, rand).puzzle;
 }

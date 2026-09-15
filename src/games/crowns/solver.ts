@@ -1153,19 +1153,30 @@ export interface DeduceResult {
  *  `maxMs` optionally bounds the wall time (generation uses it); exceeding the
  *  budget reports the state as unresolved rather than solved.
  */
-export function solveByDeduction(st: State, tg: Targets, allowSearch = false, searchBudget = 5000, maxMs = 0): DeduceResult {
+export function solveByDeduction(
+  st: State,
+  tg: Targets,
+  allowSearch = false,
+  searchBudget = 5000,
+  maxMs = 0,
+  collectSteps = true,
+): DeduceResult {
   const steps: Step[][] = [];
   let hardest = "propagate";
   const start = Date.now();
 
   while (maxMs === 0 || Date.now() - start < maxMs) {
     // Propagate to closure
-    const before = st.grid.slice();
+    const before = collectSteps ? st.grid.slice() : [];
+    const beforeResolved = collectSteps ? 0 : st.grid.length - st.grid.filter((v) => v === U).length;
     const witness = propagate(st, tg);
     if (witness) return { solved: false, contradiction: true, steps, hardest };
-    const propSteps = collectPropagateChanges(st, before);
-    if (propSteps.length > 0) {
-      steps.push(propSteps);
+    const propSteps = collectSteps ? collectPropagateChanges(st, before) : [];
+    const propagationChanged = collectSteps
+      ? propSteps.length > 0
+      : st.grid.length - st.grid.filter((v) => v === U).length > beforeResolved;
+    if (propagationChanged) {
+      if (collectSteps) steps.push(propSteps);
       if (isStateSolved(st, tg)) return { solved: true, contradiction: false, steps, hardest };
       continue;
     }
@@ -1180,7 +1191,7 @@ export function solveByDeduction(st: State, tg: Targets, allowSearch = false, se
         if (!applySteps(st, tg, outcome.steps)) return { solved: false, contradiction: true, steps, hardest };
         const rule = outcome.steps[0].rule;
         if (RULE_RANK[rule]! > RULE_RANK[hardest]!) hardest = rule;
-        steps.push(outcome.steps);
+        if (collectSteps) steps.push(outcome.steps);
         continue;
       }
     }
@@ -1191,7 +1202,7 @@ export function solveByDeduction(st: State, tg: Targets, allowSearch = false, se
       if (searchStep) {
         if (!applySteps(st, tg, [searchStep])) return { solved: false, contradiction: true, steps, hardest };
         hardest = "search";
-        steps.push([searchStep]);
+        if (collectSteps) steps.push([searchStep]);
         continue;
       }
     }

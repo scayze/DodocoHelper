@@ -5,7 +5,7 @@ import { findHints } from "./hints.js";
 import type { Hint } from "./hints.js";
 import type { NormalizedPuzzle } from "./types.js";
 import { nextMark } from "./marks.js";
-import { generatePuzzle } from "./generator.js";
+import { generatePuzzleWithSolution } from "./generator.js";
 import { validatePuzzleInput } from "./validator.js";
 import { extractBoardFromFile } from "./extract.js";
 import type { GameInstance } from "../types.js";
@@ -231,13 +231,9 @@ function dealDaily(day: string, seed: number): void {
   let generated: NormalizedPuzzle;
   let solution: string[][];
   try {
-    generated = generatePuzzle(9, 2, 1200, mulberry32(seed));
-    const solved = solvePuzzle(generated);
-    if (solved.status !== "solved" || !solved.solution) {
-      if (modeShell.mode === "daily") showError("Could not deal today's puzzle.", solved.errors.join(" "));
-      return;
-    }
-    solution = solved.solution;
+    const generatedWithSolution = generatePuzzleWithSolution(9, 2, 1200, mulberry32(seed));
+    generated = generatedWithSolution.puzzle;
+    solution = generatedWithSolution.solution;
   } catch (e) {
     if (modeShell.mode === "daily") {
       showError("Could not deal today's puzzle.", e instanceof Error ? e.message : "Try again.");
@@ -282,15 +278,8 @@ function dealEndless(): void {
   setPhase("working");
   isWorking = true;
   try {
-    const generated = generatePuzzle(s.size, 2, 1200, Math.random);
-    const solved = solvePuzzle(generated);
-    if (solved.status !== "solved" || !solved.solution) {
-      hintMessage.textContent = "Could not find a pure-logic board — try different settings.";
-      isWorking = false;
-      setPhase("ready");
-      return;
-    }
-    applyBoard(generated, solved.solution, null);
+    const generated = generatePuzzleWithSolution(s.size, 2, 1200, Math.random);
+    applyBoard(generated.puzzle, generated.solution, null);
   } catch {
     hintMessage.textContent = "Could not find a pure-logic board — try different settings.";
     isWorking = false;
