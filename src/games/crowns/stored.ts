@@ -6,15 +6,13 @@
 import { isIntGrid, isStrGrid } from "../persist.js";
 import { LIMITS } from "../mode.js";
 import type { NormalizedPuzzle } from "./types.js";
-import type { Hint } from "./hints.js";
 
-/** JSON-safe slice of a crowns slot (Set/function-free) for storage. */
+/** JSON-safe slice of a crowns slot (Set/function-free) for storage.
+ * Hints and the shown-hints history are runtime-only and are not persisted:
+ * after a reload the first Hint click recomputes them. */
 export interface CrownsStored {
   puzzle: NormalizedPuzzle;
   solution: string[][];
-  hints: Hint[];
-  hintsComputed: boolean;
-  shown: string[];
   undo: Array<{ r: number; c: number; prev: string }>;
   solved: boolean;
 }
@@ -41,24 +39,7 @@ export function isCrownsStored(value: unknown): value is CrownsStored {
     !isIntGrid(p["regions"], size as number) ||
     !isStrGrid(p["initial"], size as number, CROPTS) ||
     !isStrGrid(s["solution"], size as number, new Set(["C", "."])) ||
-    typeof s["hintsComputed"] !== "boolean" ||
     typeof s["solved"] !== "boolean" ||
-    !Array.isArray(s["shown"]) ||
-    !s["shown"].every((v) => typeof v === "string") ||
-    !Array.isArray(s["hints"]) ||
-    !s["hints"].every((h) => {
-      if (typeof h !== "object" || h === null) return false;
-      const hm = h as Record<string, unknown>;
-      return (
-        typeof hm["kind"] === "string" &&
-        typeof hm["scope"] === "string" &&
-        typeof hm["text"] === "string" &&
-        Array.isArray(hm["cells"]) &&
-        hm["cells"].every((v) => typeof v === "string") &&
-        Array.isArray(hm["decisiveCells"]) &&
-        hm["decisiveCells"].every((v) => typeof v === "string")
-      );
-    }) ||
     !Array.isArray(undo) ||
     !undo.every((e) => {
       if (typeof e !== "object" || e === null) return false;

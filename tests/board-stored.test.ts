@@ -3,7 +3,6 @@ import assert from "node:assert/strict";
 import { isCrownsStored, type CrownsStored } from "../src/games/crowns/stored.js";
 import { generatePuzzle } from "../src/games/crowns/generator.js";
 import { solvePuzzle } from "../src/games/crowns/solver.js";
-import { findHints } from "../src/games/crowns/hints.js";
 import { nextMark } from "../src/games/crowns/marks.js";
 import { isMineStored } from "../src/games/minesweeper/stored.js";
 import { createPreplacedBoard } from "../src/games/minesweeper/logic.js";
@@ -17,19 +16,15 @@ import { generateLevel } from "../src/games/tents/generator.js";
 import { mulberry32 } from "../src/games/rng.js";
 
 describe("crowns stored boards", () => {
-  it("accepts a real played daily (marks, hints, undo) and rejects tampering", () => {
+  it("accepts a real played daily (undo) and rejects tampering", () => {
     const puzzle = generatePuzzle(9, 2, 50, mulberry32(42));
     const solved = solvePuzzle(puzzle);
     assert.equal(solved.status, "solved");
     const undo = [{ r: 0, c: 0, prev: puzzle.initial[0][0] }];
     puzzle.initial[0][0] = nextMark(puzzle.initial[0][0]);
-    const hints = findHints(puzzle);
     const stored: CrownsStored = {
       puzzle,
       solution: solved.solution!,
-      hints,
-      hintsComputed: true,
-      shown: hints.slice(0, 1).map((h) => JSON.stringify([h.kind, h.scope])),
       undo,
       solved: false,
     };

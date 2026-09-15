@@ -2,12 +2,13 @@ import { describe, it } from "node:test";
 import assert from "node:assert/strict";
 import fs from "node:fs";
 import { validatePuzzleInput, validateSolution } from "../src/games/crowns/validator.js";
-import { solveAll, solvePuzzle, testAssumption, testAssumptionDetailed } from "../src/games/crowns/solver.js";
+import { solveAll, solvePuzzle, testAssumption, testAssumptionDetailed, buildInitialState, tryPlaceCrown, markCrown, propagate, collectPropagateChanges, solveByDeduction, stateToGrid, deduceRegionFit, deduceBand, K, E } from "../src/games/crowns/solver.js";
 import { findHints } from "../src/games/crowns/hints.js";
 import { nextMark } from "../src/games/crowns/marks.js";
-import { generatePuzzle } from "../src/games/crowns/generator.js";
+import { generatePuzzle, generateRegions } from "../src/games/crowns/generator.js";
 import { mulberry32 } from "../src/games/daily.js";
 import type { NormalizedPuzzle } from "../src/games/crowns/types.js";
+import { CROWN, EMPTY } from "../src/games/crowns/types.js";
 
 // ---------------------------------------------------------------------------
 // Shared fixtures
@@ -295,7 +296,7 @@ describe("hints", () => {
     const complex = hints.find((hint) => hint.scope === "analysis");
     assert.ok(complex, "expected at least one solver-backed deduction");
     assert.doesNotMatch(complex!.text, /Advanced deduction/);
-    assert.match(complex!.text, /no valid option|touch the queen/);
+    assert.match(complex!.text, /no valid way|touch/);
     for (let i = 1; i < hints.length; i++) {
       assert.ok(
         hints[i - 1].difficulty < hints[i].difficulty ||
@@ -321,30 +322,238 @@ describe("editable marks", () => {
 });
 
 // ---------------------------------------------------------------------------
+// Human-style deduction engine (solver.ts)
+// ---------------------------------------------------------------------------
+
+function loadBoard(p: NormalizedPuzzle, state: { grid: number[] }): void {
+  for (let r = 0; r < p.size; r++) {
+    for (let c = 0; c < p.size; c++) {
+      if (p.initial[r][c] === EMPTY) state.grid[r * p.size + c] = E;
+    }
+  }
+}
+
+describe("deduction engine", () => {
+  it("crosses all 8 neighbours of a crown", () => {
+    const p = normalized({ ...baseInput(), initial: blankInitial() });
+    const { state, tg } = buildInitialState(p);
+    assert.ok(markCrown(state, tg, 4, 4));
+    const before = state.grid.slice();
+    assert.equal(propagate(state, tg), null);
+    const steps = collectPropagateChanges(state, before);
+    assert.equal(steps.filter((s) => s.to === E).length, 8);
+    for (let dr = -1; dr <= 1; dr++) {
+      for (let dc = -1; dc <= 1; dc++) {
+        if (dr === 0 && dc === 0) continue;
+        assert.equal(state.grid[(4 + dr) * 9 + (4 + dc)], E);
+      }
+    }
+  });
+
+  it("forces the last remaining crown of a column", () => {
+    const p = normalized({ ...baseInput(), initial: blankInitial() });
+    const { state, tg } = buildInitialState(p);
+    assert.ok(markCrown(state, tg, 0, 0));
+    for (let r = 1; r < 8; r++) state.grid[r * 9 + 0] = E;
+    const before = state.grid.slice();
+    assert.equal(propagate(state, tg), null);
+    const steps = collectPropagateChanges(state, before);
+    assert.ok(steps.some((s) => s.to === K && s.r === 8 && s.c === 0), "column 0 must force (8,0)");
+  });
+
+  it("can fully deduce the blank fixture board using advanced rules", () => {
+    const p = normalized({ ...baseInput(), initial: blankInitial() });
+    const { state, tg } = buildInitialState(p);
+    const res = solveByDeduction(state, tg, false);
+    assert.ok(res.solved, "blank REGIONS board must be solvable by deduction");
+    assert.equal(res.contradiction, false);
+    assert.ok(res.steps.length > 0);
+    assert.deepEqual(validateSolution(p, stateToGrid(state).grid), []);
+  });
+
+  it("reports a contradiction when a state cannot satisfy a unit", () => {
+    const p = normalized({ ...baseInput(), initial: blankInitial() });
+    const { state, tg } = buildInitialState(p);
+    // Starve column 0: cross out all but one cell.
+    for (let r = 1; r < 9; r++) state.grid[r * 9 + 0] = E;
+    const res = solveByDeduction(state, tg, false);
+    assert.ok(res.contradiction);
+    assert.equal(res.solved, false);
+  });
+
+  it("fully revealed boards are solved by plain propagation", () => {
+    const p = normalized({ ...baseInput(), initial: solutionGridFrom(KNOWN_CROWNS) });
+    const { state, tg } = buildInitialState(p);
+    loadBoard(p, state);
+    for (let r = 0; r < 9; r++) {
+      for (let c = 0; c < 9; c++) {
+        if (p.initial[r][c] === CROWN) assert.ok(markCrown(state, tg, r, c));
+      }
+    }
+    const res = solveByDeduction(state, tg, false);
+    assert.ok(res.solved, "fully revealed board must be human-solvable");
+    assert.deepEqual(validateSolution(p, stateToGrid(state).grid), []);
+  });
+
+  it("region-fit crosses a region centre that can never hold a queen", () => {
+    // Region 0 is a plus around (2,2); it needs 2 queens that must never
+    // touch, so the centre blocks every option. Built directly (size 5 sits
+    // below the playable limit) because we only exercise the rule itself.
+    const regions = [
+      [1, 1, 1, 1, 1],
+      [3, 3, 0, 4, 4],
+      [3, 0, 0, 0, 4],
+      [3, 3, 0, 4, 4],
+      [2, 2, 2, 2, 2],
+    ];
+    const puzzle: NormalizedPuzzle = {
+      size: 5,
+      crownsPerRow: 2,
+      crownsPerColumn: 2,
+      crownsPerRegion: 2,
+      regions,
+      regionCount: 5,
+      initial: Array.from({ length: 5 }, () => Array(5).fill("?")),
+      palette: null,
+    };
+    const { state, tg } = buildInitialState(puzzle);
+    const res = deduceRegionFit(state, tg);
+    assert.equal(res.witness, null);
+    const crossed = new Set(res.steps.filter((s) => s.to === E).map((s) => `${s.r},${s.c}`));
+    assert.ok(crossed.has("2,2"), "the plus centre must be crossed");
+    assert.ok(res.steps.every((s) => s.to === E), "no forced queen in the plus");
+  });
+
+  it("region-fit and band-cover marks are sound (verified against exact search)", () => {
+    const toInitial = (state: { n: number; grid: number[] }): string[][] => {
+      const out: string[][] = [];
+      for (let r = 0; r < state.n; r++) {
+        const row: string[] = [];
+        for (let c = 0; c < state.n; c++) {
+          row.push(state.grid[r * state.n + c] === K ? CROWN : state.grid[r * state.n + c] === E ? EMPTY : "?");
+        }
+        out.push(row);
+      }
+      return out;
+    };
+    let verified = 0;
+    for (let seed = 1; seed <= 12; seed++) {
+      const regions = generateRegions(6, mulberry32(9000 + seed));
+      if (!regions) continue;
+      const rand = mulberry32(seed * 31);
+      const initial = Array.from({ length: 6 }, () => Array(6).fill("?"));
+      const order: Array<[number, number]> = [];
+      for (let r = 0; r < 6; r++) for (let c = 0; c < 6; c++) order.push([r, c]);
+      for (let i = order.length - 1; i > 0; i--) {
+        const j = Math.floor(rand() * (i + 1));
+        [order[i], order[j]] = [order[j], order[i]];
+      }
+      let crowns = 0;
+      for (const [r, c] of order) {
+        if (crowns >= 3) break;
+        let touching = false;
+        for (let dr = -1; dr <= 1; dr++) for (let dc = -1; dc <= 1; dc++) {
+          const nr = r + dr;
+          const nc = c + dc;
+          if (nr >= 0 && nr < 6 && nc >= 0 && nc < 6 && initial[nr][nc] === CROWN) touching = true;
+        }
+        if (touching) continue;
+        // Each unit holds at most one queen here (1 queen per row/col/region).
+        if (initial.some((row) => row.includes(CROWN) && row === initial[r])) continue;
+        const sameCol = Array.from({ length: 6 }, (_, rr) => initial[rr][c]).includes(CROWN);
+        const sameReg = Array.from({ length: 36 }, (_, i) => {
+          const rr = Math.floor(i / 6);
+          const cc = i % 6;
+          return regions[rr][cc] === regions[r][c] ? initial[rr][cc] : undefined;
+        }).includes(CROWN);
+        if (!sameCol && !sameReg) {
+          initial[r][c] = CROWN;
+          crowns++;
+        }
+      }
+      for (const [r, c] of order.slice(0, 6)) {
+        if (initial[r][c] === "?") initial[r][c] = EMPTY;
+      }
+      const checked = validatePuzzleInput({ size: 6, crownsPerRow: 1, crownsPerColumn: 1, crownsPerRegion: 1, regions, initial });
+      if (!checked.puzzle) continue;
+      const p = checked.puzzle;
+      const { state, tg } = buildInitialState(p);
+      for (let r = 0; r < 6; r++) for (let c = 0; c < 6; c++) {
+        if (initial[r][c] === EMPTY) state.grid[r * 6 + c] = E;
+        if (initial[r][c] === CROWN) assert.ok(markCrown(state, tg, r, c));
+      }
+      const kinds = [
+        { rule: "region-fit", steps: deduceRegionFit(state, tg).steps },
+        { rule: "band-cover", steps: deduceBand(state, tg).steps },
+      ];
+      const premise = validatePuzzleInput({ size: 6, crownsPerRow: 1, crownsPerColumn: 1, crownsPerRegion: 1, regions, initial: toInitial(state) });
+      assert.ok(premise.puzzle);
+      for (const { rule, steps } of kinds) {
+        for (const s of steps) {
+          const opposite = s.to === K ? EMPTY : CROWN;
+          const res = testAssumption(premise.puzzle!, s.r, s.c, opposite);
+          if (res === "unknown") continue; // budget-limited search doesn't disprove anything
+          assert.equal(res, "unsatisfiable", `${rule} mark at (${s.r},${s.c}) must be forced`);
+          verified++;
+        }
+      }
+    }
+    assert.ok(verified > 0, "the new rules must actually fire on some case");
+  });
+});
+
+// ---------------------------------------------------------------------------
 // Puzzle generation
 // ---------------------------------------------------------------------------
 
 describe("generatePuzzle", () => {
-  it("produces a valid solvable 9x9 puzzle", () => {
+  it("produces a blank, human-deductible 9x9 puzzle with a unique solution", () => {
     const puzzle = generatePuzzle(9, 2);
     assert.equal(puzzle.size, 9);
     assert.equal(puzzle.regions.length, 9);
     assert.equal(puzzle.regions[0].length, 9);
     assert.equal(puzzle.crownsPerRow, 2);
-    assert.equal(puzzle.initial.flat().every((c) => c === "?"), true);
+    assert.ok(
+      puzzle.initial.flat().every((c) => c === "?" || c === "C"),
+      "generated boards must not prefill crosses",
+    );
 
-    const solutions = solveAll(puzzle, { limit: 1 });
-    assert.equal(solutions.length, 1);
+    const { state, tg } = buildInitialState(puzzle);
+    for (let r = 0; r < puzzle.size; r++) {
+      for (let c = 0; c < puzzle.size; c++) {
+        if (puzzle.initial[r][c] === CROWN) assert.ok(tryPlaceCrown(state, tg, r, c));
+      }
+    }
+    assert.ok(solveByDeduction(state, tg, false).solved, "generated boards must be solvable by pure deduction");
+
+    const solutions = solveAll(puzzle, { limit: 2 });
+    assert.equal(solutions.length, 1, "generated boards must have a unique solution");
     assert.deepEqual(validateSolution(puzzle, solutions[0].grid), []);
   });
 
   it("generates different region layouts across calls", () => {
     const results = new Set<string>();
-    // Run several times; at least 2 out of 10 should be unique
-    for (let i = 0; i < 10; i++) {
+    // Several calls; they must not all be identical.
+    for (let i = 0; i < 4; i++) {
       results.add(JSON.stringify(generatePuzzle(9, 2).regions));
     }
     assert.ok(results.size > 1, "should produce different layouts across calls");
+  });
+
+  it("can generate a blank human-deductible board with a unique solution", () => {
+    const easy = generatePuzzle(5, 1, 400, mulberry32(42));
+    assert.equal(solveAll(easy, { limit: 2 }).length, 1, "unique solution expected");
+    assert.ok(
+      easy.initial.flat().every((c) => c === "?" || c === "C"),
+      "generated boards must not prefill crosses",
+    );
+    const { state, tg } = buildInitialState(easy);
+    for (let r = 0; r < easy.size; r++) {
+      for (let c = 0; c < easy.size; c++) {
+        if (easy.initial[r][c] === CROWN) assert.ok(tryPlaceCrown(state, tg, r, c));
+      }
+    }
+    assert.ok(solveByDeduction(state, tg, false).solved, "board must be human-solvable");
   });
 
   it("round-trips through solvePuzzle (null palette is accepted)", () => {

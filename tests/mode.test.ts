@@ -57,6 +57,7 @@ describe("endless settings clampers", () => {
   it("clamps crowns size and crowns-per-unit", () => {
     assert.deepEqual(clampCrownsSettings({ size: 9, crowns: 2 }), { size: 9, crowns: 2 });
     assert.deepEqual(clampCrownsSettings({ size: 4, crowns: 5 }), { size: 6, crowns: 2 });
+    assert.deepEqual(clampCrownsSettings({ size: 6, crowns: 1 }), { size: 6, crowns: 1 });
   });
 
   it("clamps seasons and tents sizes", () => {
@@ -76,6 +77,15 @@ describe("endless settings persistence", () => {
     assert.deepEqual(loadEndlessSettings("tents"), TENTS_DEFAULTS);
     saveEndlessSettings("minesweeper", { size: 12, mines: 30 });
     assert.deepEqual(loadEndlessSettings("minesweeper"), { size: 12, mines: 30 });
+    saveEndlessSettings("crowns", { size: 8, crowns: 2 });
+    assert.deepEqual(loadEndlessSettings("crowns"), { size: 8, crowns: 2 });
+  });
+
+  it("repairs stored crowns settings that carry the legacy difficulty field", () => {
+    const store = installStorage();
+    // Settings saved by an older build carried a difficulty option.
+    store.set("dodoco:endless:crowns", JSON.stringify({ size: 7, crowns: 1, difficulty: "easy" }));
+    assert.deepEqual(loadEndlessSettings("crowns"), { size: 7, crowns: 1 });
   });
 
   it("repairs corrupt or out-of-range stored values", () => {

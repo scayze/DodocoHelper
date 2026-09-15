@@ -82,9 +82,6 @@ let readingShot = false;
 interface Slot {
   puzzle: NormalizedPuzzle;
   solution: string[][];
-  hints: Hint[];
-  hintsComputed: boolean;
-  shown: Set<string>;
   undo: Array<{ r: number; c: number; prev: string }>;
   solved: boolean;
   day: string | null;
@@ -93,14 +90,11 @@ interface Slot {
 let daily: Slot | null = null;
 let endless: Slot | null = null;
 
-/** Rebuild a full slot from its stored slice (Set back, day/timer from envelope). */
+/** Rebuild a full slot from its stored slice (day/timer from envelope). */
 function storedCrownsSlot(raw: CrownsStored, day: string | null, timerLive: boolean): Slot {
   return {
     puzzle: raw.puzzle,
     solution: raw.solution,
-    hints: raw.hints,
-    hintsComputed: raw.hintsComputed,
-    shown: new Set(raw.shown),
     undo: raw.undo,
     solved: raw.solved,
     day,
@@ -113,9 +107,6 @@ function snapshot(): Slot | null {
   return {
     puzzle,
     solution: fullSolution,
-    hints: availableHints,
-    hintsComputed,
-    shown: new Set(shownHints),
     undo: [...undoStack],
     solved: puzzleSolved,
     day: dailyDay,
@@ -159,11 +150,9 @@ const modeShell = createModeShell<Slot>({
   canResume: () => puzzle !== null && !puzzleSolved,
 });
 
-/**
- * Whether availableHints holds fresh results for the current board.
- * Hints are computed lazily on Hint click (findHints runs a solver search
- * per unknown cell, far too slow to redo on every cell edit).
- */
+/** Whether availableHints holds fresh results for the current board.
+ * Hints are computed lazily on Hint click and are never persisted: after a
+ * reload the first click recomputes them, so the shown-hints history restarts. */
 let hintsComputed = false;
 
 function focusPanel(id: string): void {
@@ -197,9 +186,6 @@ function persistActive(): void {
     state: {
       puzzle: slot.puzzle,
       solution: slot.solution,
-      hints: slot.hints,
-      hintsComputed: slot.hintsComputed,
-      shown: [...slot.shown],
       undo: slot.undo,
       solved: slot.solved,
     },
@@ -258,9 +244,6 @@ function dealDaily(day: string, seed: number): void {
     daily = {
       puzzle: generated,
       solution,
-      hints: [],
-      hintsComputed: false,
-      shown: new Set<string>(),
       undo: [],
       solved: false,
       day,
@@ -295,21 +278,21 @@ function fillSettingsInputs(s: CrownsEndlessSettings): void {
 function dealEndless(): void {
   if (isWorking || readingShot) return;
   const s = readSettings();
-  setWorkingMessage("Dealing a new board…");
+  setWorkingMessage("Dealing a pure-logic board…");
   setPhase("working");
   isWorking = true;
   try {
     const generated = generatePuzzle(s.size, s.crowns, 50, Math.random);
     const solved = solvePuzzle(generated);
     if (solved.status !== "solved" || !solved.solution) {
-      hintMessage.textContent = "Could not generate a board — try different settings.";
+      hintMessage.textContent = "Could not find a pure-logic board — try different settings.";
       isWorking = false;
       setPhase("ready");
       return;
     }
     applyBoard(generated, solved.solution, null);
-  } catch (e) {
-    hintMessage.textContent = `Could not generate a board (${e instanceof Error ? e.message : "try again"}).`;
+  } catch {
+    hintMessage.textContent = "Could not find a pure-logic board — try different settings.";
     isWorking = false;
     setPhase("ready");
   }
@@ -355,9 +338,10 @@ function dealScreenshot(file: File): void {
 function restoreSlot(slot: Slot): void {
   puzzle = slot.puzzle;
   fullSolution = slot.solution;
-  availableHints = [...slot.hints];
-  hintsComputed = slot.hintsComputed;
-  shownHints = new Set(slot.shown);
+  // Hint state is runtime-only: recompute lazily on the next Hint click.
+  availableHints = [];
+  hintsComputed = false;
+  shownHints = new Set();
   activeHint = null;
   undoStack = [...slot.undo];
   puzzleSolved = slot.solved;
@@ -505,18 +489,9 @@ function editCell(cell: HTMLElement): void {
   persistActive();
 }
 
-async function revealHint(): Promise<void> {
+function revealHint(): void {
   if (!puzzle || !fullSolution || hintButton.disabled) return;
   if (!hintsComputed) {
-    hintButton.disabled = true;
-    hintMessage.textContent = "Thinking…";
-    // Yield so the message paints before the blocking search runs.
-    await new Promise((resolve) => setTimeout(resolve, 0));
-    // The board may have changed while yielding (new daily dealt).
-    if (!puzzle || !fullSolution) {
-      refreshHintButton();
-      return;
-    }
     availableHints = findHints(puzzle);
     hintsComputed = true;
     if (availableHints.length === 0) {
@@ -556,7 +531,7 @@ function onBoardToggle(detail: BoardDetail): void {
 function attachListeners(): void {
   if (listenersAttached) return;
   listenersAttached = true;
-  hintButton.addEventListener("click", () => void revealHint());
+  hintButton.addEventListener("click", revealHint);
   undoButton.addEventListener("click", undo);
   boardEvents.on(onBoardToggle);
   boardGrid.addEventListener("click", (e) => {
