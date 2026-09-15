@@ -58,6 +58,19 @@ function makeNode() {
     getAttribute(k) {
       return node["attr-" + k] ?? null;
     },
+    hasAttribute(k) {
+      return ("attr-" + k) in node;
+    },
+    removeAttribute(k) {
+      delete node["attr-" + k];
+    },
+    toggleAttribute(k, force) {
+      const has = ("attr-" + k) in node;
+      const on = force === undefined ? !has : Boolean(force);
+      if (on) node["attr-" + k] = "";
+      else delete node["attr-" + k];
+      return on;
+    },
     addEventListener(name, cb) {
       listeners.set(name, [...(listeners.get(name) ?? []), cb]);
     },

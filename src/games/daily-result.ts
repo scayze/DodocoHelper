@@ -8,6 +8,7 @@
  */
 
 import { LEADERBOARD_GAMES, isLeaderboardGame, isValidDay, type LeaderboardGameId } from "../leaderboard/types.js";
+import { storageSet, storageReadJson } from "../storage.js";
 
 export interface DailyResult {
   /** UTC day key `YYYY-MM-DD` of the finished daily. */
@@ -51,14 +52,9 @@ function isDailyResult(value: unknown): value is DailyResult {
 }
 
 export function loadDailyResult(game: LeaderboardGameId): DailyResult | null {
-  try {
-    const raw = localStorage.getItem(dailyResultKey(game));
-    if (!raw) return null;
-    const parsed = JSON.parse(raw) as unknown;
-    return isDailyResult(parsed) ? parsed : null;
-  } catch {
-    return null;
-  }
+  const parsed = storageReadJson(dailyResultKey(game));
+  if (parsed === null) return null;
+  return isDailyResult(parsed) ? parsed : null;
 }
 
 /** Record the first finish of a daily; later finishes must not overwrite it. */
@@ -74,11 +70,7 @@ export function saveDailyResult(
     durationMs: Math.max(1, Math.round(result.durationMs)),
     moves: Math.max(0, Math.round(result.moves)),
   };
-  try {
-    localStorage.setItem(dailyResultKey(game), JSON.stringify(stored));
-  } catch {
-    // Private mode etc: the server one-shot rule still guards resubmits.
-  }
+  storageSet(dailyResultKey(game), JSON.stringify(stored));
   return stored;
 }
 

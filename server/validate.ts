@@ -5,6 +5,7 @@ import {
   MAX_NAME_LENGTH,
   MIN_NAME_LENGTH,
   isLeaderboardGame,
+  normalizeDisplayName,
   winScoreFor,
   type LeaderboardGameId,
   type ScoreSubmit,
@@ -14,11 +15,8 @@ export interface ValidSubmit extends ScoreSubmit {
   game: LeaderboardGameId;
 }
 
-/** Trim + collapse whitespace; never throws. */
-export function normalizeName(raw: unknown): string {
-  if (typeof raw !== "string") return "";
-  return raw.trim().replace(/\s+/g, " ").slice(0, MAX_NAME_LENGTH + 10);
-}
+/** Back-compat alias: single implementation lives in leaderboard/types.ts. */
+export const normalizeName = normalizeDisplayName;
 
 function isInt(n: unknown): n is number {
   return typeof n === "number" && Number.isInteger(n);

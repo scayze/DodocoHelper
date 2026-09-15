@@ -25,12 +25,7 @@ import {
 import { createModeShell, type ModeShell } from "../mode-shell.js";
 import { loadBoardState, saveBoardState } from "../persist.js";
 import { isSeasonsStored, type SeasonsStored } from "./stored.js";
-
-function el<T extends HTMLElement>(id: string): T {
-  const node = document.getElementById(id);
-  if (!node) throw new Error(`missing element #${id}`);
-  return node as T;
-}
+import { el } from "../dom.js";
 
 /** Shared FLIP timing for falls and column slides. */
 const FLIP_MS = 240;

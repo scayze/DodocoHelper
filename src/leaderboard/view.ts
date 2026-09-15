@@ -14,6 +14,7 @@ import {
 import { winEvents } from "./report.js";
 import { showToast } from "./toast.js";
 import { createEventHub } from "../events.js";
+import { elOrNull as el } from "../games/dom.js";
 import {
   formatScore,
   isValidDay,
@@ -28,10 +29,6 @@ export const boardEvents = createEventHub<BoardDetail>();
 export interface BoardDetail {
   game: LeaderboardGameId;
   showingBoard: boolean;
-}
-
-function el<T extends HTMLElement>(id: string): T | null {
-  return document.getElementById(id) as T | null;
 }
 
 function gameLabel(game: LeaderboardGameId): string {

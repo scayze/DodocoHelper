@@ -27,12 +27,7 @@ import {
 } from "./logic.js";
 import { generateMines } from "./generator.js";
 import { computeAdjacent, type Opening } from "./solver.js";
-
-function el<T extends HTMLElement>(id: string): T {
-  const node = document.getElementById(id);
-  if (!node) throw new Error(`missing element #${id}`);
-  return node as T;
-}
+import { el } from "../dom.js";
 
 const NUMBER_COLORS = [
   "",

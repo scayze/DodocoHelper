@@ -1,4 +1,7 @@
 #!/usr/bin/env node
+// Render the per-game panels in index.html from one template.
+// The template carries __GAME_ID__ / __GAME_LABEL__ tokens (never a real
+// game name), so adding a game can't corrupt unrelated words.
 import fs from "node:fs";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
@@ -67,18 +70,21 @@ const undoButton = (id) => `
                   </button>`;
 
 function renderPanel(game) {
-  let panel = fs.readFileSync(PANEL_TEMPLATE, "utf8")
-    .replaceAll("seasons", game.id)
-    .replaceAll("Seasons", game.label);
+  const raw = fs.readFileSync(PANEL_TEMPLATE, "utf8");
+  if (!raw.includes("__GAME_ID__")) throw new Error(`Template missing __GAME_ID__ token`);
+  let panel = raw
+    .replaceAll("__GAME_ID__", game.id)
+    .replaceAll("__GAME_LABEL__", game.label);
 
-  const settingsStart = panel.indexOf(`                  <div id="${game.id}-settings"`);
+  const settingsOpen = `                  <div id="${game.id}-settings"`;
+  const settingsStart = panel.indexOf(settingsOpen);
   // Anchor on the settings close + stage close pair: the header row inside
   // ends with an 18-space </div> too, so a single-close search would stop early.
   const settingsEnd = panel.indexOf("\n                  </div>\n                </div>", settingsStart);
   if (settingsStart < 0 || settingsEnd < 0) {
     throw new Error(`Could not locate settings panel for ${game.id}`);
   }
-  panel = `${panel.slice(0, settingsStart)}                  <div id="${game.id}-settings" class="settings-overlay hidden flex-col gap-[9px] rounded-xl bg-white/70 px-[18px] py-[13px] shadow-sm">${settingsHeader}${game.settings}\n                  </div>${panel.slice(settingsEnd + "\n                  </div>".length)}`;
+  panel = `${panel.slice(0, settingsStart)}${settingsOpen} class="settings-overlay hidden flex-col gap-[9px] rounded-xl bg-white/70 px-[18px] py-[13px] shadow-sm">${settingsHeader}${game.settings}\n                  </div>${panel.slice(settingsEnd + "\n                  </div>".length)}`;
 
   if (game.undo) {
     const settingsToggle = panel.indexOf(`                  <button id="${game.id}-settings-toggle"`);

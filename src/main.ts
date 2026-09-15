@@ -9,18 +9,13 @@ import {
 } from "./leaderboard/api.js";
 import { initGameLeaderboard, initNameGate } from "./leaderboard/view.js";
 import { showToast } from "./leaderboard/toast.js";
+import { el } from "./games/dom.js";
 
 initNameGate();
 initGameLeaderboard("crowns", "crowns");
 initGameLeaderboard("minesweeper", "mines");
 initGameLeaderboard("seasons", "seasons");
 initGameLeaderboard("tents", "tents");
-
-function el<T extends HTMLElement>(id: string): T {
-  const node = document.getElementById(id);
-  if (!node) throw new Error(`missing element #${id}`);
-  return node as T;
-}
 
 const tabButtons = {
   home: el<HTMLButtonElement>("nav-home"),

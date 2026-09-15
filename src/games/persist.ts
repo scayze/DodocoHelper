@@ -13,6 +13,7 @@
  */
 
 import { isValidDay, LEADERBOARD_GAMES } from "../leaderboard/types.js";
+import { storageGet, storageRemove, storageSet, storageReadJson } from "../storage.js";
 import type { GameId } from "./types.js";
 import type { PlayMode } from "./mode.js";
 
@@ -102,17 +103,9 @@ export function loadBoardState<TSlot>(
   isState: (value: unknown) => value is TSlot,
   today: string,
 ): RestoredBoard<TSlot> | null {
-  let raw: string | null = null;
-  try {
-    raw = localStorage.getItem(boardStateKey(game, mode));
-  } catch {
-    return null;
-  }
-  if (raw === null) return null;
-  let parsed: unknown;
-  try {
-    parsed = JSON.parse(raw);
-  } catch {
+  if (storageGet(boardStateKey(game, mode)) === null) return null;
+  const parsed: unknown = storageReadJson(boardStateKey(game, mode));
+  if (parsed === null) {
     clearBoardState(game, mode);
     return null;
   }
@@ -133,21 +126,10 @@ export function saveBoardState<TSlot>(
   mode: PlayMode,
   payload: StoredBoard<TSlot>,
 ): void {
-  try {
-    localStorage.setItem(
-      boardStateKey(game, mode),
-      JSON.stringify({ v: BOARD_STATE_VERSION, ...payload }),
-    );
-  } catch {
-    // Private mode etc: board state simply doesn't persist.
-  }
+  storageSet(boardStateKey(game, mode), JSON.stringify({ v: BOARD_STATE_VERSION, ...payload }));
 }
 
 /** Drop a stored board (corrupt payloads, midnight rollover cleanup). */
 export function clearBoardState(game: GameId, mode: PlayMode): void {
-  try {
-    localStorage.removeItem(boardStateKey(game, mode));
-  } catch {
-    // Best-effort.
-  }
+  storageRemove(boardStateKey(game, mode));
 }

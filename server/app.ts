@@ -24,8 +24,18 @@ function sendJson(res: ServerResponse, status: number, data: unknown): void {
 /** Tiny sliding-window limiter: max `max` hits per `windowMs` per key. */
 export function createLimiter(max: number, windowMs: number): {
   hit(key: string, now?: number): boolean;
+  size(): number;
 } {
   const hits = new Map<string, number[]>();
+  function sweep(now: number): void {
+    // Bound memory: drop fully-expired keys. Runs at most once per
+    // window-full map (amortized), so per-request cost stays O(1).
+    if (hits.size <= 5000) return;
+    for (const [k, list] of hits) {
+      if (list.every((t) => now - t >= windowMs)) hits.delete(k);
+      if (hits.size <= 4000) break;
+    }
+  }
   return {
     hit(key: string, now: number = Date.now()): boolean {
       const list = (hits.get(key) ?? []).filter((t) => now - t < windowMs);
@@ -35,7 +45,11 @@ export function createLimiter(max: number, windowMs: number): {
       }
       list.push(now);
       hits.set(key, list);
+      sweep(now);
       return true;
+    },
+    size(): number {
+      return hits.size;
     },
   };
 }

@@ -102,6 +102,12 @@ export function shiftDayKey(day: string, deltaDays: number): string {
   return dt.toISOString().slice(0, 10);
 }
 
+/** Trim + collapse whitespace; shared by client gate and server validation. */
+export function normalizeDisplayName(raw: unknown): string {
+  if (typeof raw !== "string") return "";
+  return raw.trim().replace(/\s+/g, " ");
+}
+
 export function isValidDay(value: unknown): value is string {
   if (typeof value !== "string" || !DAY_RE.test(value)) return false;
   const [y, m, d] = value.split("-").map(Number);

@@ -3,11 +3,13 @@ import {
   MIN_NAME_LENGTH,
   dayKeyUTC,
   isLeaderboardGame,
+  normalizeDisplayName,
   winScoreFor,
   type LeaderboardGameId,
   type LeaderboardResponse,
   type ScoreSubmit,
 } from "./types.js";
+import { storageGet, storageRemove, storageSet, storageReadJson } from "../storage.js";
 import { allDailyResultKeys } from "../games/daily-result.js";
 import { allBoardStateKeys } from "../games/persist.js";
 import { allEndlessKeys } from "../games/mode.js";
@@ -35,13 +37,7 @@ const DODOCO_KEYS = [
 
 /** Remove every dodoco-owned key so a visitor can "reregister" from scratch. */
 export function resetDodocoStorage(): void {
-  for (const key of DODOCO_KEYS) {
-    try {
-      localStorage.removeItem(key);
-    } catch {
-      // Private mode etc: keep going; reload still resets the session view.
-    }
-  }
+  for (const key of DODOCO_KEYS) storageRemove(key);
 }
 
 export interface QueuedWin {
@@ -60,29 +56,18 @@ export interface QueuedWin {
 }
 
 export function getClientId(): string {
-  let id = "";
-  try {
-    id = localStorage.getItem(CLIENT_KEY) ?? "";
-  } catch {
-    id = "";
-  }
+  const id = storageGet(CLIENT_KEY) ?? "";
   if (/^[0-9a-f-]{36}$/i.test(id)) return id.toLowerCase();
   const fresh =
     typeof crypto !== "undefined" && "randomUUID" in crypto
       ? crypto.randomUUID()
       : `00000000-0000-4000-8000-${Date.now().toString(16).padStart(12, "0").slice(-12)}`;
-  try {
-    localStorage.setItem(CLIENT_KEY, fresh);
-  } catch {
-    // Private mode: still return a stable id for this session.
-  }
+  storageSet(CLIENT_KEY, fresh);
   return fresh;
 }
 
-/** Collapse whitespace like the server validator does. */
-export function normalizeDisplayName(raw: string): string {
-  return raw.trim().replace(/\s+/g, " ");
-}
+/** Re-exported from the shared contract so client and server stay identical. */
+export { normalizeDisplayName } from "./types.js";
 
 export function isValidDisplayName(raw: string): boolean {
   const name = normalizeDisplayName(raw);
@@ -95,12 +80,7 @@ export function isValidDisplayName(raw: string): boolean {
 
 /** Saved name, or "" when absent, invalid, or unreadable (counts as nameless). */
 export function getDisplayName(): string {
-  let raw = "";
-  try {
-    raw = localStorage.getItem(NAME_KEY) ?? "";
-  } catch {
-    return "";
-  }
+  const raw = storageGet(NAME_KEY) ?? "";
   const name = normalizeDisplayName(raw);
   return isValidDisplayName(name) ? name : "";
 }
@@ -110,11 +90,7 @@ export function hasValidName(): boolean {
 }
 
 export function setDisplayName(name: string): void {
-  try {
-    localStorage.setItem(NAME_KEY, normalizeDisplayName(name));
-  } catch {
-    // Ignore storage failures; the name still applies to this session's submits.
-  }
+  storageSet(NAME_KEY, normalizeDisplayName(name));
   if (typeof window !== "undefined") {
     nameEvents.dispatch();
   }
@@ -147,32 +123,22 @@ function normalizeQueuedWin(w: QueuedWin): QueuedWin {
 }
 
 function readQueue(): QueuedWin[] {
-  try {
-    const raw = localStorage.getItem(QUEUE_KEY);
-    if (!raw) return [];
-    const parsed = JSON.parse(raw) as {
-      version?: number;
-      wins?: unknown;
-    };
-    if (parsed.version !== QUEUE_VERSION || !Array.isArray(parsed.wins)) return [];
-    return parsed.wins.filter(isQueuedWin);
-  } catch {
-    return [];
-  }
+  const parsed = storageReadJson(QUEUE_KEY) as {
+    version?: number;
+    wins?: unknown;
+  } | null;
+  if (!parsed || parsed.version !== QUEUE_VERSION || !Array.isArray(parsed.wins)) return [];
+  return parsed.wins.filter(isQueuedWin);
 }
 
 function writeQueue(wins: QueuedWin[]): void {
-  try {
-    localStorage.setItem(QUEUE_KEY, JSON.stringify({ version: QUEUE_VERSION, wins }));
-  } catch {
-    // Ignore; the win still counts for this session's flush attempt.
-  }
+  storageSet(QUEUE_KEY, JSON.stringify({ version: QUEUE_VERSION, wins }));
 }
 
 /** Fold a legacy single pending win into the queue (once), then drop the key. */
 function migrateLegacy(): QueuedWin[] {
   try {
-    const raw = localStorage.getItem(LEGACY_KEY);
+    const raw = storageGet(LEGACY_KEY);
     if (!raw) return [];
     const parsed = JSON.parse(raw) as {
       game?: unknown;
@@ -198,11 +164,7 @@ function migrateLegacy(): QueuedWin[] {
   } catch {
     return [];
   } finally {
-    try {
-      localStorage.removeItem(LEGACY_KEY);
-    } catch {
-      // Ignore.
-    }
+    storageRemove(LEGACY_KEY);
   }
 }
 
@@ -256,11 +218,7 @@ export function dropQueuedWin(game: LeaderboardGameId): void {
 }
 
 export function clearQueuedWins(): void {
-  try {
-    localStorage.removeItem(QUEUE_KEY);
-  } catch {
-    // Ignore.
-  }
+  storageRemove(QUEUE_KEY);
 }
 
 export function todayUTC(): string {

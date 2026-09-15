@@ -5,6 +5,7 @@
  */
 
 import { LEADERBOARD_GAMES } from "../leaderboard/types.js";
+import { storageGet, storageSet, storageReadJson } from "../storage.js";
 import type { GameId } from "./types.js";
 
 export type PlayMode = "daily" | "endless";
@@ -123,24 +124,14 @@ export function loadEndlessSettings<G extends GameId>(
   game: G,
 ): (typeof DEFAULTS)[G] {
   const defaults = DEFAULTS[game];
-  try {
-    const raw = localStorage.getItem(`${KEY_PREFIX}${game}`);
-    if (!raw) return { ...defaults };
-    const parsed = JSON.parse(raw) as Partial<(typeof DEFAULTS)[G]>;
-    if (typeof parsed !== "object" || parsed === null) return { ...defaults };
-    const clamper = CLAMPERS[game] as (p: object) => (typeof DEFAULTS)[G];
-    return clamper({ ...defaults, ...parsed });
-  } catch {
-    return { ...defaults };
-  }
+  const parsed = storageReadJson(`${KEY_PREFIX}${game}`) as Partial<(typeof DEFAULTS)[G]> | null;
+  if (typeof parsed !== "object" || parsed === null) return { ...defaults };
+  const clamper = CLAMPERS[game] as (p: object) => (typeof DEFAULTS)[G];
+  return clamper({ ...defaults, ...parsed });
 }
 
 export function saveEndlessSettings(game: GameId, settings: EndlessSettings): void {
-  try {
-    localStorage.setItem(`${KEY_PREFIX}${game}`, JSON.stringify(settings));
-  } catch {
-    // Private mode etc: settings simply don't persist.
-  }
+  storageSet(`${KEY_PREFIX}${game}`, JSON.stringify(settings));
 }
 
 /**
@@ -162,17 +153,9 @@ export function allEndlessKeys(): string[] {
 }
 
 export function isEndlessUnlocked(gameId: GameId, day: string): boolean {
-  try {
-    return localStorage.getItem(`${UNLOCK_KEY_PREFIX}${gameId}`) === day;
-  } catch {
-    return false;
-  }
+  return storageGet(`${UNLOCK_KEY_PREFIX}${gameId}`) === day;
 }
 
 export function setEndlessUnlocked(gameId: GameId, day: string): void {
-  try {
-    localStorage.setItem(`${UNLOCK_KEY_PREFIX}${gameId}`, day);
-  } catch {
-    // Private mode etc: unlock simply lasts the session.
-  }
+  storageSet(`${UNLOCK_KEY_PREFIX}${gameId}`, day);
 }
