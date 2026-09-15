@@ -64,11 +64,15 @@ const screenshotBtn = el<HTMLButtonElement>("crowns-screenshot");
 const fileInput = el<HTMLInputElement>("crowns-file-input");
 
 let puzzle: NormalizedPuzzle | null = null;
+/** The solution for the untouched puzzle; kept even when the current marks conflict. */
 let fullSolution: string[][] | null = null;
+/** Whether the player's current marks can still be completed. */
+let boardPlayable = false;
 let isWorking = false;
 let availableHints: Hint[] = [];
 let shownHints = new Set<string>();
 let activeHint: Hint | null = null;
+let mistakeCells = new Set<string>();
 let undoStack: Array<{ r: number; c: number; prev: string }> = [];
 let puzzleSolved = false;
 /** UTC day key of the currently dealt daily board; re-deals at midnight rollover. */
@@ -195,10 +199,12 @@ function persistActive(): void {
 function applyBoard(next: NormalizedPuzzle, solution: string[][], day: string | null): void {
   puzzle = next;
   fullSolution = solution;
+  boardPlayable = true;
   availableHints = [];
   hintsComputed = false;
   shownHints = new Set<string>();
   activeHint = null;
+  mistakeCells = new Set<string>();
   undoStack = [];
   puzzleSolved = false;
   dailyDay = day;
@@ -332,11 +338,14 @@ function dealScreenshot(file: File): void {
 function restoreSlot(slot: Slot): void {
   puzzle = slot.puzzle;
   fullSolution = slot.solution;
+  // Playability is derived from the restored marks rather than persisted.
+  boardPlayable = solvePuzzle(slot.puzzle).status === "solved";
   // Hint state is runtime-only: recompute lazily on the next Hint click.
   availableHints = [];
   hintsComputed = false;
   shownHints = new Set();
   activeHint = null;
+  mistakeCells = new Set<string>();
   undoStack = [...slot.undo];
   puzzleSolved = slot.solved;
   dailyDay = slot.day;
@@ -452,20 +461,18 @@ function describeBoard(): string {
 function recomputeEditedBoard(): void {
   if (!puzzle) return;
   const solved = solvePuzzle(puzzle);
-  fullSolution = solved.status === "solved" ? solved.solution : null;
+  boardPlayable = solved.status === "solved";
   // Invalidate the hint cache; hints are recomputed lazily on Hint click
   // because findHints runs a solver search per unknown cell.
   availableHints = [];
   hintsComputed = false;
   shownHints.clear();
   activeHint = null;
+  mistakeCells = new Set<string>();
   paintBoard(boardGrid, puzzle, new Set(), null, puzzle.initial);
   boardGrid.setAttribute("aria-label", describeBoard());
-  if (fullSolution) {
-    hintMessage.textContent = "";
-  } else {
-    hintMessage.textContent = "These marks cannot all be satisfied. Change a queen or cross to continue.";
-  }
+  // An unsatisfiable board is reported only when the player asks for a hint.
+  hintMessage.textContent = "";
   refreshHintButton();
 }
 
@@ -483,8 +490,31 @@ function editCell(cell: HTMLElement): void {
   persistActive();
 }
 
+function findMistakeCells(): Set<string> {
+  const mistakes = new Set<string>();
+  if (!puzzle || !fullSolution) return mistakes;
+  for (let r = 0; r < puzzle.size; r++) {
+    for (let c = 0; c < puzzle.size; c++) {
+      const mark = puzzle.initial[r][c];
+      if (mark !== "?" && mark !== fullSolution[r][c]) mistakes.add(`${r},${c}`);
+    }
+  }
+  return mistakes;
+}
+
 function revealHint(): void {
   if (!puzzle || !fullSolution || hintButton.disabled) return;
+  if (!boardPlayable) {
+    mistakeCells = findMistakeCells();
+    hintMessage.textContent = mistakeCells.size > 0
+      ? `These marks cannot all be satisfied. Check ${[...mistakeCells].map((position) => {
+        const [r, c] = position.split(",").map(Number);
+        return `R${r + 1}C${c + 1}`;
+      }).join(", ")}.`
+      : "These marks cannot all be satisfied. Change a queen or cross to continue.";
+    paintBoard(boardGrid, puzzle, new Set(), null, puzzle.initial, mistakeCells);
+    return;
+  }
   if (!hintsComputed) {
     availableHints = findHints(puzzle);
     hintsComputed = true;

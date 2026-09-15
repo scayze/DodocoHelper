@@ -77,6 +77,7 @@ export function paintBoard(
   crowns: ReadonlySet<string>,
   hint: Hint | null = null,
   marks: ReadonlyArray<ReadonlyArray<string>> = puzzle.initial,
+  mistakes: ReadonlySet<string> = new Set(),
 ): void {
   const n = puzzle.size;
   for (let r = 0; r < n; r++) {
@@ -92,6 +93,7 @@ export function paintBoard(
       cell.classList.toggle("hint-decisive", Boolean(hint?.decisiveCells.includes(position)));
       cell.classList.toggle("hint-cross", hint?.kind === "cross" && Boolean(hint.decisiveCells.includes(position)));
       cell.classList.toggle("hint-queen", hint?.kind === "queen" && Boolean(hint.decisiveCells.includes(position)));
+      cell.classList.toggle("mistake", mistakes.has(position));
       cell.classList.toggle("has-x", !crowned && mark === ".");
       const state = mark === "C" ? "queen" : mark === "." ? "cross" : "unmarked";
       cell.setAttribute("aria-label", `Row ${r + 1}, column ${c + 1}, ${state}`);

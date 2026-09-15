@@ -397,6 +397,11 @@ nav[aria-label="Primary"] .mode-btn svg {
   box-shadow: inset 0 0 0 3px #8b3f35, 0 0 0 3px rgba(255, 255, 255, 0.9);
 }
 
+.board-cell.mistake .crown-chip {
+  box-shadow: inset 0 0 0 3px #a33f35, 0 0 0 3px rgba(255, 235, 220, 0.95);
+  animation: hint-pulse 900ms ease-in-out infinite alternate;
+}
+
 /* Minesweeper owns its own grid (#mines-grid) and cells (.mine-cell built on
    .board-cell). The button is a transparent slot (never changes, so marks
    can't resize it); the creamy raised tile lives on .mine-chip. Revealed
