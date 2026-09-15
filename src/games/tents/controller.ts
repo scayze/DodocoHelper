@@ -48,6 +48,7 @@ export function createTentsGame(): GameInstance {
   const viewToggle = el<HTMLButtonElement>("tents-view-toggle");
   const lbView = el("tents-lb-view");
   const setSizeInput = el<HTMLInputElement>("tents-set-size");
+  const setTreesInput = el<HTMLInputElement>("tents-set-trees");
 
   let board: TentsBoard | null = null;
   let started = false;
@@ -308,14 +309,18 @@ export function createTentsGame(): GameInstance {
 
   /** Read settings inputs, clamp, persist, and echo the clamped values back. */
   function readSettings(): TentsEndlessSettings {
-    const clamped = clampTentsSettings({ size: setSizeInput.value });
+    const clamped = clampTentsSettings({ size: setSizeInput.value, trees: setTreesInput.value });
     saveEndlessSettings("tents", clamped);
     setSizeInput.value = String(clamped.size);
+    setTreesInput.value = String(clamped.trees);
+    // A size change can shrink the per-size tree cap; re-clamp already
+    // persisted trees against the new size.
     return clamped;
   }
 
   function fillSettingsInputs(s: TentsEndlessSettings): void {
     setSizeInput.value = String(s.size);
+    setTreesInput.value = String(s.trees);
   }
 
   /** Persist the active board so a reload can restore it (played state only). */
@@ -340,9 +345,9 @@ export function createTentsGame(): GameInstance {
     const s = readSettings();
     let levelData;
     try {
-      levelData = generateLevel(s.size, Math.random);
+      levelData = generateLevel(s.size, Math.random, s.trees);
     } catch {
-      message.textContent = "Could not generate a board — try a smaller size.";
+      message.textContent = "Could not generate a board — try a smaller size or fewer trees.";
       return;
     }
     board = createBoard(levelData);
@@ -437,6 +442,7 @@ export function createTentsGame(): GameInstance {
   boardEvents.on(onBoardToggle);
   modeShell.attachListeners();
   setSizeInput.addEventListener("change", readSettings);
+  setTreesInput.addEventListener("change", readSettings);
   fillSettingsInputs(loadEndlessSettings("tents"));
 
   return {

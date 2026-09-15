@@ -24,6 +24,7 @@ export interface SeasonsEndlessSettings {
 
 export interface TentsEndlessSettings {
   size: number;
+  trees: number;
 }
 
 export type EndlessSettings =
@@ -37,7 +38,7 @@ const KEY_PREFIX = "dodoco:endless:";
 export const MINES_DEFAULTS: MinesEndlessSettings = { size: 9, mines: 15 };
 export const CROWNS_DEFAULTS: CrownsEndlessSettings = { size: 9 };
 export const SEASONS_DEFAULTS: SeasonsEndlessSettings = { size: 10 };
-export const TENTS_DEFAULTS: TentsEndlessSettings = { size: 8 };
+export const TENTS_DEFAULTS: TentsEndlessSettings = { size: 8, trees: 13 };
 
 export const LIMITS = {
   mines: { size: [6, 12], mines: [1, 60] },
@@ -46,7 +47,7 @@ export const LIMITS = {
   // cannot produce them.
   crowns: { size: [9, 10] },
   seasons: { size: [6, 12] },
-  tents: { size: [5, 10] },
+  tents: { size: [5, 10], trees: [2, 23] },
 } as const;
 
 /** Clamp to int range; non-numbers fall back (then get clamped too). */
@@ -60,6 +61,17 @@ export function clampInt(raw: unknown, min: number, max: number, fallback: numbe
 export interface RawSettings {
   size?: unknown;
   mines?: unknown;
+  trees?: unknown;
+}
+
+/** Kings-cap bound for a no-touch tent set: ceil(size/2)^2, minus slack. */
+export function tentsMaxForSize(size: number): number {
+  return Math.ceil(size / 2) ** 2 - 2;
+}
+
+/** Default tree count for a size (~1.6 per row, as the generator used). */
+export function defaultTreesForSize(size: number): number {
+  return Math.max(2, Math.min(Math.round(size * 1.6), tentsMaxForSize(size)));
 }
 
 export function clampMinesSettings(raw: RawSettings): MinesEndlessSettings {
@@ -83,9 +95,14 @@ export function clampSeasonsSettings(raw: RawSettings): SeasonsEndlessSettings {
 }
 
 export function clampTentsSettings(raw: RawSettings): TentsEndlessSettings {
-  return {
-    size: clampInt(raw.size, LIMITS.tents.size[0], LIMITS.tents.size[1], TENTS_DEFAULTS.size),
-  };
+  const size = clampInt(raw.size, LIMITS.tents.size[0], LIMITS.tents.size[1], TENTS_DEFAULTS.size);
+  // Missing/non-numeric trees falls back to the per-size default (legacy
+  // saves only carry size); numeric input is clamped to the per-size max.
+  const max = Math.max(2, tentsMaxForSize(size));
+  const trees = raw.trees === undefined
+    ? defaultTreesForSize(size)
+    : clampInt(raw.trees, 2, max, defaultTreesForSize(size));
+  return { size, trees };
 }
 
 const CLAMPERS = {

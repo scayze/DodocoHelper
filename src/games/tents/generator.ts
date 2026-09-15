@@ -110,20 +110,35 @@ function countsFrom(tents: boolean[][], size: number): { rows: number[]; cols: n
   return { rows, cols };
 }
 
-/** Generate a uniquely solvable level with `count` trees (tents). */
+/**
+ * Generate a uniquely solvable level. `count` overrides the default tree
+ * count (~1.6 per row); omitted keeps the historic default. Trees and
+ * tents are 1:1, so this is also the tent count.
+ */
 export function generateLevel(
   size = TENTS_DEFAULT_SIZE,
   rand: () => number = Math.random,
+  count?: number,
 ): TentsLevel {
   if (!Number.isInteger(size) || size < 2) {
     throw new Error(`Tents board size must be an integer >= 2, got ${size}`);
   }
-  // ~1.6 tents per row on the default board (≈13 on 8x8), capped so a
-  // no-touch tent set always fits: kings cap is ceil(size/2)^2.
-  const maxTents = Math.ceil(size / 2) ** 2;
-  const count = Math.max(2, Math.min(Math.round(size * 1.6), maxTents - 2));
+  // Capped so a no-touch tent set always fits: kings cap is ceil(size/2)^2.
+  const maxTents = Math.ceil(size / 2) ** 2 - 2;
+  let wanted: number;
+  if (count === undefined) {
+    // ~1.6 tents per row on the default board (≈13 on 8x8).
+    wanted = Math.max(2, Math.min(Math.round(size * 1.6), maxTents));
+  } else {
+    if (!Number.isInteger(count) || count < 2 || count > maxTents) {
+      throw new Error(
+        `Tents tree count must be an integer in [2, ${maxTents}] for size ${size}, got ${count}`,
+      );
+    }
+    wanted = count;
+  }
   for (let attempt = 0; attempt < 30; attempt++) {
-    const level = tryBuild(size, count, rand);
+    const level = tryBuild(size, wanted, rand);
     if (level) return level;
   }
   throw new Error("Failed to generate a tents level");

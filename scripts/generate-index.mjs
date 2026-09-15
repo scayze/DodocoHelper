@@ -40,6 +40,10 @@ const games = [
                   <label class="settings-row" for="tents-set-size">
                     <span>Board size</span>
                     <input id="tents-set-size" type="number" min="5" max="10" step="1" inputmode="numeric" />
+                  </label>
+                  <label class="settings-row" for="tents-set-trees">
+                    <span>Trees</span>
+                    <input id="tents-set-trees" type="number" min="2" max="23" step="1" inputmode="numeric" />
                   </label>`,
     undo: true,
   },

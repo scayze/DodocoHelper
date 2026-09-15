@@ -63,8 +63,17 @@ describe("endless settings clampers", () => {
   it("clamps seasons and tents sizes", () => {
     assert.deepEqual(clampSeasonsSettings({ size: 10 }), { size: 10 });
     assert.deepEqual(clampSeasonsSettings({ size: 3 }), { size: 6 });
-    assert.deepEqual(clampTentsSettings({ size: 8 }), { size: 8 });
-    assert.deepEqual(clampTentsSettings({ size: 20 }), { size: 10 });
+    assert.deepEqual(clampTentsSettings({ size: 8 }), { size: 8, trees: 13 });
+    assert.deepEqual(clampTentsSettings({ size: 20 }), { size: 10, trees: 16 });
+  });
+
+  it("clamps tents tree counts to the per-size cap", () => {
+    assert.deepEqual(clampTentsSettings({ size: 8, trees: 10 }), { size: 8, trees: 10 });
+    // 8x8 caps at ceil(8/2)^2 - 2 = 14.
+    assert.deepEqual(clampTentsSettings({ size: 8, trees: 99 }), { size: 8, trees: 14 });
+    assert.deepEqual(clampTentsSettings({ size: 5, trees: 99 }), { size: 5, trees: 7 });
+    assert.deepEqual(clampTentsSettings({ size: 8, trees: 0 }), { size: 8, trees: 2 });
+    assert.deepEqual(clampTentsSettings({ size: 8, trees: "nope" }), { size: 8, trees: 13 });
   });
 });
 

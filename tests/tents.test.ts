@@ -180,4 +180,13 @@ describe("tents generator", () => {
   it("rejects bad sizes", () => {
     assert.throws(() => generateLevel(1), /integer >= 2/);
   });
+
+  it("honors an explicit tree count and rejects out-of-range counts", () => {
+    const level = generateLevel(8, mulberry32(42), 6);
+    assert.equal(level.trees.flat().filter(Boolean).length, 6);
+    assert.equal(validateLevelData(level.trees, level.rowCounts, level.colCounts), null);
+    assert.equal(countSolutions(level.trees, level.rowCounts, level.colCounts, 2), 1);
+    assert.throws(() => generateLevel(8, mulberry32(1), 99), /tree count/);
+    assert.throws(() => generateLevel(8, mulberry32(1), 1), /tree count/);
+  });
 });
