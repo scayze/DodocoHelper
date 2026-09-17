@@ -38,6 +38,69 @@ export function createBoard(level: TentsLevel): TentsBoard {
   };
 }
 
+/** Direct set used by drag-paint strokes. Skips trees/bounds/finished boards and
+ *  tent cells (a grass sweep never clobbers a placed tent); returns false when
+ *  ignored or already at the target mark. */
+export function setMark(board: TentsBoard, r: number, c: number, mark: CellMark): boolean {
+  if (board.over) return false;
+  if (r < 0 || r >= board.size || c < 0 || c >= board.size) return false;
+  if (board.trees[r][c]) return false;
+  if (board.marks[r][c] === "tent") return false;
+  if (board.marks[r][c] === mark) return false;
+  if (mark === "tent") return false;
+  board.marks[r][c] = mark;
+  return true;
+}
+
+/** Drag-paint ("gray out") stroke state. Pure data; the controller owns the
+ *  DOM half (start element, pointer id). `seen` dedupes re-entered cells and
+ *  `changed` records prev marks so one Undo reverts the whole stroke. The
+ *  start cell is deliberately NOT pre-registered in `seen`: it gets painted
+ *  once the gesture becomes a real drag. */
+export interface PaintStroke {
+  target: CellMark;
+  changed: Array<{ r: number; c: number; prev: CellMark }>;
+  seen: Set<string>;
+  startKey: string;
+  moved: boolean;
+}
+
+/** Begin a stroke on (r, c); null when the cell can't start one (tree, tent,
+ *  out of bounds, finished board). Unknown starts paint grass, grass starts
+ *  erase back to unknown, tent starts stay tap-to-cycle. */
+export function createStroke(board: TentsBoard, r: number, c: number): PaintStroke | null {
+  if (board.over) return null;
+  if (r < 0 || r >= board.size || c < 0 || c >= board.size) return null;
+  if (board.trees[r][c]) return null;
+  const cur = board.marks[r][c];
+  if (cur === "tent") return null;
+  return {
+    target: cur === "grass" ? "unknown" : "grass",
+    changed: [],
+    seen: new Set<string>(),
+    startKey: `${r},${c}`,
+    moved: false,
+  };
+}
+
+/** Apply a stroke to one cell, recording the prev mark on change. Returns
+ *  true when the cell was marked. Tents are never clobbered (see setMark). */
+export function strokeCell(
+  board: TentsBoard,
+  stroke: PaintStroke,
+  r: number,
+  c: number,
+): boolean {
+  if (r < 0 || r >= board.size || c < 0 || c >= board.size) return false;
+  const key = `${r},${c}`;
+  if (stroke.seen.has(key)) return false;
+  stroke.seen.add(key);
+  const prev = board.marks[r][c];
+  if (!setMark(board, r, c, stroke.target)) return false;
+  stroke.changed.push({ r, c, prev });
+  return true;
+}
+
 /** Cycle unknown -> grass -> tent -> unknown. Trees are immutable; returns false when ignored. */
 export function toggleMark(board: TentsBoard, r: number, c: number): boolean {
   if (board.over) return false;

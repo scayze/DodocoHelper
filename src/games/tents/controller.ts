@@ -12,8 +12,10 @@ import {
   tentsInRow,
   totalTents,
   tentsPlaced,
+  createStroke,
+  strokeCell,
   toggleMark,
-  type CellMark,
+  type PaintStroke,
   type TentsBoard,
 } from "./logic.js";
 import { generateLevel } from "./generator.js";
@@ -26,7 +28,7 @@ import {
 } from "../mode.js";
 import { createModeShell } from "../mode-shell.js";
 import { loadBoardState, saveBoardState } from "../persist.js";
-import { isTentsStored, type TentsStored } from "./stored.js";
+import { isTentsStored, type TentsStored, type TentsUndoEntry } from "./stored.js";
 import { el } from "../dom.js";
 
 export function createTentsGame(): GameInstance {
@@ -54,15 +56,16 @@ export function createTentsGame(): GameInstance {
   const runTimer = createRunTimer();
   let moveCount = 0;
   let winReported = false;
-  /** Mark history for the unified Undo button (unknown/grass/tent steps). */
-  let undoStack: Array<{ r: number; c: number; prev: CellMark }> = [];
+  /** Mark history for the unified Undo button. Entries are single taps or
+   *  whole drag-paint strokes (undone atomically). */
+  let undoStack: TentsUndoEntry[] = [];
 
   const endlessTimer = createRunTimer();
   /** Stashed per-mode play state; working vars above always mirror the active mode. */
   interface Slot {
     board: TentsBoard;
     moveCount: number;
-    undoStack: Array<{ r: number; c: number; prev: CellMark }>;
+    undoStack: TentsUndoEntry[];
     winReported: boolean;
     day: string | null;
     timerLive: boolean;
@@ -241,6 +244,7 @@ export function createTentsGame(): GameInstance {
   }
 
   function buildGrid(): void {
+    cancelStroke();
     if (!board) return;
     const n = board.size;
     grid.style.gridTemplateColumns = `repeat(${n + 1}, minmax(0, 1fr))`;
@@ -393,11 +397,18 @@ export function createTentsGame(): GameInstance {
   }
 
 
-  function activateCell(cell: HTMLElement): void {
-    if (!started || !board || board.over) return;
+  function cellCoords(cell: HTMLElement): [number, number] | null {
     const r = Number(cell.dataset.row);
     const c = Number(cell.dataset.col);
-    if (!Number.isInteger(r) || !Number.isInteger(c)) return;
+    if (!Number.isInteger(r) || !Number.isInteger(c)) return null;
+    return [r, c];
+  }
+
+  function activateCell(cell: HTMLElement): void {
+    if (!started || !board || board.over) return;
+    const coords = cellCoords(cell);
+    if (!coords) return;
+    const [r, c] = coords;
     if (r < 0 || r >= board.size || c < 0 || c >= board.size) return;
     if (board.trees[r][c]) return;
     undoStack.push({ r, c, prev: board.marks[r][c] });
@@ -415,19 +426,153 @@ export function createTentsGame(): GameInstance {
 
   function undo(): void {
     if (!board || board.over || undoStack.length === 0 || undoButton.disabled) return;
+    cancelStroke();
     const last = undoStack.pop()!;
-    board.marks[last.r][last.c] = last.prev;
+    const cells = "stroke" in last ? last.stroke : [last];
+    for (const s of cells) {
+      if (s.r >= 0 && s.r < board.size && s.c >= 0 && s.c < board.size) {
+        board.marks[s.r][s.c] = s.prev;
+      }
+    }
     checkWin(board);
     paint();
     setStatus();
-    const node = grid.children[(last.r + 1) * (board.size + 1) + (last.c + 1)] as
+    const focusCell = cells[cells.length - 1]!;
+    const node = grid.children[(focusCell.r + 1) * (board.size + 1) + (focusCell.c + 1)] as
       | HTMLElement
       | undefined;
     node?.focus({ preventScroll: true });
     persistActive();
   }
 
+  // ---- Drag-paint ("gray out") strokes ----
+  // Press-and-drag paints grass (or erases it when the stroke starts on a
+  // grass cell). A press that never leaves its starting cell marks nothing
+  // mid-gesture; on release it runs the legacy single-tap cycle in
+  // activateCell, exactly as if simply tapped. Tent cells are never clobbered.
+  /** Live stroke: pure PaintStroke state plus its DOM/pointer half. */
+  interface ActiveStroke extends PaintStroke {
+    startCell: HTMLElement;
+    pointerId: number;
+  }
+  let stroke: ActiveStroke | null = null;
+  /** Set after a committed stroke so the trailing click doesn't re-toggle. */
+  let suppressClick = false;
+
+  function cancelStroke(): void {
+    if (!stroke) return;
+    stroke = null;
+    grid.classList.remove("is-painting");
+  }
+
+  function cellFromPoint(x: number, y: number): HTMLElement | null {
+    if (typeof document === "undefined" || !document.elementFromPoint) return null;
+    const t = document.elementFromPoint(x, y) as HTMLElement | null;
+    const cell = t?.closest?.("[data-row][data-col]") as HTMLElement | null;
+    return cell && grid.contains(cell) ? cell : null;
+  }
+
+  function applyStrokeTo(cell: HTMLElement): void {
+    if (!stroke || !board) return;
+    const coords = cellCoords(cell);
+    if (!coords) return;
+    if (strokeCell(board, stroke, coords[0], coords[1])) paint();
+  }
+
+  function commitStroke(endCell: HTMLElement | null): void {
+    if (!stroke) return;
+    const done = stroke;
+    stroke = null;
+    grid.classList.remove("is-painting");
+    if (!board) return;
+    // Any real drag suppresses the trailing click, even a no-op one, so a
+    // paint gesture never ends with a surprise tap-cycle on the end cell.
+    if (!done.moved) return;
+    suppressClick = true;
+    if (done.changed.length === 0) return;
+    undoStack.push({ stroke: done.changed });
+    moveCount += done.changed.length;
+    checkWin(board);
+    paint();
+    setStatus();
+    (endCell ?? done.startCell).focus({ preventScroll: true });
+    persistActive();
+  }
+
+  function onPointerDown(e: PointerEvent): void {
+    if (e.button !== undefined && e.button !== 0) return;
+    if (stroke) return;
+    const cell = (e.target as HTMLElement).closest<HTMLElement>("[data-row][data-col]");
+    if (!cell || !grid.contains(cell)) return;
+    if (!started || !board || board.over) return;
+    const coords = cellCoords(cell);
+    if (!coords) return;
+    const [r, c] = coords;
+    // Trees, tents, and finished boards can't start a stroke (tents keep
+    // tap-to-cycle): createStroke returns null for all of them.
+    const state = createStroke(board, r, c);
+    if (!state) return;
+    stroke = { ...state, pointerId: e.pointerId, startCell: cell };
+    grid.classList.add("is-painting");
+    try {
+      grid.setPointerCapture(e.pointerId);
+    } catch {
+      /* no-op: capture is best-effort */
+    }
+  }
+
+  function onPointerMove(e: PointerEvent): void {
+    if (!stroke || e.pointerId !== stroke.pointerId) return;
+    if (!board || board.over) {
+      cancelStroke();
+      return;
+    }
+    const cell = cellFromPoint(e.clientX, e.clientY);
+    if (!cell) return;
+    const coords = cellCoords(cell);
+    if (!coords) return;
+    const key = `${coords[0]},${coords[1]}`;
+    if (!stroke.moved) {
+      if (key === stroke.startKey) return;
+      stroke.moved = true;
+      // A real stroke: include the start cell, then the entered cell.
+      applyStrokeTo(stroke.startCell);
+      applyStrokeTo(cell);
+      return;
+    }
+    applyStrokeTo(cell);
+  }
+
+  function onPointerUp(e: PointerEvent): void {
+    if (!stroke || e.pointerId !== stroke.pointerId) return;
+    if (!stroke.moved) {
+      // Tap: the press never left its starting cell, so nothing was marked
+      // mid-gesture. Apply the legacy single-cell cycle on release. This
+      // runs here rather than in the trailing click because pointer capture
+      // retargets that click to the grid, where the cell can't be resolved.
+      const start = stroke.startCell;
+      cancelStroke();
+      suppressClick = true;
+      activateCell(start);
+      return;
+    }
+    const cell = cellFromPoint(e.clientX, e.clientY);
+    commitStroke(cell);
+  }
+
+  function onPointerCancel(e: PointerEvent): void {
+    if (!stroke || e.pointerId !== stroke.pointerId) return;
+    // Commit the partial stroke so work isn't lost on interruptions.
+    const cell = cellFromPoint(e.clientX, e.clientY);
+    if (stroke.moved) commitStroke(cell);
+    else cancelStroke();
+  }
+
   function onClick(e: MouseEvent): void {
+    if (suppressClick) {
+      suppressClick = false;
+      return;
+    }
     const cell = (e.target as HTMLElement).closest<HTMLElement>("[data-row][data-col]");
     if (cell && grid.contains(cell)) activateCell(cell);
   }
@@ -442,6 +587,10 @@ export function createTentsGame(): GameInstance {
 
   grid.addEventListener("click", onClick);
   grid.addEventListener("keydown", onKey);
+  grid.addEventListener("pointerdown", onPointerDown);
+  grid.addEventListener("pointermove", onPointerMove);
+  grid.addEventListener("pointerup", onPointerUp);
+  grid.addEventListener("pointercancel", onPointerCancel);
   undoButton.addEventListener("click", undo);
   boardEvents.on(onBoardToggle);
   settingsEvents.on(onSettingsToggle);
@@ -479,6 +628,7 @@ export function createTentsGame(): GameInstance {
       modeShell.paintMode();
     },
     unmount(): void {
+      cancelStroke();
       pauseClock();
       root.classList.add("hidden");
     },

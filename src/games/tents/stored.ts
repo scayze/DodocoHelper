@@ -7,11 +7,27 @@ import { isBoolGrid, isStrGrid } from "../persist.js";
 import { LIMITS } from "../mode.js";
 import type { CellMark, TentsBoard } from "./logic.js";
 
+/** One undo step: either a single tap or a whole drag-paint stroke (atomic). */
+export type TentsUndoEntry =
+  | { r: number; c: number; prev: CellMark }
+  | { stroke: Array<{ r: number; c: number; prev: CellMark }> };
+
 export interface TentsStored {
   board: TentsBoard;
   moveCount: number;
-  undoStack: Array<{ r: number; c: number; prev: CellMark }>;
+  undoStack: TentsUndoEntry[];
   winReported: boolean;
+}
+
+function isUndoCell(e: unknown): e is { r: number; c: number; prev: CellMark } {
+  if (typeof e !== "object" || e === null) return false;
+  const em = e as Record<string, unknown>;
+  return (
+    Number.isInteger(em["r"]) &&
+    Number.isInteger(em["c"]) &&
+    typeof em["prev"] === "string" &&
+    TENT_MARKS.has(em["prev"])
+  );
 }
 
 const TENT_MARKS = new Set(["unknown", "tent", "grass"]);
@@ -45,14 +61,11 @@ export function isTentsStored(value: unknown): value is TentsStored {
     typeof s["winReported"] !== "boolean" ||
     !Array.isArray(undo) ||
     !undo.every((e) => {
+      if (isUndoCell(e)) return true;
+      // Grouped drag-paint stroke: non-empty list of single-cell entries.
       if (typeof e !== "object" || e === null) return false;
-      const em = e as Record<string, unknown>;
-      return (
-        Number.isInteger(em["r"]) &&
-        Number.isInteger(em["c"]) &&
-        typeof em["prev"] === "string" &&
-        TENT_MARKS.has(em["prev"])
-      );
+      const g = (e as Record<string, unknown>)["stroke"];
+      return Array.isArray(g) && g.length > 0 && g.every(isUndoCell);
     })
   ) {
     return false;

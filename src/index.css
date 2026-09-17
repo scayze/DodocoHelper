@@ -567,9 +567,19 @@ nav[aria-label="Primary"] .mode-btn svg {
   background: transparent;
   border: 0;
   padding: clamp(1.5px, 0.44vmin, 3.5px);
-  touch-action: manipulation;
+  touch-action: none;
   user-select: none;
   -webkit-user-select: none;
+}
+
+/* Drag-paint ("gray out") stroke: the grid captures the pointer, so kill
+   browser touch gestures on the board and show a paint cursor. */
+#tents-grid {
+  touch-action: none;
+}
+
+#tents-grid.is-painting .tent-cell {
+  cursor: crosshair;
 }
 
 .tent-chip {

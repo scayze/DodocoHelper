@@ -3,6 +3,9 @@ import assert from "node:assert/strict";
 import {
   checkWin,
   createBoard,
+  createStroke,
+  setMark,
+  strokeCell,
   tentsPlaced,
   toggleMark,
   validateLevelData,
@@ -48,6 +51,70 @@ describe("tents marks", () => {
     const t = level.trees.flatMap((row, i) => row.map((v, j) => (v ? [i, j] as const : null)).filter(Boolean));
     assert.ok(t.length > 0);
     assert.equal(toggleMark(board, t[0]![0], t[0]![1]), false);
+  });
+});
+
+describe("tents drag-paint strokes", () => {
+  it("paints grass from unknown, dedupes, and records the stroke", () => {
+    const level = generateLevel(6, mulberry32(11));
+    const board = createBoard(level);
+    // Find two adjacent non-tree cells for a mini-stroke.
+    let a: [number, number] | null = null;
+    let b: [number, number] | null = null;
+    outer: for (let r = 0; r < level.size; r++) {
+      for (let c = 0; c + 1 < level.size; c++) {
+        if (!level.trees[r][c] && !level.trees[r][c + 1]) {
+          a = [r, c];
+          b = [r, c + 1];
+          break outer;
+        }
+      }
+    }
+    assert.ok(a && b);
+    const stroke = createStroke(board, a[0], a[1]);
+    assert.ok(stroke);
+    assert.equal(stroke.target, "grass");
+    // The start cell paints once the drag is real; re-entry is a no-op.
+    assert.equal(strokeCell(board, stroke, a[0], a[1]), true);
+    assert.equal(board.marks[a[0]][a[1]], "grass");
+    assert.equal(strokeCell(board, stroke, a[0], a[1]), false);
+    assert.equal(strokeCell(board, stroke, b[0], b[1]), true);
+    assert.equal(stroke.changed.length, 2);
+    // Reverting the recorded prevs undoes the whole stroke atomically.
+    for (const s of stroke.changed) board.marks[s.r][s.c] = s.prev;
+    assert.equal(board.marks[a[0]][a[1]], "unknown");
+    assert.equal(board.marks[b[0]][b[1]], "unknown");
+  });
+
+  it("erases from grass and never starts on tents or trees", () => {
+    const level = generateLevel(6, mulberry32(12));
+    const board = createBoard(level);
+    let a: [number, number] | null = null;
+    outer: for (let r = 0; r < level.size; r++) {
+      for (let c = 0; c < level.size; c++) {
+        if (!level.trees[r][c]) {
+          a = [r, c];
+          break outer;
+        }
+      }
+    }
+    assert.ok(a);
+    board.marks[a[0]][a[1]] = "grass";
+    const erase = createStroke(board, a[0], a[1]);
+    assert.ok(erase);
+    assert.equal(erase.target, "unknown");
+    assert.equal(strokeCell(board, erase, a[0], a[1]), true);
+    assert.equal(board.marks[a[0]][a[1]], "unknown");
+    // Tents are never clobbered and can't start a stroke.
+    board.marks[a[0]][a[1]] = "tent";
+    assert.equal(createStroke(board, a[0], a[1]), null);
+    // Trees refuse strokes too.
+    const t = level.trees.flatMap((row, i) =>
+      row.map((v, j) => (v ? ([i, j] as const) : null)).filter(Boolean),
+    );
+    assert.ok(t.length > 0);
+    assert.equal(createStroke(board, t[0]![0], t[0]![1]), null);
+    assert.equal(setMark(board, t[0]![0], t[0]![1], "grass"), false);
   });
 });
 
