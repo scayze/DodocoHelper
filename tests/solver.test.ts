@@ -3,7 +3,7 @@ import assert from "node:assert/strict";
 import fs from "node:fs";
 import { validatePuzzleInput, validateSolution } from "../src/games/crowns/validator.js";
 import { solveAll, solvePuzzle, testAssumption, testAssumptionDetailed, buildInitialState, tryPlaceCrown, markCrown, propagate, collectPropagateChanges, solveByDeduction, stateToGrid, deduceRegionFit, deduceBand, deducePointing, deduceHall, bandAnalyze, K, E } from "../src/games/crowns/solver.js";
-import { findHints } from "../src/games/crowns/hints.js";
+import { findHints, stepToHint } from "../src/games/crowns/hints.js";
 import { nextMark } from "../src/games/crowns/marks.js";
 import { generatePuzzle, generateRegions } from "../src/games/crowns/generator.js";
 import { mulberry32 } from "../src/games/daily.js";
@@ -598,6 +598,110 @@ describe("harder human deductions", () => {
     assert.equal(endToEnd.witness, null);
     assert.ok(endToEnd.steps.some((s) => s.r === 0 && s.c === 0 && s.to === K));
     verifySound(puzzle, endToEnd.steps, "band-cover");
+  });
+});
+
+// ---------------------------------------------------------------------------
+// Hint trust fixes: cited crowns, named units, fitting highlights
+// ---------------------------------------------------------------------------
+describe("hint trust", () => {
+  const regions5 = [
+    [0, 0, 1, 1, 1],
+    [0, 2, 1, 1, 1],
+    [2, 2, 2, 2, 2],
+    [3, 3, 3, 3, 4],
+    [3, 3, 4, 4, 4],
+  ];
+  const blank5 = () => Array.from({ length: 5 }, () => Array(5).fill("?"));
+  const norm5 = (initial: string[][]): NormalizedPuzzle => {
+    const checked = validatePuzzleInput({ size: 5, crownsPerRow: 1, crownsPerColumn: 1, crownsPerRegion: 1, regions: regions5, initial });
+    assert.deepEqual(checked.errors, []);
+    assert.ok(checked.puzzle);
+    return checked.puzzle!;
+  };
+  const inBounds = (puzzle: NormalizedPuzzle, position: string) => {
+    const [r, c] = position.split(",").map(Number);
+    return r >= 0 && r < puzzle.size && c >= 0 && c < puzzle.size;
+  };
+  /** Fitting-highlight invariants for every hint on the board. */
+  const checkInvariants = (puzzle: NormalizedPuzzle, hints: ReturnType<typeof findHints>) => {
+    for (const h of hints) {
+      for (const d of h.decisiveCells) assert.ok(h.cells.includes(d), `${h.method}: decisive ${d} must be highlighted`);
+      for (const cell of h.cells) assert.ok(inBounds(puzzle, cell), `${h.method}: highlight ${cell} out of bounds`);
+      assert.ok(h.cells.length <= 2 * puzzle.size, `${h.method}: context of ${h.cells.length} washes the board`);
+      if (h.method === "adjacency") {
+        const [pr, pc] = h.cells[0].split(",").map(Number);
+        assert.equal(puzzle.initial[pr][pc], "C", `adjacency parent ${h.cells[0]} must be a placed crown`);
+      }
+    }
+  };
+
+  it("never cites a deduced crown as an adjacency parent", () => {
+    // Row 1 has a single unknown: propagation deduces (but the player never
+    // placed) the queen at R1C1. Its neighbours must not be blamed on it.
+    const initial = blank5();
+    initial[0][1] = "."; initial[0][2] = "."; initial[0][3] = "."; initial[0][4] = ".";
+    const puzzle = norm5(initial);
+    const hints = findHints(puzzle, false);
+    assert.ok(hints.length > 0);
+    for (const h of hints) {
+      if (h.method !== "adjacency") continue;
+      const [pr, pc] = h.cells[0].split(",").map(Number);
+      assert.equal(puzzle.initial[pr][pc], "C", `phantom parent ${h.cells[0]}: ${h.text}`);
+    }
+    checkInvariants(puzzle, hints);
+  });
+
+  it("names the unit in 1d-fit, critical, region-fit and hall reasons", () => {
+    const puzzle = norm5(blank5());
+    const { state, tg } = buildInitialState(puzzle);
+    const hall = deduceHall(state, tg);
+    assert.ok(hall.steps.length > 0);
+    assert.ok(/[Rr]ows? 1/.test(hall.steps[0].reason), `hall must name its rows: ${hall.steps[0].reason}`);
+    const hints = findHints(puzzle, false);
+    assert.ok(hints.length > 0);
+    for (const h of hints) {
+      if (h.method === "critical" || h.method === "1d-fit") {
+        assert.ok(/row \d|column \d|region \d/.test(h.text), `${h.method} must name a unit: ${h.text}`);
+      }
+      if (h.method === "region-fit") {
+        assert.ok(/region \d/.test(h.text), `region-fit must name its region: ${h.text}`);
+      }
+      if (h.method === "hall") {
+        assert.ok(/[Rr]ows? \d/.test(h.text), `hall must name its rows: ${h.text}`);
+      }
+    }
+    checkInvariants(puzzle, hints);
+  });
+
+  it("passes solver reasons and contexts through"
+    + " (column bands never say rows)", () => {
+    const puzzle = norm5(blank5());
+    const colReason = "No way to fill columns 2 and 4 together uses this cell";
+    const bandHint = stepToHint(puzzle, { r: 0, c: 1, to: E, rule: "band-cover", reason: colReason, context: ["0,1", "0,3", "2,1"] });
+    assert.ok(bandHint);
+    assert.equal(bandHint!.text, colReason);
+    assert.ok(!/rows?/i.test(bandHint!.text), "column band text must not mention rows");
+    assert.deepEqual(new Set(bandHint!.cells), new Set(["0,1", "0,3", "2,1"]));
+    const critHint = stepToHint(puzzle, { r: 1, c: 1, to: E, rule: "critical", reason: "Placing a queen here would starve neighboring row 3, leaving no valid way to fill it.", context: ["2,0", "2,1"] });
+    assert.ok(critHint);
+    assert.ok(critHint!.text.includes("row 3"));
+    // Decisive cell is unioned into a context that lacks it.
+    assert.deepEqual(new Set(critHint!.cells), new Set(["2,0", "2,1", "1,1"]));
+    assert.deepEqual(critHint!.decisiveCells, ["1,1"]);
+  });
+
+  it("keeps highlights fitting on solution-consistent mid-game boards", () => {
+    // Solution crowns: (0,0), (1,2), (2,4), (3,1), (4,3). Marks below agree.
+    const marks: Array<[number, number, string]> = [
+      [1, 0, "."], [0, 1, "."], [3, 3, "."], [4, 4, "."], [0, 0, "C"],
+    ];
+    const initial = blank5();
+    for (const [r, c, v] of marks) initial[r][c] = v;
+    const puzzle = norm5(initial);
+    assert.ok(solveAll(puzzle, { limit: 1 }).length > 0, "premise must stay solvable");
+    checkInvariants(puzzle, findHints(puzzle, false));
+    checkInvariants(puzzle, findHints(puzzle, true));
   });
 });
 

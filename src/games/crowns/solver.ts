@@ -325,6 +325,9 @@ export interface Step {
   to: typeof K | typeof E;
   rule: string;
   reason: string;
+  /** Highlight set for the hint UI ("r,c" keys): exactly the cells the
+   *  reasoning uses. Falls back to row+column+region when absent. */
+  context?: string[];
 }
 
 /** Apply a list of steps to a mutable state. Returns false if a step is illegal. */
@@ -343,10 +346,13 @@ function applySteps(st: State, tg: Targets, steps: Step[]): boolean {
 
 // ---- D3 advanced: 1-D exact fit (rows + columns) ----
 
-function forcedIn1D(st: State, tg: Targets, cells: number[], need: number, isRow: boolean): Step[] {
+function forcedIn1D(st: State, tg: Targets, cells: number[], need: number, isRow: boolean, line: number): Step[] {
   const n = st.n;
   const out: Step[] = [];
   if (cells.length < need || need <= 0) return out;
+  const lineName = `${isRow ? "Row" : "Column"} ${line + 1}`;
+  const unitWord = need === 1 ? "queen" : "queens";
+  const context = cells.map((ci) => pos(Math.floor(ci / n), ci % n));
 
   const placements: number[][] = [];
   const tryPlace = (start: number, chosen: number[]) => {
@@ -397,11 +403,11 @@ function forcedIn1D(st: State, tg: Targets, cells: number[], need: number, isRow
   }
 
   for (const c of alwaysCrown) {
-    out.push({ r: Math.floor(c / n), c: c % n, to: K, rule: "1d-fit", reason: `Forced crown in ${isRow ? "row" : "column"} pattern` });
+    out.push({ r: Math.floor(c / n), c: c % n, to: K, rule: "1d-fit", reason: `Every way to fit ${lineName}'s remaining ${unitWord} includes this cell, so it must be a queen.`, context });
   }
   for (const c of cells) {
     if (!everCrown.has(c)) {
-      out.push({ r: Math.floor(c / n), c: c % n, to: E, rule: "1d-fit", reason: `Blocked by ${isRow ? "row" : "column"} pattern` });
+      out.push({ r: Math.floor(c / n), c: c % n, to: E, rule: "1d-fit", reason: `No way to fit ${lineName}'s remaining ${unitWord} uses this cell, so cross it out.`, context });
     }
   }
   return out;
@@ -419,7 +425,7 @@ function deduce1D(st: State, tg: Targets): Step[] {
       const i = idx(n, r, c);
       if (st.grid[i] === U) cells.push(i);
     }
-    if (cells.length > 0) out.push(...forcedIn1D(st, tg, cells, need, true));
+    if (cells.length > 0) out.push(...forcedIn1D(st, tg, cells, need, true, r));
   }
 
   for (let c = 0; c < n; c++) {
@@ -430,7 +436,7 @@ function deduce1D(st: State, tg: Targets): Step[] {
       const i = idx(n, r, c);
       if (st.grid[i] === U) cells.push(i);
     }
-    if (cells.length > 0) out.push(...forcedIn1D(st, tg, cells, need, false));
+    if (cells.length > 0) out.push(...forcedIn1D(st, tg, cells, need, false, c));
   }
 
   return out;
@@ -464,10 +470,13 @@ function deduceCritical(st: State, tg: Targets): Step[] {
 
       const aReg = st.regionOf[A];
       let impossible = false;
+      // First starving unit: named in the hint reason, cells highlighted.
+      let blameLabel: string | null = null;
+      let blameCells: number[] | null = null;
 
       // Helper to test a unit
-      const testUnit = (cells: number[], need: number, containsA: boolean) => {
-        if (need <= 0) return;
+      const testUnit = (cells: number[], need: number, containsA: boolean, label: string) => {
+        if (need <= 0 || impossible) return;
         let removed = 0;
         for (const ci of cells) {
           if (ci === A) {
@@ -480,23 +489,30 @@ function deduceCritical(st: State, tg: Targets): Step[] {
         }
         const newAvail = cells.length - removed;
         const newNeed = containsA ? need - 1 : need;
-        if (newAvail < newNeed) impossible = true;
+        if (newAvail < newNeed) {
+          impossible = true;
+          blameLabel = label;
+          blameCells = cells;
+        }
       };
 
+      const blameContext = (): string[] =>
+        (blameCells ?? []).map((ci) => pos(Math.floor(ci / n), ci % n));
+
       // Units containing A
-      testUnit(rowCells[ar], tg.row - st.rowPlaced[ar], true);
+      testUnit(rowCells[ar], tg.row - st.rowPlaced[ar], true, `row ${ar + 1}`);
       if (impossible) {
-        out.push({ r: ar, c: ac, to: E, rule: "critical", reason: "Crown here would starve its own row" });
+        out.push({ r: ar, c: ac, to: E, rule: "critical", reason: `Placing a queen here would starve its own ${blameLabel}, leaving no valid way to fill it.`, context: blameContext() });
         continue;
       }
-      testUnit(colCells[ac], tg.col - st.colPlaced[ac], true);
+      testUnit(colCells[ac], tg.col - st.colPlaced[ac], true, `column ${ac + 1}`);
       if (impossible) {
-        out.push({ r: ar, c: ac, to: E, rule: "critical", reason: "Crown here would starve its own column" });
+        out.push({ r: ar, c: ac, to: E, rule: "critical", reason: `Placing a queen here would starve its own ${blameLabel}, leaving no valid way to fill it.`, context: blameContext() });
         continue;
       }
-      testUnit(regCells[aReg], tg.reg - st.regPlaced[aReg], true);
+      testUnit(regCells[aReg], tg.reg - st.regPlaced[aReg], true, `region ${aReg + 1}`);
       if (impossible) {
-        out.push({ r: ar, c: ac, to: E, rule: "critical", reason: "Crown here would starve its own region" });
+        out.push({ r: ar, c: ac, to: E, rule: "critical", reason: `Placing a queen here would starve its own ${blameLabel}, leaving no valid way to fill it.`, context: blameContext() });
         continue;
       }
 
@@ -508,17 +524,17 @@ function deduceCritical(st: State, tg: Targets): Step[] {
           const nc = ac + dc;
           if (nr < 0 || nr >= n || nc < 0 || nc >= n) continue;
           // Only test units that do NOT also contain A.
-          if (dr !== 0) testUnit(rowCells[nr], tg.row - st.rowPlaced[nr], false);
-          if (dc !== 0) testUnit(colCells[nc], tg.col - st.colPlaced[nc], false);
+          if (dr !== 0) testUnit(rowCells[nr], tg.row - st.rowPlaced[nr], false, `row ${nr + 1}`);
+          if (dc !== 0) testUnit(colCells[nc], tg.col - st.colPlaced[nc], false, `column ${nc + 1}`);
           const nReg = st.regionOf[idx(n, nr, nc)];
-          if (nReg !== aReg) testUnit(regCells[nReg], tg.reg - st.regPlaced[nReg], false);
+          if (nReg !== aReg) testUnit(regCells[nReg], tg.reg - st.regPlaced[nReg], false, `region ${nReg + 1}`);
           if (impossible) break;
         }
         if (impossible) break;
       }
 
       if (impossible) {
-        out.push({ r: ar, c: ac, to: E, rule: "critical", reason: "Crown here would starve a neighboring unit" });
+        out.push({ r: ar, c: ac, to: E, rule: "critical", reason: `Placing a queen here would starve neighboring ${blameLabel}, leaving no valid way to fill it.`, context: blameContext() });
       }
     }
   }
@@ -599,6 +615,13 @@ export function deduceHall(st: State, tg: Targets): RuleOutcome {
   const crossInRows = (rows: number[], covered: number[], geometric: boolean): Step[] => {
     const out: Step[] = [];
     const names = covered.map((g) => `region ${g + 1}`).join(" and ");
+    const unitList = rows.map((u) => u + 1).join(", ");
+    const context: string[] = [];
+    for (const r of rows) {
+      for (let c = 0; c < n; c++) {
+        if (st.grid[idx(n, r, c)] === U) context.push(pos(r, c));
+      }
+    }
     for (const r of rows) {
       for (let c = 0; c < n; c++) {
         const i = idx(n, r, c);
@@ -609,8 +632,9 @@ export function deduceHall(st: State, tg: Targets): RuleOutcome {
           to: E,
           rule: "hall",
           reason: geometric
-            ? `These ${rows.length} rows contain every cell of exactly ${covered.length} regions, so only those regions may place a queen here.`
-            : `With these crosses, ${names} can only still live in ${rows.length === 1 ? "this row" : "these rows"}, which need exactly as many queens as ${covered.length === 1 ? "it needs" : "they need"}, so no other region may place a queen here.`,
+            ? `Rows ${unitList} contain every cell of ${names}, so only ${covered.length === 1 ? "it" : "those regions"} may place a queen here. Cross out the rest.`
+            : `With these crosses, ${names} can only still live in row${rows.length === 1 ? "" : "s"} ${unitList}, which need${rows.length === 1 ? "s" : ""} exactly as many queens as ${covered.length === 1 ? "it needs" : "they need"}, so cross out every other region here.`,
+          context,
         });
       }
     }
@@ -620,6 +644,13 @@ export function deduceHall(st: State, tg: Targets): RuleOutcome {
   const crossInCols = (cols: number[], covered: number[], geometric: boolean): Step[] => {
     const out: Step[] = [];
     const names = covered.map((g) => `region ${g + 1}`).join(" and ");
+    const unitList = cols.map((u) => u + 1).join(", ");
+    const context: string[] = [];
+    for (const c of cols) {
+      for (let r = 0; r < n; r++) {
+        if (st.grid[idx(n, r, c)] === U) context.push(pos(r, c));
+      }
+    }
     for (const c of cols) {
       for (let r = 0; r < n; r++) {
         const i = idx(n, r, c);
@@ -630,8 +661,9 @@ export function deduceHall(st: State, tg: Targets): RuleOutcome {
           to: E,
           rule: "hall",
           reason: geometric
-            ? `These ${cols.length} columns contain every cell of exactly ${covered.length} regions, so only those regions may place a queen here.`
-            : `With these crosses, ${names} can only still live in ${cols.length === 1 ? "this column" : "these columns"}, which need exactly as many queens as ${covered.length === 1 ? "it needs" : "they need"}, so no other region may place a queen here.`,
+            ? `Columns ${unitList} contain every cell of ${names}, so only ${covered.length === 1 ? "it" : "those regions"} may place a queen here. Cross out the rest.`
+            : `With these crosses, ${names} can only still live in column${cols.length === 1 ? "" : "s"} ${unitList}, which need${cols.length === 1 ? "s" : ""} exactly as many queens as ${covered.length === 1 ? "it needs" : "they need"}, so cross out every other region here.`,
+          context,
         });
       }
     }
@@ -815,6 +847,7 @@ export function deduceRegionFit(st: State, tg: Targets): RuleOutcome {
     const cells = ep.cells;
     const sets = ep.sets;
     const m = cells.length;
+    const context = cells.map((ci) => pos(Math.floor(ci / n), ci % n));
     const always = new Set<number>(cells);
     const ever = new Set<number>();
     for (const s of sets) {
@@ -823,9 +856,9 @@ export function deduceRegionFit(st: State, tg: Targets): RuleOutcome {
         else always.delete(cells[i]);
       }
     }
-    for (const c of always) steps.push({ r: Math.floor(c / n), c: c % n, to: K, rule: "region-fit", reason: "Every placement of this region's queens includes this cell" });
+    for (const c of always) steps.push({ r: Math.floor(c / n), c: c % n, to: K, rule: "region-fit", reason: `Every placement of region ${g + 1}'s queens includes this cell, so it must be a queen.`, context });
     for (const c of cells) {
-      if (!ever.has(c)) steps.push({ r: Math.floor(c / n), c: c % n, to: E, rule: "region-fit", reason: "No placement of this region's queens uses this cell" });
+      if (!ever.has(c)) steps.push({ r: Math.floor(c / n), c: c % n, to: E, rule: "region-fit", reason: `No placement of region ${g + 1}'s queens uses this cell, so cross it out.`, context });
     }
   }
 
@@ -907,20 +940,29 @@ export function deducePointing(st: State, tg: Targets): Step[] {
     if (!ep || ep.overflow || ep.sets.length === 0) continue;
     const everRows = new Set<number>();
     const everCols = new Set<number>();
+    const everCells = new Set<number>();
     for (const s of ep.sets) {
       for (let i = 0; i < ep.cells.length; i++) {
         if (!s[i]) continue;
         everRows.add(ep.rowOf[i]);
         everCols.add(ep.colOf[i]);
+        everCells.add(ep.cells[i]);
       }
     }
+    const toKeys = (cells: Iterable<number>) => [...cells].map((ci) => pos(Math.floor(ci / n), ci % n));
     if (everRows.size === 1) {
       const r = [...everRows][0];
       if (need === rowSlots(st, tg, r) && rowSlots(st, tg, r) > 0) {
+        const lineCells: number[] = [];
+        for (let c = 0; c < n; c++) {
+          const i = idx(n, r, c);
+          if (st.grid[i] === U) lineCells.push(i);
+        }
+        const context = toKeys(new Set([...lineCells, ...everCells]));
         for (let c = 0; c < n; c++) {
           const i = idx(n, r, c);
           if (st.grid[i] === U && st.regionOf[i] !== g) {
-            out.push({ r, c, to: E, rule: "pointing", reason: `Every way to place region ${g + 1}'s queens lies in row ${r + 1}, which needs exactly that many queens, so cross out the rest of the row.` });
+            out.push({ r, c, to: E, rule: "pointing", reason: `Every way to place region ${g + 1}'s queens lies in row ${r + 1}, which needs exactly that many queens, so cross out the rest of the row.`, context });
           }
         }
       }
@@ -928,10 +970,16 @@ export function deducePointing(st: State, tg: Targets): Step[] {
     if (everCols.size === 1) {
       const c = [...everCols][0];
       if (need === colSlots(st, tg, c) && colSlots(st, tg, c) > 0) {
+        const lineCells: number[] = [];
+        for (let r = 0; r < n; r++) {
+          const i = idx(n, r, c);
+          if (st.grid[i] === U) lineCells.push(i);
+        }
+        const context = toKeys(new Set([...lineCells, ...everCells]));
         for (let r = 0; r < n; r++) {
           const i = idx(n, r, c);
           if (st.grid[i] === U && st.regionOf[i] !== g) {
-            out.push({ r, c, to: E, rule: "pointing", reason: `Every way to place region ${g + 1}'s queens lies in column ${c + 1}, which needs exactly that many queens, so cross out the rest of the column.` });
+            out.push({ r, c, to: E, rule: "pointing", reason: `Every way to place region ${g + 1}'s queens lies in column ${c + 1}, which needs exactly that many queens, so cross out the rest of the column.`, context });
           }
         }
       }
@@ -959,6 +1007,14 @@ export function deducePointing(st: State, tg: Targets): Step[] {
     if (everRegs.size !== 1) return;
     const g = [...everRegs][0];
     if (slots !== regNeed(st, tg, g)) return;
+    const regionCells: number[] = [];
+    for (let r = 0; r < n; r++) {
+      for (let c = 0; c < n; c++) {
+        const i = idx(n, r, c);
+        if (st.grid[i] === U && st.regionOf[i] === g) regionCells.push(i);
+      }
+    }
+    const context = [...cells, ...regionCells].map((ci) => pos(Math.floor(ci / n), ci % n));
     for (let r = 0; r < n; r++) {
       for (let c = 0; c < n; c++) {
         const i = idx(n, r, c);
@@ -969,6 +1025,7 @@ export function deducePointing(st: State, tg: Targets): Step[] {
             reason: isRow
               ? `Row ${line + 1} needs ${slots} ${slots === 1 ? "queen" : "queens"} and every way to place them lies in region ${g + 1}, so cross out that region's cells elsewhere.`
               : `Column ${line + 1} needs ${slots} ${slots === 1 ? "queen" : "queens"} and every way to place them lies in region ${g + 1}, so cross out that region's cells elsewhere.`,
+            context,
           });
         }
       }
@@ -1215,9 +1272,10 @@ export function bandAnalyze(st: State, tg: Targets, units: number[], axis: "row"
   const unitNames = units.map((u) => u + 1).join(units.length === 2 && Math.abs(units[0] - units[1]) > 1 ? " and " : ", ");
   const lineWord = isRow ? "rows" : "columns";
   const steps: Step[] = [];
-  for (const c of always) steps.push({ r: Math.floor(c / n), c: c % n, to: K, rule: "band-cover", reason: `Every way to fill ${lineWord} ${unitNames} together includes this cell` });
+  const context = bandCells.map((ci) => pos(Math.floor(ci / n), ci % n));
+  for (const c of always) steps.push({ r: Math.floor(c / n), c: c % n, to: K, rule: "band-cover", reason: `Every way to fill ${lineWord} ${unitNames} together includes this cell`, context });
   for (const c of bandCells) {
-    if (!ever.has(c)) steps.push({ r: Math.floor(c / n), c: c % n, to: E, rule: "band-cover", reason: `No way to fill ${lineWord} ${unitNames} together uses this cell` });
+    if (!ever.has(c)) steps.push({ r: Math.floor(c / n), c: c % n, to: E, rule: "band-cover", reason: `No way to fill ${lineWord} ${unitNames} together uses this cell`, context });
   }
   return { witness: null, steps };
 }

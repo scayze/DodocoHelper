@@ -4,15 +4,19 @@ import { buildInitialState, markCrown, propagate, collectPropagateChanges, findF
 
 const idx = (n: number, r: number, c: number) => r * n + c;
 
-/** If the step cell sits next to a crown (in the propagated state), return its key. */
-function adjacencyParent(state: { n: number; grid: number[] }, r: number, c: number): string | null {
+/** If the step cell sits next to a player-placed crown, return its key.
+ *  The lookup runs against the pre-propagation grid: crowns the solver
+ *  deduces mid-loop must never be cited as if the player placed them. */
+function adjacencyParent(state: { n: number; grid: number[] }, before: number[], r: number, c: number): string | null {
   for (let dr = -1; dr <= 1; dr++) {
     for (let dc = -1; dc <= 1; dc++) {
       if (dr === 0 && dc === 0) continue;
       const nr = r + dr;
       const nc = c + dc;
       if (nr < 0 || nr >= state.n || nc < 0 || nc >= state.n) continue;
-      if (state.grid[idx(state.n, nr, nc)] === K) return key(nr, nc);
+      if (state.grid[idx(state.n, nr, nc)] !== K) continue;
+      if (before[idx(state.n, nr, nc)] !== K) continue; // deduced, not placed: no citation
+      return key(nr, nc);
     }
   }
   return null;
@@ -86,7 +90,17 @@ function analysisContext(puzzle: NormalizedPuzzle, r: number, c: number): string
 // Build hints from deduction steps
 // ---------------------------------------------------------------------------
 
-function stepToHint(puzzle: NormalizedPuzzle, step: Step): Hint | null {
+/** Highlight set for a deduction step: the deduction's own context when it
+ *  carries one (exactly the cells the reasoning uses), else the classic
+ *  row+column+region fallback. The decisive cell is always included. */
+function stepContext(puzzle: NormalizedPuzzle, step: Step): string[] {
+  const position = key(step.r, step.c);
+  const base = step.context ?? analysisContext(puzzle, step.r, step.c);
+  if (base.includes(position)) return [...new Set(base)];
+  return [...new Set([...base, position])];
+}
+
+export function stepToHint(puzzle: NormalizedPuzzle, step: Step): Hint | null {
   const { r, c, to, rule, reason } = step;
   const position = key(r, c);
 
@@ -149,7 +163,7 @@ function stepToHint(puzzle: NormalizedPuzzle, step: Step): Hint | null {
     }
 
     case "1d-fit": {
-      const context = analysisContext(puzzle, r, c);
+      const context = stepContext(puzzle, step);
       return {
         kind: to === K ? "queen" : "cross",
         scope: "analysis",
@@ -157,16 +171,14 @@ function stepToHint(puzzle: NormalizedPuzzle, step: Step): Hint | null {
         difficulty: 3,
         proofCost: 0,
         difficultyLabel: "Intermediate",
-        text: to === K
-          ? `The remaining empty pattern forces a queen at ${cellName(position)}.`
-          : `The remaining empty pattern rules out ${cellName(position)}.`,
+        text: reason,
         cells: context,
         decisiveCells: [position],
       };
     }
 
     case "critical": {
-      const context = analysisContext(puzzle, r, c);
+      const context = stepContext(puzzle, step);
       return {
         kind: "cross",
         scope: "analysis",
@@ -174,14 +186,14 @@ function stepToHint(puzzle: NormalizedPuzzle, step: Step): Hint | null {
         difficulty: 5,
         proofCost: 0,
         difficultyLabel: "Intermediate",
-        text: `Placing a queen at ${cellName(position)} would block too many cells in a neighboring unit, leaving no valid way to fill it.`,
+        text: reason,
         cells: context,
         decisiveCells: [position],
       };
     }
 
     case "pointing": {
-      const context = analysisContext(puzzle, r, c);
+      const context = stepContext(puzzle, step);
       return {
         kind: "cross",
         scope: "analysis",
@@ -196,7 +208,7 @@ function stepToHint(puzzle: NormalizedPuzzle, step: Step): Hint | null {
     }
 
     case "region-fit": {
-      const context = analysisContext(puzzle, r, c);
+      const context = stepContext(puzzle, step);
       return {
         kind: to === K ? "queen" : "cross",
         scope: "analysis",
@@ -204,16 +216,14 @@ function stepToHint(puzzle: NormalizedPuzzle, step: Step): Hint | null {
         difficulty: 4,
         proofCost: 0,
         difficultyLabel: "Intermediate",
-        text: to === K
-          ? `Every possible way to place this region's remaining queens includes ${cellName(position)}, so it must be a queen.`
-          : `No way to place this region's remaining queens uses ${cellName(position)}, so cross it out.`,
+        text: reason,
         cells: context,
         decisiveCells: [position],
       };
     }
 
     case "hall": {
-      const context = analysisContext(puzzle, r, c);
+      const context = stepContext(puzzle, step);
       return {
         kind: "cross",
         scope: "analysis",
@@ -228,7 +238,7 @@ function stepToHint(puzzle: NormalizedPuzzle, step: Step): Hint | null {
     }
 
     case "band-cover": {
-      const context = analysisContext(puzzle, r, c);
+      const context = stepContext(puzzle, step);
       return {
         kind: to === K ? "queen" : "cross",
         scope: "analysis",
@@ -236,9 +246,7 @@ function stepToHint(puzzle: NormalizedPuzzle, step: Step): Hint | null {
         difficulty: 7,
         proofCost: 0,
         difficultyLabel: "Hard",
-        text: to === K
-          ? `Every way to fill the surrounding rows together includes ${cellName(position)}, so it must be a queen.`
-          : `No way to fill the surrounding rows together uses ${cellName(position)}, so cross it out.`,
+        text: reason,
         cells: context,
         decisiveCells: [position],
       };
@@ -309,7 +317,7 @@ export function findHints(puzzle: NormalizedPuzzle, allowSearch = true): Hint[] 
   const nonAdjacency: Step[] = [];
   for (const step of propSteps) {
     if (step.to === E) {
-      const parent = adjacencyParent(state, step.r, step.c);
+      const parent = adjacencyParent(state, before, step.r, step.c);
       if (parent) {
         const list = adjacency.get(parent) ?? [];
         list.push(key(step.r, step.c));
