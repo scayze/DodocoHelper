@@ -90,10 +90,8 @@ function setView(id: ViewId): void {
   if (activeView === id) return;
   if (isGameId(id) && !hasValidName()) {
     // Nameless visitors stay on Home and are pointed at the name gate.
-    const nameInput = document.getElementById("lb-gate-name") as HTMLInputElement | null;
-    const gateStatus = document.getElementById("lb-gate-status");
-    if (gateStatus) gateStatus.textContent = "Tell us your name first to start playing.";
-    nameInput?.focus();
+    showToast("Tell us your name first to start playing.");
+    (document.getElementById("lb-gate-name") as HTMLInputElement | null)?.focus();
     return;
   }
   if (isGameId(activeView)) {

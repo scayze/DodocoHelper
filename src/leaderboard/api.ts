@@ -70,12 +70,19 @@ export function getClientId(): string {
 export { normalizeDisplayName } from "./types.js";
 
 export function isValidDisplayName(raw: string): boolean {
+  return nameValidationError(raw) === null;
+}
+
+/** Specific reason a name is rejected, or null when it is acceptable. */
+export function nameValidationError(raw: string): string | null {
   const name = normalizeDisplayName(raw);
-  return (
-    name.length >= MIN_NAME_LENGTH &&
-    name.length <= MAX_NAME_LENGTH &&
-    !/[<>]/.test(name)
-  );
+  if (name.length === 0) return "Enter a name first.";
+  if (name.length < MIN_NAME_LENGTH)
+    return `Name is too short — use at least ${MIN_NAME_LENGTH} characters.`;
+  if (name.length > MAX_NAME_LENGTH)
+    return `Name is too long — use at most ${MAX_NAME_LENGTH} characters.`;
+  if (/[<>]/.test(name)) return "Name can't contain < or >.";
+  return null;
 }
 
 /** Saved name, or "" when absent, invalid, or unreadable (counts as nameless). */

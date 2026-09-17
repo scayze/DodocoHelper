@@ -35,10 +35,10 @@ export function validateSubmit(body: unknown):
   }
   const name = normalizeName(b["displayName"]);
   if (name.length < MIN_NAME_LENGTH) {
-    return { ok: false, error: "displayName must be at least 2 characters." };
+    return { ok: false, error: `displayName must be at least ${MIN_NAME_LENGTH} characters.` };
   }
   if (name.length > MAX_NAME_LENGTH) {
-    return { ok: false, error: "displayName must be at most 20 characters." };
+    return { ok: false, error: `displayName must be at most ${MAX_NAME_LENGTH} characters.` };
   }
   // Reject angle brackets to keep the dumbest XSS path closed; the
   // frontend also renders with textContent.

@@ -13,7 +13,7 @@ export const DAY_RE = /^\d{4}-\d{2}-\d{2}$/;
 export const CLIENT_ID_RE =
   /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 
-export const MAX_NAME_LENGTH = 20;
+export const MAX_NAME_LENGTH = 14;
 export const MIN_NAME_LENGTH = 2;
 export const MAX_DURATION_MS = 86_400_000;
 export const MAX_LIMIT = 100;

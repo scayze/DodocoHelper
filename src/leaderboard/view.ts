@@ -5,8 +5,8 @@ import {
   getDisplayName,
   hasValidName,
   isRetryableError,
-  isValidDisplayName,
   loadQueuedWins,
+  nameValidationError,
   setDisplayName,
   submitScore,
   todayUTC,
@@ -86,33 +86,30 @@ export function initNameGate(): void {
   if (!gateName || !gateConfirm || !gateStatus) return;
   const nameEl: HTMLInputElement = gateName;
   const confirmEl: HTMLButtonElement = gateConfirm;
-  const statusEl: HTMLParagraphElement = gateStatus;
 
   let flushing = false;
 
   function confirmName(): void {
-    const raw = nameEl.value;
-    if (!isValidDisplayName(raw)) {
-      statusEl.textContent = "Pick a name with 2–20 characters (no < or >).";
+    const problem = nameValidationError(nameEl.value);
+    if (problem) {
+      showToast(problem);
       nameEl.focus();
       return;
     }
     if (flushing) return;
     flushing = true;
     confirmEl.disabled = true;
-    statusEl.textContent = "Saving…";
-    const displayName = raw.trim().replace(/\s+/g, " ");
+    const displayName = nameEl.value.trim().replace(/\s+/g, " ");
     // Dispatches nameEvents: main.ts hides the gate and shows "Welcome X!".
     setDisplayName(displayName);
     void flushQueue(displayName)
       .then(({ submitted }) => {
-        statusEl.textContent = "";
         if (submitted > 0) {
           showToast(submitted === 1 ? "Score submitted." : `${submitted} scores submitted.`);
         }
       })
       .catch(() => {
-        statusEl.textContent = "";
+        // Offline: the win stays queued; the gate is already gone.
       })
       .finally(() => {
         flushing = false;
