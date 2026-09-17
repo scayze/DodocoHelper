@@ -537,28 +537,43 @@ function deduceCritical(st: State, tg: Targets): Step[] {
 // covered regions) is vacuous — a fully-contained region has no cells outside
 // the rows — so only the in-rows direction exists.
 
-function deduceHall(st: State, tg: Targets): Step[] {
+export function deduceHall(st: State, tg: Targets): RuleOutcome {
   // Only applies when row/col targets equal region targets (standard Crowns)
-  if (tg.row !== tg.reg && tg.col !== tg.reg) return [];
+  if (tg.row !== tg.reg && tg.col !== tg.reg) return { witness: null, steps: [] };
   const n = st.n;
+  const R = st.regPlaced.length;
 
-  // Precompute which rows/cols each region occupies (pure geometry).
-  const regRows: Set<number>[] = Array.from({ length: st.regPlaced.length }, () => new Set());
-  const regCols: Set<number>[] = Array.from({ length: st.regPlaced.length }, () => new Set());
+  // Effective footprints from remaining (U|K) cells; geometric sets for text.
+  const regRowsEff: Set<number>[] = Array.from({ length: R }, () => new Set());
+  const regColsEff: Set<number>[] = Array.from({ length: R }, () => new Set());
+  const regRowsGeo: Set<number>[] = Array.from({ length: R }, () => new Set());
+  const regColsGeo: Set<number>[] = Array.from({ length: R }, () => new Set());
   for (let r = 0; r < n; r++) {
     for (let c = 0; c < n; c++) {
       const g = st.regionOf[idx(n, r, c)];
-      regRows[g].add(r);
-      regCols[g].add(c);
+      regRowsGeo[g].add(r);
+      regColsGeo[g].add(c);
+      const v = st.grid[idx(n, r, c)];
+      if (v === U || v === K) {
+        regRowsEff[g].add(r);
+        regColsEff[g].add(c);
+      }
     }
   }
 
+  // A region that still needs crowns but has no remaining cells is starved.
+  for (let g = 0; g < R; g++) {
+    if (regNeed(st, tg, g) > 0 && regRowsEff[g].size === 0) {
+      return { witness: starvedRegionWitness(st, g, regNeed(st, tg, g)), steps: [] };
+    }
+  }
   const rowDir = tg.row === tg.reg;
   const colDir = tg.col === tg.reg;
 
-  const regionsFullyInside = (units: number[], unitOf: (g: number) => Set<number>) => {
+  const regionsEffectivelyInside = (units: number[], unitOf: (g: number) => Set<number>) => {
     const inside: number[] = [];
-    for (let g = 0; g < st.regPlaced.length; g++) {
+    for (let g = 0; g < R; g++) {
+      if (unitOf(g).size === 0) continue; // empty footprint: decided above
       let ok = true;
       for (const u of unitOf(g)) {
         if (!units.includes(u)) {
@@ -571,65 +586,116 @@ function deduceHall(st: State, tg: Targets): Step[] {
     return inside;
   };
 
-  const crossInRows = (rows: number[], covered: Set<number>): Step[] => {
+  // True when the lock is already visible geometrically (opening-style).
+  const isGeometric = (covered: number[], unitOfEff: (g: number) => Set<number>, unitOfGeo: (g: number) => Set<number>) => {
+    for (const g of covered) {
+      for (const u of unitOfGeo(g)) {
+        if (!unitOfEff(g).has(u)) return false;
+      }
+    }
+    return true;
+  };
+
+  const crossInRows = (rows: number[], covered: number[], geometric: boolean): Step[] => {
     const out: Step[] = [];
+    const names = covered.map((g) => `region ${g + 1}`).join(" and ");
     for (const r of rows) {
       for (let c = 0; c < n; c++) {
         const i = idx(n, r, c);
-        if (st.grid[i] !== U || covered.has(st.regionOf[i])) continue;
+        if (st.grid[i] !== U || covered.includes(st.regionOf[i])) continue;
         out.push({
           r,
           c,
           to: E,
           rule: "hall",
-          reason: `These ${rows.length} rows contain every cell of exactly ${covered.size} regions, so only those regions may place a queen here.`,
+          reason: geometric
+            ? `These ${rows.length} rows contain every cell of exactly ${covered.length} regions, so only those regions may place a queen here.`
+            : `With these crosses, ${names} can only still live in ${rows.length === 1 ? "this row" : "these rows"}, which need exactly as many queens as ${covered.length === 1 ? "it needs" : "they need"}, so no other region may place a queen here.`,
         });
       }
     }
     return out;
   };
 
-  const crossInCols = (cols: number[], covered: Set<number>): Step[] => {
+  const crossInCols = (cols: number[], covered: number[], geometric: boolean): Step[] => {
     const out: Step[] = [];
+    const names = covered.map((g) => `region ${g + 1}`).join(" and ");
     for (const c of cols) {
       for (let r = 0; r < n; r++) {
         const i = idx(n, r, c);
-        if (st.grid[i] !== U || covered.has(st.regionOf[i])) continue;
+        if (st.grid[i] !== U || covered.includes(st.regionOf[i])) continue;
         out.push({
           r,
           c,
           to: E,
           rule: "hall",
-          reason: `These ${cols.length} columns contain every cell of exactly ${covered.size} regions, so only those regions may place a queen here.`,
+          reason: geometric
+            ? `These ${cols.length} columns contain every cell of exactly ${covered.length} regions, so only those regions may place a queen here.`
+            : `With these crosses, ${names} can only still live in ${cols.length === 1 ? "this column" : "these columns"}, which need exactly as many queens as ${covered.length === 1 ? "it needs" : "they need"}, so no other region may place a queen here.`,
         });
       }
     }
     return out;
   };
 
-  if (rowDir) {
+  if (ENABLE_DYNAMIC_HALL && rowDir) {
     for (let mask = 1; mask < 1 << n; mask++) {
       const rows: number[] = [];
       for (let r = 0; r < n; r++) if (mask & (1 << r)) rows.push(r);
-      const covered = regionsFullyInside(rows, (g) => regRows[g]);
-      if (rows.length !== covered.length) continue;
-      const out = crossInRows(rows, new Set(covered));
-      if (out.length > 0) return out;
+      const covered = regionsEffectivelyInside(rows, (g) => regRowsEff[g]);
+      if (covered.length === 0) continue;
+      let slots = 0;
+      for (const r of rows) slots += rowSlots(st, tg, r);
+      let need = 0;
+      for (const g of covered) need += regNeed(st, tg, g);
+      if (need <= 0 || need !== slots) continue;
+      const geometric = isGeometric(covered, (g) => regRowsEff[g], (g) => regRowsGeo[g]);
+      const out = crossInRows(rows, covered, geometric);
+      if (out.length > 0) return { witness: null, steps: out };
     }
   }
 
-  if (colDir) {
+  if (ENABLE_DYNAMIC_HALL && colDir) {
     for (let mask = 1; mask < 1 << n; mask++) {
       const cols: number[] = [];
       for (let c = 0; c < n; c++) if (mask & (1 << c)) cols.push(c);
-      const covered = regionsFullyInside(cols, (g) => regCols[g]);
-      if (cols.length !== covered.length) continue;
-      const out = crossInCols(cols, new Set(covered));
-      if (out.length > 0) return out;
+      const covered = regionsEffectivelyInside(cols, (g) => regColsEff[g]);
+      if (covered.length === 0) continue;
+      let slots = 0;
+      for (const c of cols) slots += colSlots(st, tg, c);
+      let need = 0;
+      for (const g of covered) need += regNeed(st, tg, g);
+      if (need <= 0 || need !== slots) continue;
+      const geometric = isGeometric(covered, (g) => regColsEff[g], (g) => regColsGeo[g]);
+      const out = crossInCols(cols, covered, geometric);
+      if (out.length > 0) return { witness: null, steps: out };
     }
   }
 
-  return [];
+  if (!ENABLE_DYNAMIC_HALL) {
+    if (rowDir) {
+      for (let mask = 1; mask < 1 << n; mask++) {
+        const rows: number[] = [];
+        for (let r = 0; r < n; r++) if (mask & (1 << r)) rows.push(r);
+        const covered = regionsEffectivelyInside(rows, (g) => regRowsGeo[g]);
+        if (rows.length !== covered.length) continue;
+        const out = crossInRows(rows, covered, true);
+        if (out.length > 0) return { witness: null, steps: out };
+      }
+    }
+    if (colDir) {
+      for (let mask = 1; mask < 1 << n; mask++) {
+        const cols: number[] = [];
+        for (let c = 0; c < n; c++) if (mask & (1 << c)) cols.push(c);
+        const covered = regionsEffectivelyInside(cols, (g) => regColsGeo[g]);
+        if (cols.length !== covered.length) continue;
+        const out = crossInCols(cols, covered, true);
+        if (out.length > 0) return { witness: null, steps: out };
+      }
+    }
+  }
+
+  return { witness: null, steps: [] };
 }
 
 // ---- D-R1: Region fit (2-D always/never) ----
@@ -651,6 +717,90 @@ function starvedRegionWitness(st: State, g: number, need: number): Contradiction
   return { kind: "starved", scope: "region", unit: g, cells: allUnitPos(st, "region", g), needed: need };
 }
 
+const REGION_PLACEMENT_LIMIT = 50_000;
+
+/** Every legal way to place region g's remaining crowns (king-separated,
+ *  within row/column quotas). Shared by region-fit and pointing so the two
+ *  rules can never disagree about what is placeable. `overflow` is set when
+ *  the cap is hit (caller must skip); empty `sets` means starved. */
+export interface RegionPlacements {
+  cells: number[];
+  rowOf: number[];
+  colOf: number[];
+  sets: boolean[][];
+  need: number;
+  overflow: boolean;
+}
+
+export function enumerateRegionPlacements(st: State, tg: Targets, g: number): RegionPlacements | null {
+  const n = st.n;
+  const need = regNeed(st, tg, g);
+  if (need <= 0) return null;
+  const cells: number[] = [];
+  for (let r = 0; r < n; r++) {
+    for (let c = 0; c < n; c++) {
+      const i = idx(n, r, c);
+      if (st.regionOf[i] === g && st.grid[i] === U) cells.push(i);
+    }
+  }
+  const m = cells.length;
+  const rowOf = new Array<number>(m);
+  const colOf = new Array<number>(m);
+  const finish = (sets: boolean[][], overflow: boolean): RegionPlacements => ({ cells, rowOf, colOf, sets, need, overflow });
+  if (m < need) return finish([], false);
+  const capRow = new Array<number>(n);
+  const capCol = new Array<number>(n);
+  for (let r = 0; r < n; r++) capRow[r] = rowSlots(st, tg, r);
+  for (let c = 0; c < n; c++) capCol[c] = colSlots(st, tg, c);
+  const adj: boolean[][] = Array.from({ length: m }, () => new Array<boolean>(m).fill(false));
+  for (let a = 0; a < m; a++) {
+    rowOf[a] = Math.floor(cells[a] / n);
+    colOf[a] = cells[a] % n;
+    for (let b = a + 1; b < m; b++) {
+      const dr = rowOf[a] - Math.floor(cells[b] / n);
+      const dc = colOf[a] - cells[b] % n;
+      if (Math.max(Math.abs(dr), Math.abs(dc)) <= 1) {
+        adj[a][b] = true;
+        adj[b][a] = true;
+      }
+    }
+  }
+  const inSet = new Array<boolean>(m).fill(false);
+  const inRow = new Array<number>(n).fill(0);
+  const inCol = new Array<number>(n).fill(0);
+  const sets: boolean[][] = [];
+  const dfs = (start: number, chosen: number): void => {
+    if (sets.length > REGION_PLACEMENT_LIMIT) return;
+    if (chosen === need) {
+      sets.push(inSet.slice());
+      return;
+    }
+    if (m - start < need - chosen) return;
+    for (let j = start; j < m; j++) {
+      if (sets.length > REGION_PLACEMENT_LIMIT) return;
+      if (inRow[rowOf[j]] >= capRow[rowOf[j]] || inCol[colOf[j]] >= capCol[colOf[j]]) continue;
+      let adjacent = false;
+      for (let t = 0; t < j; t++) {
+        if (inSet[t] && adj[t][j]) {
+          adjacent = true;
+          break;
+        }
+      }
+      if (adjacent) continue;
+      inSet[j] = true;
+      inRow[rowOf[j]]++;
+      inCol[colOf[j]]++;
+      dfs(j + 1, chosen + 1);
+      inSet[j] = false;
+      inRow[rowOf[j]]--;
+      inCol[colOf[j]]--;
+    }
+  };
+  dfs(0, 0);
+  if (sets.length > REGION_PLACEMENT_LIMIT) return finish([], true);
+  return finish(sets, false);
+}
+
 export function deduceRegionFit(st: State, tg: Targets): RuleOutcome {
   const n = st.n;
   const steps: Step[] = [];
@@ -659,74 +809,12 @@ export function deduceRegionFit(st: State, tg: Targets): RuleOutcome {
     const need = tg.reg - st.regPlaced[g];
     if (need <= 0) continue;
 
-    const cells: number[] = [];
-    for (let r = 0; r < n; r++) {
-      for (let c = 0; c < n; c++) {
-        const i = idx(n, r, c);
-        if (st.regionOf[i] === g && st.grid[i] === U) cells.push(i);
-      }
-    }
-    if (cells.length < need) return { witness: starvedRegionWitness(st, g, need), steps: [] };
-
+    const ep = enumerateRegionPlacements(st, tg, g);
+    if (!ep || ep.overflow) continue; // too many placements: no forced cells
+    if (ep.sets.length === 0) return { witness: starvedRegionWitness(st, g, need), steps: [] };
+    const cells = ep.cells;
+    const sets = ep.sets;
     const m = cells.length;
-    const capRow = new Array<number>(n);
-    const capCol = new Array<number>(n);
-    for (let r = 0; r < n; r++) capRow[r] = tg.row - st.rowPlaced[r];
-    for (let c = 0; c < n; c++) capCol[c] = tg.col - st.colPlaced[c];
-    const rowOf = new Array<number>(m);
-    const colOf = new Array<number>(m);
-    const adj: boolean[][] = Array.from({ length: m }, () => new Array<boolean>(m).fill(false));
-    for (let a = 0; a < m; a++) {
-      rowOf[a] = Math.floor(cells[a] / n);
-      colOf[a] = cells[a] % n;
-      for (let b = a + 1; b < m; b++) {
-        const dr = rowOf[a] - Math.floor(cells[b] / n);
-        const dc = colOf[a] - cells[b] % n;
-        if (Math.max(Math.abs(dr), Math.abs(dc)) <= 1) {
-          adj[a][b] = true;
-          adj[b][a] = true;
-        }
-      }
-    }
-
-    const inSet = new Array<boolean>(m).fill(false);
-    const inRow = new Array<number>(n).fill(0);
-    const inCol = new Array<number>(n).fill(0);
-    const sets: boolean[][] = [];
-    const LIMIT = 50_000;
-
-    const dfs = (start: number, chosen: number): void => {
-      if (sets.length > LIMIT) return;
-      if (chosen === need) {
-        sets.push(inSet.slice());
-        return;
-      }
-      if (m - start < need - chosen) return;
-      for (let j = start; j < m; j++) {
-        if (sets.length > LIMIT) return;
-        if (inRow[rowOf[j]] >= capRow[rowOf[j]] || inCol[colOf[j]] >= capCol[colOf[j]]) continue;
-        let adjacent = false;
-        for (let t = 0; t < j; t++) {
-          if (inSet[t] && adj[t][j]) {
-            adjacent = true;
-            break;
-          }
-        }
-        if (adjacent) continue;
-        inSet[j] = true;
-        inRow[rowOf[j]]++;
-        inCol[colOf[j]]++;
-        dfs(j + 1, chosen + 1);
-        inSet[j] = false;
-        inRow[rowOf[j]]--;
-        inCol[colOf[j]]--;
-      }
-    };
-    dfs(0, 0);
-
-    if (sets.length === 0) return { witness: starvedRegionWitness(st, g, need), steps: [] };
-    if (sets.length > LIMIT) continue; // too many placements: no forced cells
-
     const always = new Set<number>(cells);
     const ever = new Set<number>();
     for (const s of sets) {
@@ -744,9 +832,158 @@ export function deduceRegionFit(st: State, tg: Targets): RuleOutcome {
   return { witness: null, steps };
 }
 
-// ---- D-R3: Row-band cover ----
+// ---- Pointing / claiming (placement-confined + count equality) ----
 //
-// Look at a small band of consecutive rows as a self-contained sub-puzzle:
+// Region-fit tells us what must happen INSIDE a region; pointing carries the
+// conclusion OUTSIDE: when every legal placement of region g's remaining
+// crowns lies in a single row r AND r needs exactly that many crowns, the
+// rest of row r is dead (same for columns). The mirrored direction holds for
+// lines: when every legal placement of row r's remaining crowns lies inside a
+// single region g AND g needs exactly that many, g's cells outside r are dead.
+// The equality check is what keeps the rule sound with 2 crowns per unit.
+// State is NOT mutated.
+
+const LINE_PLACEMENT_LIMIT = 50_000;
+
+/** Every legal way to place `need` crowns on `cells` (a single row or column
+ *  of U cells): king-separated, within column/row + region quotas. Mirrors
+ *  forcedIn1D's guards but returns the full placement list. Null on overflow. */
+function enumerateLinePlacements(st: State, tg: Targets, cells: number[], need: number, isRow: boolean): number[][] | null {
+  const n = st.n;
+  const placements: number[][] = [];
+  let overflow = false;
+  const tryPlace = (start: number, chosen: number[]): void => {
+    if (overflow) return;
+    if (placements.length > LINE_PLACEMENT_LIMIT) {
+      overflow = true;
+      return;
+    }
+    if (chosen.length === need) {
+      placements.push([...chosen]);
+      return;
+    }
+    const remaining = need - chosen.length;
+    for (let i = start; i <= cells.length - remaining; i++) {
+      if (overflow) return;
+      const ci = cells[i];
+      const cr = Math.floor(ci / n);
+      const cc = ci % n;
+      if (isRow) {
+        if (st.colPlaced[cc] >= tg.col) continue;
+        if (st.regPlaced[st.regionOf[ci]] >= tg.reg) continue;
+      } else {
+        if (st.rowPlaced[cr] >= tg.row) continue;
+        if (st.regPlaced[st.regionOf[ci]] >= tg.reg) continue;
+      }
+      if (chosen.length > 0) {
+        const prev = chosen[chosen.length - 1];
+        const pr = Math.floor(prev / n);
+        const pc = prev % n;
+        if (isRow) {
+          if (Math.abs(cc - pc) <= 1) continue;
+        } else {
+          if (Math.abs(cr - pr) <= 1) continue;
+        }
+      }
+      chosen.push(ci);
+      tryPlace(i + 1, chosen);
+      chosen.pop();
+    }
+  };
+  tryPlace(0, []);
+  return overflow ? null : placements;
+}
+
+export function deducePointing(st: State, tg: Targets): Step[] {
+  const n = st.n;
+  const out: Step[] = [];
+  const R = st.regPlaced.length;
+
+  // Region -> row / column.
+  for (let g = 0; g < R; g++) {
+    const need = regNeed(st, tg, g);
+    if (need <= 0) continue;
+    const ep = enumerateRegionPlacements(st, tg, g);
+    if (!ep || ep.overflow || ep.sets.length === 0) continue;
+    const everRows = new Set<number>();
+    const everCols = new Set<number>();
+    for (const s of ep.sets) {
+      for (let i = 0; i < ep.cells.length; i++) {
+        if (!s[i]) continue;
+        everRows.add(ep.rowOf[i]);
+        everCols.add(ep.colOf[i]);
+      }
+    }
+    if (everRows.size === 1) {
+      const r = [...everRows][0];
+      if (need === rowSlots(st, tg, r) && rowSlots(st, tg, r) > 0) {
+        for (let c = 0; c < n; c++) {
+          const i = idx(n, r, c);
+          if (st.grid[i] === U && st.regionOf[i] !== g) {
+            out.push({ r, c, to: E, rule: "pointing", reason: `Every way to place region ${g + 1}'s queens lies in row ${r + 1}, which needs exactly that many queens, so cross out the rest of the row.` });
+          }
+        }
+      }
+    }
+    if (everCols.size === 1) {
+      const c = [...everCols][0];
+      if (need === colSlots(st, tg, c) && colSlots(st, tg, c) > 0) {
+        for (let r = 0; r < n; r++) {
+          const i = idx(n, r, c);
+          if (st.grid[i] === U && st.regionOf[i] !== g) {
+            out.push({ r, c, to: E, rule: "pointing", reason: `Every way to place region ${g + 1}'s queens lies in column ${c + 1}, which needs exactly that many queens, so cross out the rest of the column.` });
+          }
+        }
+      }
+    }
+  }
+
+  // Line -> region (mirror): a row/column whose placements all sit in one
+  // region claims that region's remaining crowns.
+  const claimRegion = (line: number, isRow: boolean) => {
+    const slots = isRow ? rowSlots(st, tg, line) : colSlots(st, tg, line);
+    if (slots <= 0) return;
+    const cells: number[] = [];
+    for (let k = 0; k < n; k++) {
+      const r = isRow ? line : k;
+      const c = isRow ? k : line;
+      if (st.grid[idx(n, r, c)] === U) cells.push(idx(n, r, c));
+    }
+    if (cells.length === 0) return;
+    const placements = enumerateLinePlacements(st, tg, cells, slots, isRow);
+    if (!placements || placements.length === 0) return;
+    const everRegs = new Set<number>();
+    for (const p of placements) {
+      for (const cell of p) everRegs.add(st.regionOf[cell]);
+    }
+    if (everRegs.size !== 1) return;
+    const g = [...everRegs][0];
+    if (slots !== regNeed(st, tg, g)) return;
+    for (let r = 0; r < n; r++) {
+      for (let c = 0; c < n; c++) {
+        const i = idx(n, r, c);
+        const inLine = isRow ? r === line : c === line;
+        if (!inLine && st.grid[i] === U && st.regionOf[i] === g) {
+          out.push({
+            r, c, to: E, rule: "pointing",
+            reason: isRow
+              ? `Row ${line + 1} needs ${slots} ${slots === 1 ? "queen" : "queens"} and every way to place them lies in region ${g + 1}, so cross out that region's cells elsewhere.`
+              : `Column ${line + 1} needs ${slots} ${slots === 1 ? "queen" : "queens"} and every way to place them lies in region ${g + 1}, so cross out that region's cells elsewhere.`,
+          });
+        }
+      }
+    }
+  };
+  for (let r = 0; r < n; r++) claimRegion(r, true);
+  for (let c = 0; c < n; c++) claimRegion(c, false);
+
+  return out;
+}
+
+// ---- D-R3: Row/column-band cover ----
+//
+// Look at a small band of lines (any pair, or consecutive triples) as a
+// self-contained sub-puzzle:
 // every row must place exactly its quota of queens within the band, every
 // region may contribute between low_g and high_g queens to the band (from its
 // capacity outside), and no column may exceed its quota inside the band.
@@ -759,26 +996,61 @@ const MAX_BAND_ROWS = 3;
 const BAND_NODE_BUDGET = 12_000;
 
 export function deduceBand(st: State, tg: Targets): RuleOutcome {
+  // Phase 1: every pair of rows / columns (gapped pairs included — the
+  // counting argument does not care about consecutiveness, and gapped lines
+  // are king-independent, which humans read just as easily).
+  if (ENABLE_BAND_PAIRS) {
+    for (let a = 0; a < st.n; a++) {
+      for (let b = a + 1; b < st.n; b++) {
+        const res = bandAnalyze(st, tg, [a, b], "row");
+        if (res.witness || (res.steps.length > 0 && res.steps.length < 200)) return res;
+      }
+    }
+  }
+  if (ENABLE_COL_BANDS) {
+    for (let a = 0; a < st.n; a++) {
+      for (let b = a + 1; b < st.n; b++) {
+        const res = bandAnalyze(st, tg, [a, b], "col");
+        if (res.witness || (res.steps.length > 0 && res.steps.length < 200)) return res;
+      }
+    }
+  }
+  // Phase 2: consecutive triples (both axes). Full C(n,3) is left out
+  // deliberately: pairs already carry the gapped counting, triples cover the
+  // dense local interactions.
   for (let size = 2; size <= MAX_BAND_ROWS; size++) {
     for (let top = 0; top + size <= st.n; top++) {
       const rows: number[] = [];
       for (let r = top; r < top + size; r++) rows.push(r);
-      const res = bandAnalyze(st, tg, rows);
-      if (res.witness || (res.steps.length > 0 && res.steps.length < 200)) return res;
+      if (size > 2 || !ENABLE_BAND_PAIRS) {
+        const res = bandAnalyze(st, tg, rows, "row");
+        if (res.witness || (res.steps.length > 0 && res.steps.length < 200)) return res;
+      }
+      if (ENABLE_COL_BANDS && size > 2) {
+        const cols: number[] = [];
+        for (let c = top; c < top + size; c++) cols.push(c);
+        const res = bandAnalyze(st, tg, cols, "col");
+        if (res.witness || (res.steps.length > 0 && res.steps.length < 200)) return res;
+      }
     }
   }
   return { witness: null, steps: [] };
 }
 
-function bandAnalyze(st: State, tg: Targets, rows: number[]): RuleOutcome {
+export function bandAnalyze(st: State, tg: Targets, units: number[], axis: "row" | "col"): RuleOutcome {
   const n = st.n;
-  const inRows = new Set(rows);
-  const total = rows.length * tg.row;
+  const inBand = new Set(units);
+  const isRow = axis === "row";
+  const crossQuota = isRow ? tg.col : tg.row;
+  // Remaining slots in the band (placed crowns already consume quota).
+  let total = 0;
+  for (const u of units) total += isRow ? rowSlots(st, tg, u) : colSlots(st, tg, u);
+  if (total <= 0) return { witness: null, steps: [] };
 
   // Per-region in-band available cells and outside capacity (unknown cells only).
   const inCells: number[] = new Array(st.regPlaced.length).fill(0);
   const outCells: number[] = new Array(st.regPlaced.length).fill(0);
-  let bandCells: number[] = [];
+  const bandCells: number[] = [];
   let lowSum = 0;
   let highSum = 0;
   const low: number[] = new Array(st.regPlaced.length).fill(0);
@@ -788,7 +1060,7 @@ function bandAnalyze(st: State, tg: Targets, rows: number[]): RuleOutcome {
       const i = idx(n, r, c);
       if (st.grid[i] !== U) continue;
       const g = st.regionOf[i];
-      if (inRows.has(r)) {
+      if (inBand.has(isRow ? r : c)) {
         inCells[g]++;
         bandCells.push(i);
       } else {
@@ -797,118 +1069,155 @@ function bandAnalyze(st: State, tg: Targets, rows: number[]): RuleOutcome {
     }
   }
   for (let g = 0; g < st.regPlaced.length; g++) {
-    low[g] = Math.max(0, tg.reg - outCells[g]);
-    high[g] = Math.min(tg.reg, inCells[g]);
+    const need = regNeed(st, tg, g);
+    low[g] = Math.max(0, need - outCells[g]);
+    high[g] = Math.min(Math.max(0, need), inCells[g]);
     lowSum += low[g];
     highSum += high[g];
   }
+  const unitScope = isRow ? "row" : "column";
   if (lowSum > total) {
-    return { witness: { kind: "starved", scope: "row", unit: rows[0], cells: allUnitPos(st, "row", rows[0]), needed: total, available: lowSum }, steps: [] };
+    return { witness: { kind: "starved", scope: unitScope, unit: units[0], cells: allUnitPos(st, unitScope, units[0]), needed: total, available: lowSum }, steps: [] };
   }
   if (highSum < total) {
-    return { witness: { kind: "starved", scope: "row", unit: rows[0], cells: allUnitPos(st, "row", rows[0]), needed: total, available: highSum }, steps: [] };
+    return { witness: { kind: "starved", scope: unitScope, unit: units[0], cells: allUnitPos(st, unitScope, units[0]), needed: total, available: highSum }, steps: [] };
   }
   if (lowSum !== total && highSum !== total) return { witness: null, steps: [] }; // loose window: few marks, skip the DFS
   if (bandCells.length === 0) return { witness: null, steps: [] };
 
-  // Row candidates: the row's unknown cells grouped into legal sets of `quota`.
-  const rowCands: Array<Array<number[]>> = rows.map((r) => {
-    const cols: number[] = [];
-    for (let c = 0; c < n; c++) {
-      if (st.grid[idx(n, r, c)] === U) cols.push(c);
+  // Per-line candidates: the line's unknown cells grouped into legal sets of
+  // its REMAINING slot count (placed crowns already consume quota).
+  const lineCands: Array<Array<number[]> | null> = units.map((u) => {
+    const slots = isRow ? rowSlots(st, tg, u) : colSlots(st, tg, u);
+    const ks: number[] = [];
+    for (let k = 0; k < n; k++) {
+      const r = isRow ? u : k;
+      const c = isRow ? k : u;
+      if (st.grid[idx(n, r, c)] === U) ks.push(k);
     }
-    const out: number[][] = [];
-    if (tg.row === 1) {
-      for (const c of cols) out.push([c]);
-    } else {
-      for (let a = 0; a < cols.length; a++) {
-        for (let b = a + 1; b < cols.length; b++) {
-          if (Math.abs(cols[a] - cols[b]) >= 2) out.push([cols[a], cols[b]]);
+    if (slots <= 0) return [[]];
+    if (slots === 1) return ks.map((k) => [k]);
+    if (slots === 2) {
+      const out: number[][] = [];
+      for (let a = 0; a < ks.length; a++) {
+        for (let b = a + 1; b < ks.length; b++) {
+          if (Math.abs(ks[a] - ks[b]) >= 2) out.push([ks[a], ks[b]]);
         }
       }
+      return out;
     }
-    return out;
+    return null; // unusual quota: decline rather than guess
   });
+  if (lineCands.some((c) => c === null)) return { witness: null, steps: [] };
+  const cands = lineCands as Array<Array<number[]>>;
 
   const count = new Array<number>(st.regPlaced.length).fill(0);
-  const colCount = new Array<number>(n).fill(0);
+  const crossCount = new Array<number>(n).fill(0);
+  const crossCap = new Array<number>(n);
+  for (let k = 0; k < n; k++) crossCap[k] = crossQuota - (isRow ? st.colPlaced[k] : st.rowPlaced[k]);
+  const cellOf = (ui: number, k: number) => (isRow ? idx(n, units[ui], k) : idx(n, k, units[ui]));
+  const touches = (a: number, b: number) => {
+    const ar = Math.floor(a / n);
+    const ac = a % n;
+    const br = Math.floor(b / n);
+    const bc = b % n;
+    return Math.max(Math.abs(ar - br), Math.abs(ac - bc)) <= 1;
+  };
   const confs: Array<Array<Array<number>>> = [];
   let nodes = 0;
   let aborted = false;
 
-  const dfs = (ri: number): void => {
+  const dfs = (ui: number): void => {
     if (aborted) return;
     if (++nodes > BAND_NODE_BUDGET) {
       aborted = true;
       return;
     }
-    if (ri === rows.length) {
+    if (ui === units.length) {
       for (let g = 0; g < st.regPlaced.length; g++) {
         if (count[g] < low[g]) return; // a region fell short of its minimum
       }
-      confs.push(rowCands.map((_, k) => assigAt[k]));
+      confs.push(cands.map((_, k) => assigAt[k]));
       if (confs.length > 300) aborted = true;
       return;
     }
-    for (const cand of rowCands[ri]) {
+    for (const cand of cands[ui]) {
       let ok = true;
-      for (const c of cand) {
-        const g = st.regionOf[idx(n, rows[ri], c)];
+      for (const k of cand) {
+        const cell = cellOf(ui, k);
+        const g = st.regionOf[cell];
         if (count[g] + 1 > high[g]) {
           ok = false;
           break;
         }
-        if (colCount[c] + 1 > tg.col) {
+        if (crossCount[k] + 1 > crossCap[k]) {
           ok = false;
           break;
         }
+        // King-move against already-assigned neighbouring lines.
+        for (let pj = 0; pj < ui; pj++) {
+          if (Math.abs(units[ui] - units[pj]) > 1) continue;
+          for (const pk of assigAt[pj]) {
+            if (touches(cell, cellOf(pj, pk))) {
+              ok = false;
+              break;
+            }
+          }
+          if (!ok) break;
+        }
+        if (!ok) break;
       }
       if (!ok) continue;
-      for (const c of cand) {
-        const g = st.regionOf[idx(n, rows[ri], c)];
+      for (const k of cand) {
+        const cell = cellOf(ui, k);
+        const g = st.regionOf[cell];
         count[g]++;
-        colCount[c]++;
+        crossCount[k]++;
       }
-      // Forward prune: can the remaining rows still satisfy the global minimum?
-      const remaining = (rows.length - ri - 1) * tg.row;
+      // Forward prune: can the remaining lines still satisfy the global minimum?
+      let remaining = 0;
+      for (let q = ui + 1; q < units.length; q++) remaining += isRow ? rowSlots(st, tg, units[q]) : colSlots(st, tg, units[q]);
       let lowSumC = 0;
       for (let g = 0; g < st.regPlaced.length; g++) if (count[g] < low[g]) lowSumC += low[g] - count[g];
       if (lowSumC <= remaining) {
-        assigAt[ri] = cand;
-        dfs(ri + 1);
+        assigAt[ui] = cand;
+        dfs(ui + 1);
       }
-      for (const c of cand) {
-        const g = st.regionOf[idx(n, rows[ri], c)];
+      for (const k of cand) {
+        const cell = cellOf(ui, k);
+        const g = st.regionOf[cell];
         count[g]--;
-        colCount[c]--;
+        crossCount[k]--;
       }
       if (aborted) return;
     }
   };
-  const assigAt: Array<number[]> = new Array(rows.length);
+  const assigAt: Array<number[]> = new Array(units.length);
   dfs(0);
   if (aborted) return { witness: null, steps: [] };
   if (confs.length === 0) {
     // The band admits no completion at all => the whole puzzle is infeasible.
-    return { witness: { kind: "starved", scope: "row", unit: rows[0], cells: allUnitPos(st, "row", rows[0]), needed: total }, steps: [] };
+    return { witness: { kind: "starved", scope: unitScope, unit: units[0], cells: allUnitPos(st, unitScope, units[0]), needed: total }, steps: [] };
   }
 
   const always = new Set<number>(bandCells);
   const ever = new Set<number>();
   for (const conf of confs) {
     const present = new Set<number>();
-    for (let ri = 0; ri < conf.length; ri++) {
-      for (const c of conf[ri]) present.add(idx(n, rows[ri], c));
+    for (let ui = 0; ui < conf.length; ui++) {
+      for (const k of conf[ui]) present.add(cellOf(ui, k));
     }
     for (const cell of bandCells) {
       if (!present.has(cell)) always.delete(cell);
       else ever.add(cell);
     }
   }
+  const unitNames = units.map((u) => u + 1).join(units.length === 2 && Math.abs(units[0] - units[1]) > 1 ? " and " : ", ");
+  const lineWord = isRow ? "rows" : "columns";
   const steps: Step[] = [];
-  for (const c of always) steps.push({ r: Math.floor(c / n), c: c % n, to: K, rule: "band-cover", reason: "Every way to fill these rows together includes this cell" });
+  for (const c of always) steps.push({ r: Math.floor(c / n), c: c % n, to: K, rule: "band-cover", reason: `Every way to fill ${lineWord} ${unitNames} together includes this cell` });
   for (const c of bandCells) {
-    if (!ever.has(c)) steps.push({ r: Math.floor(c / n), c: c % n, to: E, rule: "band-cover", reason: "No way to fill these rows together uses this cell" });
+    if (!ever.has(c)) steps.push({ r: Math.floor(c / n), c: c % n, to: E, rule: "band-cover", reason: `No way to fill ${lineWord} ${unitNames} together uses this cell` });
   }
   return { witness: null, steps };
 }
@@ -1061,8 +1370,14 @@ export function findForcedSteps(st: State, tg: Targets): RuleOutcome | null {
   if (regionFit.witness) return regionFit;
   if (regionFit.steps.length > 0) return regionFit;
 
+  if (ENABLE_POINTING) {
+    const pointing = deducePointing(st, tg);
+    if (pointing.length > 0) return { witness: null, steps: pointing };
+  }
+
   const hall = deduceHall(st, tg);
-  if (hall.length > 0) return { witness: null, steps: hall };
+  if (hall.witness) return hall;
+  if (hall.steps.length > 0) return hall;
 
   const band = deduceBand(st, tg);
   if (band.witness) return band;
@@ -1076,11 +1391,31 @@ const RULE_RANK: Record<string, number> = {
   propagate: 0,
   "1d-fit": 1,
   critical: 2,
-  "region-fit": 3,
-  hall: 4,
-  "band-cover": 5,
-  search: 6,
+  pointing: 3,
+  "region-fit": 4,
+  hall: 5,
+  "band-cover": 6,
+  search: 7,
 };
+
+// Rollout flags for the harder-human-deduction set (1 pointing, 2 band
+// pairs + column bands, 3 dynamic Hall). One-line revert per rule.
+const ENABLE_POINTING = true;
+const ENABLE_DYNAMIC_HALL = true;
+const ENABLE_BAND_PAIRS = true;
+const ENABLE_COL_BANDS = true;
+
+/** Remaining crown slots in a row / column given already-placed crowns. */
+function rowSlots(st: State, tg: Targets, r: number): number {
+  return tg.row - st.rowPlaced[r];
+}
+function colSlots(st: State, tg: Targets, c: number): number {
+  return tg.col - st.colPlaced[c];
+}
+/** Remaining crowns a region still needs. */
+function regNeed(st: State, tg: Targets, g: number): number {
+  return tg.reg - st.regPlaced[g];
+}
 
 /** Run a single-cell search proof. Returns one step if found, else null.
  *  State is NOT mutated. */
@@ -1144,7 +1479,7 @@ export interface DeduceResult {
   solved: boolean;
   contradiction: boolean;
   steps: Step[][];
-  /** Highest rule used: propagate < 1d-fit < critical < region-fit < hall < band-cover < search */
+  /** Highest rule used: propagate < 1d-fit < critical < pointing < region-fit < hall < band-cover < search */
   hardest: string;
 }
 

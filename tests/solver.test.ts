@@ -2,7 +2,7 @@ import { describe, it } from "node:test";
 import assert from "node:assert/strict";
 import fs from "node:fs";
 import { validatePuzzleInput, validateSolution } from "../src/games/crowns/validator.js";
-import { solveAll, solvePuzzle, testAssumption, testAssumptionDetailed, buildInitialState, tryPlaceCrown, markCrown, propagate, collectPropagateChanges, solveByDeduction, stateToGrid, deduceRegionFit, deduceBand, K, E } from "../src/games/crowns/solver.js";
+import { solveAll, solvePuzzle, testAssumption, testAssumptionDetailed, buildInitialState, tryPlaceCrown, markCrown, propagate, collectPropagateChanges, solveByDeduction, stateToGrid, deduceRegionFit, deduceBand, deducePointing, deduceHall, bandAnalyze, K, E } from "../src/games/crowns/solver.js";
 import { findHints } from "../src/games/crowns/hints.js";
 import { nextMark } from "../src/games/crowns/marks.js";
 import { generatePuzzle, generateRegions } from "../src/games/crowns/generator.js";
@@ -485,6 +485,8 @@ describe("deduction engine", () => {
       const kinds = [
         { rule: "region-fit", steps: deduceRegionFit(state, tg).steps },
         { rule: "band-cover", steps: deduceBand(state, tg).steps },
+        { rule: "pointing", steps: deducePointing(state, tg) },
+        { rule: "hall", steps: deduceHall(state, tg).steps },
       ];
       const premise = validatePuzzleInput({ size: 6, crownsPerRow: 1, crownsPerColumn: 1, crownsPerRegion: 1, regions, initial: toInitial(state) });
       assert.ok(premise.puzzle);
@@ -499,6 +501,103 @@ describe("deduction engine", () => {
       }
     }
     assert.ok(verified > 0, "the new rules must actually fire on some case");
+  });
+});
+
+// ---------------------------------------------------------------------------
+// Harder human deductions: pointing, dynamic hall, gapped band pairs
+// ---------------------------------------------------------------------------
+describe("harder human deductions", () => {
+  // 5x5, 1 crown per row/column/region.
+  // Solution crowns: (0,0), (1,2), (2,4), (3,1), (4,3).
+  const regions5 = [
+    [0, 0, 1, 1, 1],
+    [0, 2, 1, 1, 1],
+    [2, 2, 2, 2, 2],
+    [3, 3, 3, 3, 4],
+    [3, 3, 4, 4, 4],
+  ];
+  const blank5 = () => Array.from({ length: 5 }, () => Array(5).fill("?"));
+  const load = (initial: string[][]) => {
+    const checked = validatePuzzleInput({ size: 5, crownsPerRow: 1, crownsPerColumn: 1, crownsPerRegion: 1, regions: regions5, initial });
+    assert.deepEqual(checked.errors, []);
+    assert.ok(checked.puzzle);
+    const { state, tg } = buildInitialState(checked.puzzle!);
+    for (let r = 0; r < 5; r++) for (let c = 0; c < 5; c++) {
+      if (initial[r][c] === EMPTY) state.grid[r * 5 + c] = E;
+      if (initial[r][c] === CROWN) assert.ok(markCrown(state, tg, r, c));
+    }
+    return { puzzle: checked.puzzle!, state, tg };
+  };
+  const verifySound = (puzzle: NormalizedPuzzle, steps: Array<{ r: number; c: number; to: number }>, rule: string) => {
+    for (const s of steps) {
+      const opposite = s.to === K ? EMPTY : CROWN;
+      const res = testAssumption(puzzle, s.r, s.c, opposite);
+      if (res === "unknown") continue;
+      assert.equal(res, "unsatisfiable", `${rule} mark at (${s.r},${s.c}) must be forced`);
+    }
+  };
+
+  it("pointing and dynamic hall fire on effective (not geometric) containment", () => {
+    const initial = blank5();
+    initial[1][0] = EMPTY; // region 1's only row-2 cell; solution crown (0,0) survives
+    const { puzzle, state, tg } = load(initial);
+    assert.ok(solveAll(puzzle, { limit: 1 }).length > 0, "premise must stay solvable");
+
+    // Region 1's remaining placements are all in row 1 and row 1 needs exactly
+    // one queen: the rest of row 1 is dead.
+    const pointing = deducePointing(state, tg);
+    const pCells = new Set(pointing.map((s) => `${s.r},${s.c}`));
+    assert.ok(pCells.has("0,2") && pCells.has("0,3") && pCells.has("0,4"), "pointing must cross row 1 outside region 1");
+    assert.ok(pointing.every((s) => s.to === E && s.rule === "pointing"));
+    verifySound(puzzle, pointing, "pointing");
+
+    // No region is GEOMETRICALLY contained in row 1 (region 1 leaks to row 2
+    // on the map), so the classic static hall is silent — the dynamic rule
+    // fires on the effective footprint instead.
+    const hall = deduceHall(state, tg);
+    assert.equal(hall.witness, null);
+    assert.ok(hall.steps.some((s) => s.r === 0 && s.c === 2 && s.to === E), "dynamic hall must cross (0,2)");
+    verifySound(puzzle, hall.steps, "hall");
+  });
+
+  it("pointing respects the count-equality guard (no cross without it)", () => {
+    const initial = blank5();
+    initial[1][0] = EMPTY;
+    initial[0][0] = CROWN; // solution crown: region 1 needs 0, row 1 needs 0
+    const { puzzle, state, tg } = load(initial);
+    assert.ok(solveAll(puzzle, { limit: 1 }).length > 0, "premise must stay solvable");
+    const pointing = deducePointing(state, tg);
+    // Region 1 is satisfied and row 1 is full: nothing left to claim there.
+    assert.ok(pointing.every((s) => s.r !== 0), "no pointing step may touch the full row");
+    // But the mirror still fires: row 3's only region is region 3, which needs
+    // exactly row 3's one slot, so region 3's cell (1,1) is dead.
+    assert.ok(pointing.some((s) => s.r === 1 && s.c === 1 && s.to === E), "line-to-region mirror must cross (1,1)");
+    verifySound(puzzle, pointing, "pointing");
+  });
+
+  it("a gapped row pair locks (column bands ride the same machinery)", () => {
+    const initial = blank5();
+    // Eliminate every in-band cell of region 2 from rows {0,2} without
+    // touching the solution: rows {0,2} then touch exactly regions {1,3}.
+    initial[0][1] = EMPTY;
+    initial[0][2] = EMPTY;
+    initial[0][3] = EMPTY;
+    initial[0][4] = EMPTY;
+    const { puzzle, state, tg } = load(initial);
+    assert.ok(solveAll(puzzle, { limit: 1 }).length > 0, "premise must stay solvable");
+    // The gapped pair is tight and forces the row-1 queen at (0,0).
+    const pair = bandAnalyze(state, tg, [0, 2], "row");
+    assert.equal(pair.witness, null);
+    const forced = pair.steps.find((s) => s.r === 0 && s.c === 0);
+    assert.ok(forced && forced.to === K, "gapped pair must force queen (0,0)");
+    assert.ok(forced.reason.includes("1 and 3"), "reason must name the gapped rows");
+    verifySound(puzzle, pair.steps, "band-cover");
+    // End to end the band cascade surfaces the same forced queen.
+    const endToEnd = deduceBand(state, tg);
+    assert.equal(endToEnd.witness, null);
+    assert.ok(endToEnd.steps.some((s) => s.r === 0 && s.c === 0 && s.to === K));
+    verifySound(puzzle, endToEnd.steps, "band-cover");
   });
 });
 

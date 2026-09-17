@@ -20,7 +20,7 @@ function adjacencyParent(state: { n: number; grid: number[] }, r: number, c: num
 
 export type HintKind = "queen" | "cross";
 export type HintScope = "row" | "column" | "region" | "neighbors" | "analysis";
-export type HintMethod = "adjacency" | "unit-complete" | "unit-forced" | "1d-fit" | "critical" | "region-fit" | "hall" | "band-cover" | "contradiction";
+export type HintMethod = "adjacency" | "unit-complete" | "unit-forced" | "1d-fit" | "critical" | "pointing" | "region-fit" | "hall" | "band-cover" | "contradiction";
 export type HintDifficulty = "Trivial" | "Easy" | "Intermediate" | "Hard" | "Expert";
 
 export interface Hint {
@@ -175,6 +175,21 @@ function stepToHint(puzzle: NormalizedPuzzle, step: Step): Hint | null {
         proofCost: 0,
         difficultyLabel: "Intermediate",
         text: `Placing a queen at ${cellName(position)} would block too many cells in a neighboring unit, leaving no valid way to fill it.`,
+        cells: context,
+        decisiveCells: [position],
+      };
+    }
+
+    case "pointing": {
+      const context = analysisContext(puzzle, r, c);
+      return {
+        kind: "cross",
+        scope: "analysis",
+        method: "pointing",
+        difficulty: 4,
+        proofCost: 0,
+        difficultyLabel: "Intermediate",
+        text: reason,
         cells: context,
         decisiveCells: [position],
       };
