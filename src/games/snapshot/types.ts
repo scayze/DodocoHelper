@@ -1,7 +1,8 @@
 /** Snapshot minigame: guess where + when a photograph was taken.
  *
- * Data is link-only: images stay on Wikimedia Commons (hotlinked direct
- * upload.wikimedia.org thumbs). Regenerate with `scripts/fetch-snapshot.mjs`.
+ * Data is link-only: images stay on their host (currently Historypin pins
+ * curated through the Tinder view). The dataset loads at runtime from
+ * `/api/tinder/export` — same schema, separate table — never bundled.
  */
 
 export interface SnapshotItem {
@@ -9,9 +10,9 @@ export interface SnapshotItem {
   id: string;
   /** Short human label (usually the depicted place/event). */
   title: string;
-  /** Hotlink thumb (direct upload.wikimedia.org URL). No bytes stored. */
+  /** Hotlink image URL (served by the pin host). No bytes stored. */
   image: string;
-  /** Commons file page for attribution. */
+  /** Pin/file page for attribution. */
   page: string;
   /** Depicted location. */
   lat: number;
@@ -23,7 +24,7 @@ export interface SnapshotItem {
   photographer?: string;
   /** 1-2 sentence explanation, plain-text English. */
   blurb: string;
-  /** Blurb attribution URL (Commons file or Wikipedia article). */
+  /** Blurb attribution URL (pin page or Wikipedia article). */
   blurbSource: string;
 }
 

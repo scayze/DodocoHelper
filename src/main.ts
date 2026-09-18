@@ -10,6 +10,7 @@ import {
 import { initGameLeaderboard, initNameGate } from "./leaderboard/view.js";
 import { showToast } from "./leaderboard/toast.js";
 import { el } from "./games/dom.js";
+import { initTinder } from "./games/tinder/controller.js";
 
 initNameGate();
 initGameLeaderboard("crowns", "crowns");
@@ -178,3 +179,21 @@ for (const game of Object.values(games)) game.unmount();
 initHiddenReset();
 paintGate();
 paintTabs();
+
+// /dodoco/tinder (or #/tinder): standalone curator view. Boots after the
+// normal shell so all element lookups succeed; the shell stays hidden
+// underneath. No name gate, no timers, no leaderboard.
+if (
+  typeof location !== "undefined" &&
+  (location.pathname.includes("/tinder") || location.hash.includes("tinder"))
+) {
+  document.title = "Tinder - Dodoco Helper";
+  el("game-title").textContent = "Tinder";
+  el("primary-nav").classList.add("hidden");
+  el("home").classList.add("hidden");
+  el("solver").classList.add("hidden");
+  for (const id of ["mines", "seasons", "snapshot", "tents"]) {
+    document.getElementById(id)?.classList.add("hidden");
+  }
+  initTinder();
+}

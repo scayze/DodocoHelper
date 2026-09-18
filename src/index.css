@@ -1095,6 +1095,7 @@ nav[aria-label="Primary"] .mode-btn svg {
 .snap-result-pane {
   display: flex;
   flex-direction: column;
+  position: relative;
   flex: 1 1 auto;
   min-height: 140px;
   border-radius: 12px;
@@ -1165,24 +1166,6 @@ nav[aria-label="Primary"] .mode-btn svg {
   display: none;
 }
 
-.snap-details-image {
-  display: flex;
-  flex-direction: column;
-  gap: 8px;
-  flex: 1 1 auto;
-  min-height: 0;
-  overflow-y: auto;
-  overscroll-behavior: contain;
-  border-radius: 12px;
-  border: 1px solid rgba(34, 49, 84, 0.15);
-  background: rgba(255, 255, 255, 0.6);
-  padding: 12px;
-}
-
-.snap-details-image.hidden {
-  display: none;
-}
-
 .snap-details-img {
   width: 100%;
   aspect-ratio: 4 / 3;
@@ -1191,13 +1174,65 @@ nav[aria-label="Primary"] .mode-btn svg {
   background: rgba(250, 245, 230, 0.1);
   user-select: none;
   -webkit-user-drag: none;
+  cursor: zoom-in;
 }
 
-.snap-details-caption {
-  font-size: 13px;
+.snap-details-img.hidden {
+  display: none;
+}
+
+/* Fullscreen image viewer (same behavior as the Tinder lightbox). */
+.snap-lightbox {
+  position: fixed;
+  inset: 0;
+  z-index: 60;
+  align-items: center;
+  justify-content: center;
+  background: rgba(10, 8, 4, 0.92);
+  padding: 12px;
+}
+.snap-lightbox:not(.hidden) {
+  display: flex;
+}
+.snap-lightbox-img {
+  max-width: 100vw;
+  max-height: 100vh;
+  object-fit: contain;
+  border-radius: 8px;
+  touch-action: pinch-zoom;
+}
+.snap-lightbox-close {
+  position: absolute;
+  top: 12px;
+  right: 12px;
+  height: 44px;
+  width: 44px;
+  border-radius: 9999px;
+  font-size: 18px;
   font-weight: 700;
-  line-height: 1.4;
-  color: #a37f1c;
+}
+
+/* Fullscreen result map: same pane, expanded over the viewport. */
+.snap-map-expand {
+  position: absolute;
+  top: 8px;
+  right: 8px;
+  z-index: 1000;
+  height: 40px;
+  width: 40px;
+  border-radius: 9999px;
+  font-size: 17px;
+  font-weight: 700;
+  line-height: 1;
+  background: rgba(255, 255, 255, 0.9);
+  border: 1px solid rgba(34, 49, 84, 0.25);
+  cursor: pointer;
+}
+.snap-result-fullscreen {
+  position: fixed;
+  inset: 0;
+  z-index: 60;
+  border-radius: 0;
 }
 
 .snap-year {
@@ -1276,4 +1311,95 @@ nav[aria-label="Primary"] .mode-btn svg {
   border-color: #9ca3af;
   box-shadow: none;
   cursor: not-allowed;
+}
+
+/* Tinder curator: minimal card, mobile-first. Only functional elements. */
+#tinder {
+  display: grid;
+}
+
+#tinder.hidden {
+  display: none;
+}
+
+#tinder-col {
+  width: min(94vw, 520px);
+  margin-inline: auto;
+}
+
+.tinder-img {
+  width: 100%;
+  aspect-ratio: 4 / 3;
+  object-fit: cover;
+  border-radius: 12px;
+  background: #e9dcbd;
+  user-select: none;
+  -webkit-user-drag: none;
+}
+.tinder-img-zoomable {
+  cursor: zoom-in;
+}
+
+.tinder-lightbox {
+  position: fixed;
+  inset: 0;
+  z-index: 60;
+  align-items: center;
+  justify-content: center;
+  background: rgba(10, 8, 4, 0.92);
+  padding: 12px;
+}
+.tinder-lightbox:not(.hidden) {
+  display: flex;
+}
+.tinder-lightbox-img {
+  max-width: 100vw;
+  max-height: 100vh;
+  object-fit: contain;
+  border-radius: 8px;
+  touch-action: pinch-zoom;
+}
+.tinder-lightbox-close {
+  position: absolute;
+  top: 12px;
+  right: 12px;
+  height: 44px;
+  width: 44px;
+  border-radius: 9999px;
+  font-size: 18px;
+  font-weight: 700;
+}
+
+.tinder-blurb {
+  font-size: 14px;
+  line-height: 1.55;
+  color: rgba(22, 34, 61, 0.88);
+  border-left: 3px solid #d9b64a;
+  padding-left: 8px;
+  display: -webkit-box;
+  -webkit-line-clamp: 3;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+}
+.tinder-blurb.is-expanded {
+  display: block;
+  max-height: 132px;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+}
+.tinder-blurb-toggle {
+  margin-top: 2px;
+  font-size: 13px;
+  font-weight: 600;
+  color: #a07d1c;
+  text-decoration: underline;
+  background: none;
+  border: none;
+  padding: 0;
+  cursor: pointer;
+}
+
+#tinder-accept:disabled,
+#tinder-reject:disabled {
+  opacity: 0.5;
 }

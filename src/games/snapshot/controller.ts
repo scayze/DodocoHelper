@@ -13,6 +13,8 @@ import L from "leaflet";
 import "leaflet/dist/leaflet.css";
 import {
   snapshotItems,
+  snapshotLoaded,
+  loadSnapshotItems,
   pickDailyIndex,
   pickRandomIndex,
   haversineKm,
@@ -213,7 +215,12 @@ export function createSnapshotGame(): GameInstance {
   resultOsmEl.setAttribute("aria-label", "Result map: your guess and the answer.");
   const resultHint = document.createElement("p");
   resultHint.className = "snap-map-hint";
-  resultPane.append(resultOsmEl, resultHint);
+  const mapExpandBtn = document.createElement("button");
+  mapExpandBtn.type = "button";
+  mapExpandBtn.className = "snap-map-expand";
+  mapExpandBtn.textContent = "⤢";
+  mapExpandBtn.setAttribute("aria-label", "Show result map fullscreen");
+  resultPane.append(resultOsmEl, resultHint, mapExpandBtn);
   const detailsText = document.createElement("div");
   detailsText.className = "snap-details-text";
   const detailsTitle = document.createElement("p");
@@ -245,19 +252,37 @@ export function createSnapshotGame(): GameInstance {
     detailsLicense,
     detailsDaily,
   );
-  const detailsImageWrap = document.createElement("div");
-  detailsImageWrap.className = "snap-details-image hidden";
   const detailsImg = document.createElement("img");
-  detailsImg.className = "snap-details-img";
+  detailsImg.className = "snap-details-img hidden";
   detailsImg.draggable = false;
   detailsImg.referrerPolicy = "no-referrer";
   detailsImg.loading = "lazy";
-  const detailsCaption = document.createElement("p");
-  detailsCaption.className = "snap-details-caption";
-  detailsImageWrap.append(detailsImg, detailsCaption);
-  screenResults.append(resultsToggle, resultPane, detailsText, detailsImageWrap);
+  detailsImg.tabIndex = 0;
+  detailsImg.setAttribute("role", "button");
+  detailsImg.setAttribute("aria-label", "View image fullscreen");
+  screenResults.append(resultsToggle, resultPane, detailsText, detailsImg);
 
   grid.append(screenPhoto, screenWhen, screenGuess, screenResults);
+
+  // Fullscreen image viewer: same behavior as the Tinder lightbox.
+  const snapLightbox = document.createElement("div");
+  snapLightbox.className = "snap-lightbox hidden";
+  snapLightbox.setAttribute("role", "dialog");
+  snapLightbox.setAttribute("aria-modal", "true");
+  snapLightbox.setAttribute("aria-label", "Image fullscreen view");
+  const snapLightboxImg = document.createElement("img");
+  snapLightboxImg.className = "snap-lightbox-img";
+  snapLightboxImg.draggable = false;
+  snapLightboxImg.referrerPolicy = "no-referrer";
+  const snapLightboxClose = document.createElement("button");
+  snapLightboxClose.type = "button";
+  snapLightboxClose.className = "btn-outline snap-lightbox-close";
+  snapLightboxClose.textContent = "✕";
+  snapLightboxClose.setAttribute("aria-label", "Close fullscreen view");
+  snapLightbox.append(snapLightboxImg, snapLightboxClose);
+  // Host at body level: panel backdrop-filters would otherwise contain
+  // the fixed overlay and clip it to the card.
+  document.body.appendChild(snapLightbox);
 
   // ---- Persistence restore ----
   {
@@ -437,6 +462,7 @@ export function createSnapshotGame(): GameInstance {
   }
 
   function paintResultTab(): void {
+    // Leaving the result tab exits map fullscreen (the pane is hidden).
     resultsResultBtn.classList.toggle("is-active", resultsTab === "result");
     resultsTextBtn.classList.toggle("is-active", resultsTab === "text");
     resultsImgBtn.classList.toggle("is-active", resultsTab === "image");
@@ -444,8 +470,9 @@ export function createSnapshotGame(): GameInstance {
     resultsTextBtn.setAttribute("aria-pressed", String(resultsTab === "text"));
     resultsImgBtn.setAttribute("aria-pressed", String(resultsTab === "image"));
     resultPane.classList.toggle("hidden", resultsTab !== "result");
+    if (resultsTab !== "result") setMapFullscreen(false);
     detailsText.classList.toggle("hidden", resultsTab !== "text");
-    detailsImageWrap.classList.toggle("hidden", resultsTab !== "image");
+    detailsImg.classList.toggle("hidden", resultsTab !== "image");
     resultHint.textContent = revealed ? answerStatus() : "";
   }
 
@@ -612,6 +639,58 @@ export function createSnapshotGame(): GameInstance {
     yearNum.disabled = locked;
   }
 
+  /** Fullscreen result map: the pane is rehosted at body level (panel
+   *  backdrop-filters would otherwise clip the fixed overlay to the card)
+   *  and expanded over the viewport. Tiles re-measure after the switch.
+   *  Closed by button or Esc; leaving the result tab also exits. Map
+   *  stays fully interactive while expanded. */
+  let mapHome: { parent: Node; next: Node | null } | null = null;
+  function setMapFullscreen(on: boolean): void {
+    const isOn = resultPane.classList.contains("snap-result-fullscreen");
+    if (on === isOn) return;
+    if (on) {
+      if (resultPane.parentNode) {
+        mapHome = { parent: resultPane.parentNode, next: resultPane.nextSibling };
+        document.body.appendChild(resultPane);
+      }
+    } else if (mapHome) {
+      mapHome.parent.insertBefore(resultPane, mapHome.next);
+      mapHome = null;
+    }
+    resultPane.classList.toggle("snap-result-fullscreen", on);
+    mapExpandBtn.textContent = on ? "✕" : "⤢";
+    mapExpandBtn.setAttribute(
+      "aria-label",
+      on ? "Exit fullscreen map" : "Show result map fullscreen",
+    );
+    document.body.style.overflow = on ? "hidden" : "";
+    if (on && resultMap) {
+      requestAnimationFrame(() => {
+        resultMap?.invalidateSize();
+        if (revealed) fitResultBounds();
+      });
+    }
+  }
+
+  /** Fullscreen image viewer: shows the rendered answer photo large.
+   *  Voting/round state untouched; any tap or Esc closes it again. */
+  function openSnapLightbox(): void {
+    const src = detailsImg.getAttribute("src");
+    if (!src) return;
+    snapLightboxImg.setAttribute("src", src);
+    snapLightboxImg.alt = detailsImg.alt;
+    snapLightbox.classList.remove("hidden");
+    document.body.style.overflow = "hidden";
+    snapLightboxClose.focus();
+  }
+  function closeSnapLightbox(): void {
+    if (snapLightbox.classList.contains("hidden")) return;
+    snapLightbox.classList.add("hidden");
+    snapLightboxImg.removeAttribute("src");
+    document.body.style.overflow = "";
+    detailsImg.focus();
+  }
+
   function paint(): void {
     if (!item) {
       img.removeAttribute("src");
@@ -646,13 +725,15 @@ export function createSnapshotGame(): GameInstance {
       detailsWikiLink.classList.toggle("hidden", !wikiSrc);
       if (wikiSrc) detailsWikiLink.setAttribute("href", item.blurbSource);
       detailsLink.setAttribute("href", item.page);
+      detailsLink.textContent = item.page.includes("commons.wikimedia.org")
+        ? "View source on Commons ↗"
+        : "View source ↗";
       detailsLicense.textContent = item.license;
       detailsDaily.textContent = modeShell.mode === "daily" ? dailyCompleteMessage() : "";
       if (detailsImg.getAttribute("src") !== item.image) {
         detailsImg.setAttribute("src", item.image);
       }
       detailsImg.alt = `${item.title} — answer revealed`;
-      detailsCaption.textContent = `${item.title} — ${item.placeName}, ${item.year}`;
       // The map hint bar carries the answer on the result screen; the shared
       // status line repeats it only on the photo screen (which has no hint bar).
       setStatus(view === "photo" ? answerStatus() : "");
@@ -747,7 +828,10 @@ export function createSnapshotGame(): GameInstance {
   function dealItem(index: number, day: string | null): void {
     const list = items();
     if (list.length === 0) {
-      setStatus("No photos available.");
+      setStatus(snapshotLoaded()
+        ? "No curated photos yet — accept some in Tinder first."
+        : "Loading curated photos…");
+      if (!snapshotLoaded()) void loadSnapshotItems().then(() => dealItem(index, day));
       return;
     }
     const safe = ((index % list.length) + list.length) % list.length;
@@ -826,9 +910,14 @@ export function createSnapshotGame(): GameInstance {
   }
 
   function dealEndless(): void {
+    if (!snapshotLoaded()) {
+      setStatus("Loading curated photos…");
+      void loadSnapshotItems().then(() => dealEndless());
+      return;
+    }
     const list = items();
     if (list.length === 0) {
-      setStatus("No photos available.");
+      setStatus("No curated photos yet — accept some in Tinder first.");
       return;
     }
     let index = pickRandomIndex();
@@ -857,7 +946,19 @@ export function createSnapshotGame(): GameInstance {
         ? byIndex
         : list.find((it) => it.id === s.itemId) ?? byIndex ?? list[0];
     if (found === undefined) {
-      setStatus("No photos available.");
+      setStatus("No curated photos yet — accept some in Tinder first.");
+      return;
+    }
+    if (found.id !== s.itemId) {
+      // Saved round points at a photo the dataset no longer holds (e.g.
+      // curated before a migration): redeal instead of resuming a stranger.
+      if (modeShell.mode === "endless") {
+        dealEndless();
+      } else {
+        daily = null;
+        setStatus("Loading today's photo…");
+        modeShell.ensureDaily();
+      }
       return;
     }
     item = found;
@@ -965,6 +1066,25 @@ export function createSnapshotGame(): GameInstance {
   resultsResultBtn.addEventListener("click", () => setResultsTab("result"));
   resultsTextBtn.addEventListener("click", () => setResultsTab("text"));
   resultsImgBtn.addEventListener("click", () => setResultsTab("image"));
+  mapExpandBtn.addEventListener("click", () =>
+    setMapFullscreen(!resultPane.classList.contains("snap-result-fullscreen")),
+  );
+  detailsImg.addEventListener("click", openSnapLightbox);
+  detailsImg.addEventListener("keydown", (e: KeyboardEvent) => {
+    if (e.key === "Enter" || e.key === " ") {
+      e.preventDefault();
+      openSnapLightbox();
+    }
+  });
+  snapLightboxClose.addEventListener("click", closeSnapLightbox);
+  snapLightbox.addEventListener("click", (e) => {
+    if (e.target === snapLightbox || e.target === snapLightboxImg) closeSnapLightbox();
+  });
+  document.addEventListener("keydown", (e: KeyboardEvent) => {
+    if (e.key !== "Escape") return;
+    if (!snapLightbox.classList.contains("hidden")) closeSnapLightbox();
+    else setMapFullscreen(false);
+  });
   yearRange.addEventListener("input", () => setYear(yearRange.value));
   yearNum.addEventListener("change", () => setYear(yearNum.value));
 
@@ -996,9 +1116,19 @@ export function createSnapshotGame(): GameInstance {
   settingsEvents.on(onSettingsToggle);
   modeShell.attachListeners();
 
-  return {
+  const game: GameInstance = {
     id: "snapshot",
     mount(): void {
+      if (!snapshotLoaded()) {
+        root.classList.remove("hidden");
+        document.getElementById("top")?.classList.add("has-result");
+        setStatus("Loading curated photos…");
+        paint();
+        void loadSnapshotItems().then(() => {
+          if (!root.classList.contains("hidden")) game.mount();
+        });
+        return;
+      }
       root.classList.remove("hidden");
       document.getElementById("top")?.classList.add("has-result");
       if (modeShell.mode === "endless") {
@@ -1041,9 +1171,12 @@ export function createSnapshotGame(): GameInstance {
     },
     unmount(): void {
       pauseClock();
+      closeSnapLightbox();
+      setMapFullscreen(false);
       root.classList.add("hidden");
     },
     pauseClock,
     resumeClock,
   };
+  return game;
 }

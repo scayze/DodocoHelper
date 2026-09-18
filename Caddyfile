@@ -9,6 +9,11 @@
 			path /healthz
 		}
 		respond @healthz 200
+		# SPA fallback for the Tinder curator (same app, /tinder route).
+		@tinder {
+			path /tinder /tinder/*
+		}
+		rewrite @tinder /index.html
 		file_server
 	}
 }

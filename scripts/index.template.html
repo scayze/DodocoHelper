@@ -227,6 +227,32 @@
         </section>
                 <!-- GENERATED_GAME_PANELS -->
 
+        <section id="tinder" class="hidden w-full shrink-0 place-items-center pt-[2px] pb-[9px]">
+          <div class="mx-auto w-full" id="tinder-col">
+            <div id="tinder-card" class="rounded-2xl border border-night-700/15 bg-white/60 p-[14px] text-night-900 shadow-[0_16px_50px_rgba(60,45,10,0.12)] backdrop-blur-sm">
+              <img id="tinder-img" class="tinder-img tinder-img-zoomable" alt="Candidate event photograph" referrerpolicy="no-referrer" draggable="false" role="button" tabindex="0" aria-label="View image fullscreen" />
+              <p id="tinder-title" class="mt-[10px] text-[17px] font-bold leading-snug"></p>
+              <p id="tinder-meta" class="mt-[2px] text-[14px] font-semibold text-gold-600"></p>
+              <p id="tinder-blurb" class="tinder-blurb mt-[8px]"></p>
+              <button id="tinder-blurb-toggle" type="button" class="tinder-blurb-toggle hidden" aria-expanded="false" aria-controls="tinder-blurb">more…</button>
+              <div class="mt-[8px] flex items-center justify-between gap-[8px]">
+                <a id="tinder-source" class="text-[13px] font-semibold text-gold-600 underline" target="_blank" rel="noopener noreferrer" href="#">Source ↗</a>
+                <p id="tinder-count" class="text-[13px] font-semibold text-night-800/60"></p>
+                <button id="tinder-retry" type="button" class="btn-outline hidden h-[32px] w-[32px] shrink-0 rounded-full text-[15px] font-bold" aria-label="Retry loading" title="Retry">↻</button>
+              </div>
+              <p id="tinder-status" class="min-h-[24px] text-center text-[14px] font-semibold text-night-800/70" role="status" aria-live="polite"></p>
+              <div class="mt-[4px] grid grid-cols-2 gap-[10px]">
+                <button id="tinder-reject" type="button" class="btn-outline h-[56px] rounded-full text-[18px] font-bold" aria-label="Reject (left arrow)">✗</button>
+                <button id="tinder-accept" type="button" class="btn-gold h-[56px] rounded-full text-[18px] font-bold" aria-label="Accept (right arrow)">✓</button>
+              </div>
+            </div>
+          </div>
+          <div id="tinder-lightbox" class="tinder-lightbox hidden" role="dialog" aria-modal="true" aria-label="Image fullscreen view">
+            <img id="tinder-lightbox-img" class="tinder-lightbox-img" alt="" referrerpolicy="no-referrer" draggable="false" />
+            <button id="tinder-lightbox-close" type="button" class="btn-outline tinder-lightbox-close" aria-label="Close fullscreen view">✕</button>
+          </div>
+        </section>
+
       </main>
     </div>
     <div id="toast" class="hidden" role="status" aria-live="polite"></div>
