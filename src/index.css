@@ -893,20 +893,25 @@ nav[aria-label="Primary"] .mode-btn svg {
   min-width: 0;
   height: 44px;
   border-radius: 999px;
-  background: rgba(15, 25, 48, 0.92);
-  color: #faf5e6;
-  border: 1px solid rgba(250, 245, 230, 0.25);
-  font-size: 14px;
-  font-weight: 700;
+  background: #faf5e6;
+  color: #0f1930;
+  border: 1px solid rgba(15, 25, 48, 0.3);
+  font-size: 13px;
+  font-weight: 600;
   letter-spacing: 0.02em;
   white-space: nowrap;
   cursor: pointer;
   box-shadow: 0 8px 20px rgba(15, 25, 48, 0.35);
   transition: background 150ms ease, transform 150ms ease;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 4px;
+  padding: 0 8px;
 }
 
 .snap-photo-btn:hover:not(:disabled) {
-  background: rgba(15, 25, 48, 1);
+  background: #ffffff;
 }
 
 .snap-photo-btn:active:not(:disabled) {
@@ -916,6 +921,38 @@ nav[aria-label="Primary"] .mode-btn svg {
 .snap-photo-btn:disabled {
   opacity: 0.55;
   cursor: not-allowed;
+}
+
+.snap-photo-btn > span {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  min-width: 0;
+}
+
+.snap-photo-btn-primary {
+  background: rgba(15, 25, 48, 0.92);
+  border-color: rgba(250, 245, 230, 0.25);
+  color: #faf5e6;
+  font-size: 14px;
+  font-weight: 700;
+}
+
+.snap-photo-btn-primary:hover:not(:disabled) {
+  background: rgba(15, 25, 48, 1);
+}
+
+.snap-pin-mini,
+.snap-clock-mini {
+  width: 14px;
+  height: 14px;
+  flex-shrink: 0;
+  color: rgba(15, 25, 48, 0.4);
+}
+
+.snap-photo-btn.has-pin .snap-pin-mini,
+.snap-photo-btn.has-year .snap-clock-mini {
+  color: #a37f1c;
 }
 
 .snap-screen-when {

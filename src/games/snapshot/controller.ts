@@ -28,10 +28,29 @@ const YEAR_MIN = 1400;
 const YEAR_MAX = 2025;
 const YEAR_DEFAULT = 1900;
 
-/** CARTO Positron (OSM data, light theme to match the parchment UI). */
-const TILE_URL = "https://{s}.basemaps.cartocdn.com/light_all/{z}/{x}/{y}{r}.png";
+/** Esri Light Gray Canvas: minimal Positron-like style with English labels,
+ *  no key required. Two layers (base + transparent reference with labels).
+ *  Canvas tops out at z16, so deeper zooms upscale (maxNativeZoom).
+ *  (CARTO Positron is prettier but renders local scripts; switch back with:
+ *  `https://{s}.basemaps.cartocdn.com/light_all/{z}/{x}/{y}{r}.png?key=${KEY}`
+ *  plus a VITE_CARTO_API_KEY env var. Note Esri tile order is z/y/x.) */
+const TILE_BASE_URL =
+  "https://server.arcgisonline.com/ArcGIS/rest/services/Canvas/World_Light_Gray_Base/MapServer/tile/{z}/{y}/{x}";
+const TILE_REF_URL =
+  "https://server.arcgisonline.com/ArcGIS/rest/services/Canvas/World_Light_Gray_Reference/MapServer/tile/{z}/{y}/{x}";
 const TILE_ATTR =
-  '© <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors © <a href="https://carto.com/attributions">CARTO</a>';
+  "Tiles &copy; Esri &mdash; Source: Esri, DeLorme, NAVTEQ, USGS, Intermap, iPC, NRCAN, " +
+  "Esri Japan, METI, Esri China (Hong Kong), Esri Thailand, TomTom, 2012";
+
+/** Stack base + label layers onto a map (attribution once, on the base). */
+function addCanvasLayers(target: L.Map): void {
+  L.tileLayer(TILE_BASE_URL, {
+    attribution: TILE_ATTR,
+    maxZoom: 19,
+    maxNativeZoom: 16,
+  }).addTo(target);
+  L.tileLayer(TILE_REF_URL, { maxZoom: 19, maxNativeZoom: 16 }).addTo(target);
+}
 
 export function createSnapshotGame(): GameInstance {
   const root = el("snapshot");
@@ -105,7 +124,7 @@ export function createSnapshotGame(): GameInstance {
   whereBtn.textContent = "Where?";
   const photoGuessBtn = document.createElement("button");
   photoGuessBtn.type = "button";
-  photoGuessBtn.className = "snap-photo-btn";
+  photoGuessBtn.className = "snap-photo-btn snap-photo-btn-primary";
   photoGuessBtn.textContent = "Guess";
   photoActions.append(whenBtn, whereBtn, photoGuessBtn);
   screenPhoto.append(img, photoActions);
@@ -364,13 +383,11 @@ export function createSnapshotGame(): GameInstance {
       center: [20, 10],
       zoom: 2,
       minZoom: 2,
-      maxZoom: 18,
+      maxZoom: 19,
       keyboard: false,
       worldCopyJump: true,
     });
-    L.tileLayer(TILE_URL, { attribution: TILE_ATTR, subdomains: "abcd", maxZoom: 20 }).addTo(
-      resultMap,
-    );
+    addCanvasLayers(resultMap);
     syncResultMarkers();
   }
 
@@ -460,11 +477,11 @@ export function createSnapshotGame(): GameInstance {
       center: [20, 10],
       zoom: 2,
       minZoom: 2,
-      maxZoom: 18,
+      maxZoom: 19,
       keyboard: false,
       worldCopyJump: true,
     });
-    L.tileLayer(TILE_URL, { attribution: TILE_ATTR, subdomains: "abcd", maxZoom: 20 }).addTo(map);
+    addCanvasLayers(map);
     map.on("click", (e: L.LeafletMouseEvent) => setGuess(e.latlng.lat, e.latlng.lng));
     syncMarkers();
   }
@@ -537,6 +554,53 @@ export function createSnapshotGame(): GameInstance {
       mapHint.textContent = answerStatus();
     }
   }
+  /** Trusted pin glyph for the Location button (static markup, no user data). */
+  const PIN_SVG =
+    '<svg class="snap-pin-mini" viewBox="0 0 24 24" fill="none" stroke="currentColor" ' +
+    'stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">' +
+    '<path d="M20 10c0 6-8 12-8 12s-8-6-8-12a8 8 0 0 1 16 0Z"/>' +
+    '<circle cx="12" cy="10" r="3"/></svg>';
+
+  /** Trusted clock glyph for the When button (static markup, no user data). */
+  const TIME_SVG =
+    '<svg class="snap-clock-mini" viewBox="0 0 24 24" fill="none" stroke="currentColor" ' +
+    'stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">' +
+    '<circle cx="12" cy="12" r="10"/>' +
+    '<polyline points="12 6 12 12 16 14"/></svg>';
+
+  /** Live state on the photo nav buttons: labels stay When/Where until a
+   *  guess exists, then show the guessed year / pin icon + coords. */
+  function paintPhotoButtons(): void {
+    const yearSet = guessYear !== YEAR_DEFAULT;
+    whenBtn.classList.toggle("has-year", yearSet);
+    if (yearSet) {
+      whenBtn.innerHTML = TIME_SVG + "<span>" + guessYear + "</span>";
+    } else {
+      whenBtn.textContent = "When?";
+    }
+    whenBtn.setAttribute(
+      "aria-label",
+      yearSet ? "Year guess " + guessYear + ", tap to change" : "Choose a year",
+    );
+    const hasPin = guessLat !== null && guessLon !== null;
+    whereBtn.classList.toggle("has-pin", hasPin);
+    if (hasPin) {
+      whereBtn.innerHTML =
+        PIN_SVG +
+        "<span>" +
+        guessLat!.toFixed(1) +
+        "°, " +
+        guessLon!.toFixed(1) +
+        "°</span>";
+    } else {
+      whereBtn.textContent = "Where?";
+    }
+    whereBtn.setAttribute(
+      "aria-label",
+      hasPin ? "Location guess set, tap to change" : "Choose a location",
+    );
+  }
+
   /** Exact post-guess answer line: `Answer: London, 1982 | Score: 86`. */
   function answerStatus(): string {
     if (!item || score === null) return "";
@@ -557,6 +621,7 @@ export function createSnapshotGame(): GameInstance {
       grid.setAttribute("aria-label", "Snapshot: loading");
       photoActions.classList.add("hidden");
       paintScreens();
+      paintPhotoButtons();
       paintMap();
       paintYear();
       photoGuessBtn.disabled = true;
@@ -604,6 +669,7 @@ export function createSnapshotGame(): GameInstance {
     // Post-reveal the photo Guess button links to the results view instead.
     photoGuessBtn.disabled = false;
     photoGuessBtn.textContent = revealed ? "Results →" : "Guess";
+    paintPhotoButtons();
     whereConfirmBtn.disabled = !started || item === null;
     whenConfirmBtn.disabled = !started || item === null;
     whereConfirmBtn.textContent = "Confirm";
