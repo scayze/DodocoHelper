@@ -37,6 +37,12 @@ const games = [
                   </label>`,
   },
   {
+    id: "snapshot",
+    label: "Snapshot",
+    settings: `
+                  <p class="text-center text-[15px] font-semibold leading-relaxed text-night-800/70">Each board is a new photo. No settings.</p>`,
+  },
+  {
     id: "tents",
     label: "Tents &amp; Trees",
     settings: `

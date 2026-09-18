@@ -16,6 +16,7 @@ initGameLeaderboard("crowns", "crowns");
 initGameLeaderboard("minesweeper", "mines");
 initGameLeaderboard("seasons", "seasons");
 initGameLeaderboard("tents", "tents");
+initGameLeaderboard("snapshot", "snapshot");
 
 const tabButtons = {
   home: el<HTMLButtonElement>("nav-home"),

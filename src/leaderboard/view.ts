@@ -41,6 +41,8 @@ function gameLabel(game: LeaderboardGameId): string {
       return "Seasons";
     case "tents":
       return "Tents";
+    case "snapshot":
+      return "Snapshot";
   }
 }
 

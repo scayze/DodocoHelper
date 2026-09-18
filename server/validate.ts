@@ -31,7 +31,7 @@ export function validateSubmit(body: unknown):
   const b = body as Record<string, unknown>;
 
   if (!isLeaderboardGame(b["game"])) {
-    return { ok: false, error: "Unknown game. Expected crowns, minesweeper, seasons or tents." };
+    return { ok: false, error: "Unknown game. Expected crowns, minesweeper, seasons, tents or snapshot." };
   }
   const name = normalizeName(b["displayName"]);
   if (name.length < MIN_NAME_LENGTH) {
@@ -75,6 +75,12 @@ export function validateSubmit(body: unknown):
     const winScore = winScoreFor(game);
     if (wonRaw !== (scoreRaw === winScore)) {
       return { ok: false, error: `${game}: won must match score === ${winScore}.` };
+    }
+  } else if (game === "snapshot") {
+    // Snapshot always finishes (a guess is a finish): won is always true
+    // and the 0..100 points rank the board (higher is better).
+    if (!wonRaw) {
+      return { ok: false, error: "snapshot boards always finish: won must be true." };
     }
   } else if (!wonRaw || scoreRaw !== 0) {
     return { ok: false, error: `${game} boards are win-only: won must be true and score 0.` };

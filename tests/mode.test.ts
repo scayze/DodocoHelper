@@ -136,6 +136,8 @@ describe("allEndlessKeys", () => {
       "dodoco:endless-unlocked:seasons",
       "dodoco:endless:tents",
       "dodoco:endless-unlocked:tents",
+      "dodoco:endless:snapshot",
+      "dodoco:endless-unlocked:snapshot",
     ]);
   });
 });

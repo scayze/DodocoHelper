@@ -28,11 +28,17 @@ export interface TentsEndlessSettings {
   trees: number;
 }
 
+export interface SnapshotEndlessSettings {
+  // Single round; no tunable settings yet. Kept as an object so the
+  // shared endless-settings plumbing has a slot to persist.
+}
+
 export type EndlessSettings =
   | MinesEndlessSettings
   | CrownsEndlessSettings
   | SeasonsEndlessSettings
-  | TentsEndlessSettings;
+  | TentsEndlessSettings
+  | SnapshotEndlessSettings;
 
 const KEY_PREFIX = "dodoco:endless:";
 
@@ -40,6 +46,7 @@ export const MINES_DEFAULTS: MinesEndlessSettings = { size: 9, mines: 15 };
 export const CROWNS_DEFAULTS: CrownsEndlessSettings = { size: 9 };
 export const SEASONS_DEFAULTS: SeasonsEndlessSettings = { size: 10 };
 export const TENTS_DEFAULTS: TentsEndlessSettings = { size: 8, trees: 13 };
+export const SNAPSHOT_DEFAULTS: SnapshotEndlessSettings = {};
 
 export const LIMITS = {
   mines: { size: [6, 12], mines: [1, 60] },
@@ -106,11 +113,16 @@ export function clampTentsSettings(raw: RawSettings): TentsEndlessSettings {
   return { size, trees };
 }
 
+export function clampSnapshotSettings(): SnapshotEndlessSettings {
+  return {};
+}
+
 const CLAMPERS = {
   minesweeper: clampMinesSettings,
   crowns: clampCrownsSettings,
   seasons: clampSeasonsSettings,
   tents: clampTentsSettings,
+  snapshot: clampSnapshotSettings,
 } as const;
 
 const DEFAULTS = {
@@ -118,6 +130,7 @@ const DEFAULTS = {
   crowns: CROWNS_DEFAULTS,
   seasons: SEASONS_DEFAULTS,
   tents: TENTS_DEFAULTS,
+  snapshot: SNAPSHOT_DEFAULTS,
 } as const;
 
 export function loadEndlessSettings<G extends GameId>(

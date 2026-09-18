@@ -145,6 +145,8 @@ describe("board state persistence", () => {
       boardStateKey("seasons", "endless"),
       boardStateKey("tents", "daily"),
       boardStateKey("tents", "endless"),
+      boardStateKey("snapshot", "daily"),
+      boardStateKey("snapshot", "endless"),
     ]);
   });
 

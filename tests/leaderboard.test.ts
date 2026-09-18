@@ -36,7 +36,7 @@ describe("GAME_RULES win semantics", () => {
   it("covers exactly the leaderboard games", () => {
     assert.deepEqual(
       Object.keys(GAME_RULES).sort(),
-      ["crowns", "minesweeper", "seasons", "tents"],
+      ["crowns", "minesweeper", "seasons", "snapshot", "tents"],
     );
   });
 
@@ -51,6 +51,9 @@ describe("GAME_RULES win semantics", () => {
     assert.equal(GAME_RULES.minesweeper.metric, "higherScore");
     assert.equal(GAME_RULES.seasons.canLose, true);
     assert.equal(GAME_RULES.minesweeper.canLose, true);
+    // Snapshot: points board (higher is better); every guess finishes.
+    assert.equal(GAME_RULES.snapshot.metric, "higherScore");
+    assert.equal(GAME_RULES.snapshot.canLose, false);
   });
 
   it("derives winScoreFor from the rules", () => {
@@ -58,6 +61,7 @@ describe("GAME_RULES win semantics", () => {
     assert.equal(winScoreFor("seasons"), 0);
     assert.equal(winScoreFor("crowns"), 0);
     assert.equal(winScoreFor("tents"), 0);
+    assert.equal(winScoreFor("snapshot"), 100);
   });
 });
 
@@ -187,6 +191,15 @@ describe("validateSubmit", () => {
     );
     assert.equal(
       validateSubmit({ game: "tents", displayName: "AB", clientId: UUID_A, durationMs: 5, score: 3, won: true }).ok,
+      false,
+    );
+    // Snapshot accepts 0..100 points with won=true; losses are impossible.
+    assert.equal(
+      validateSubmit({ game: "snapshot", displayName: "AB", clientId: UUID_A, durationMs: 5, score: 73, won: true }).ok,
+      true,
+    );
+    assert.equal(
+      validateSubmit({ game: "snapshot", displayName: "AB", clientId: UUID_A, durationMs: 5, score: 73, won: false }).ok,
       false,
     );
   });
@@ -519,6 +532,7 @@ describe("formatScore", () => {
     assert.equal(formatScore("seasons", 8), "8 blocks");
     assert.equal(formatScore("crowns", 0), "");
     assert.equal(formatScore("tents", 0), "");
+    assert.equal(formatScore("snapshot", 73), "73 pts");
   });
 });
 

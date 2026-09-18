@@ -5,6 +5,7 @@ export const LEADERBOARD_GAMES = [
   "minesweeper",
   "seasons",
   "tents",
+  "snapshot",
 ] as const;
 
 export type LeaderboardGameId = (typeof LEADERBOARD_GAMES)[number];
@@ -56,6 +57,8 @@ export const GAME_RULES: Record<LeaderboardGameId, GameRules> = {
   seasons: { metric: "lowerScore", canLose: true },
   // minesweeper: percent of safe cells cleared; 100 = solved. Losses post.
   minesweeper: { metric: "higherScore", canLose: true },
+  // snapshot: 0..100 points (50 location + 50 year); every guess finishes.
+  snapshot: { metric: "higherScore", canLose: false },
 };
 
 /** The exact score that counts as a win (0 unless a percent-based board). */
@@ -66,6 +69,7 @@ export function winScoreFor(game: LeaderboardGameId): number {
 export function formatScore(game: LeaderboardGameId, score: number): string {
   if (game === "minesweeper") return `${score}%`;
   if (game === "seasons") return score === 1 ? "1 block" : `${score} blocks`;
+  if (game === "snapshot") return `${score} pts`;
   return "";
 }
 
