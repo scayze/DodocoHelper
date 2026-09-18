@@ -1119,11 +1119,12 @@ nav[aria-label="Primary"] .mode-btn svg {
   color: #a37f1c;
 }
 
-.snap-details-meta {
+.snap-details-blurb {
   font-size: 13px;
-  font-weight: 600;
-  line-height: 1.5;
-  color: rgba(22, 34, 61, 0.8);
+  line-height: 1.55;
+  color: rgba(22, 34, 61, 0.85);
+  border-left: 3px solid #d9b64a;
+  padding-left: 8px;
 }
 
 .snap-details-link {

@@ -1,27 +1,30 @@
-/** Snapshot minigame: guess where + when a painting/photo is from.
+/** Snapshot minigame: guess where + when a photograph was taken.
  *
- * Data is link-only: images stay on Wikimedia Commons (hotlinked via
- * Special:FilePath thumbs). This file is the curated fallback set so the
- * game works offline; `scripts/fetch-snapshot.mjs` can regenerate/expand it.
+ * Data is link-only: images stay on Wikimedia Commons (hotlinked direct
+ * upload.wikimedia.org thumbs). Regenerate with `scripts/fetch-snapshot.mjs`.
  */
 
 export interface SnapshotItem {
-  /** Stable id, e.g. `wd-Q12418` or `manual-...`. */
+  /** Stable id, e.g. `ph-Q243-1889-3`. */
   id: string;
+  /** Short human label (usually the depicted place/event). */
   title: string;
-  creator: string;
-  kind: "painting" | "photo";
-  /** Hotlink thumb (Commons Special:FilePath with width). No bytes stored. */
+  /** Hotlink thumb (direct upload.wikimedia.org URL). No bytes stored. */
   image: string;
-  /** Commons file / article page for attribution. */
+  /** Commons file page for attribution. */
   page: string;
   /** Depicted location. */
   lat: number;
   lon: number;
   placeName: string;
-  /** Year depicted / created. */
+  /** Year taken. */
   year: number;
   license: string;
+  photographer?: string;
+  /** 1-2 sentence explanation, plain-text English. */
+  blurb: string;
+  /** Blurb attribution URL (Commons file or Wikipedia article). */
+  blurbSource: string;
 }
 
 export function isSnapshotItem(v: unknown): v is SnapshotItem {
@@ -30,8 +33,6 @@ export function isSnapshotItem(v: unknown): v is SnapshotItem {
   return (
     typeof o["id"] === "string" &&
     typeof o["title"] === "string" &&
-    typeof o["creator"] === "string" &&
-    (o["kind"] === "painting" || o["kind"] === "photo") &&
     typeof o["image"] === "string" &&
     typeof o["page"] === "string" &&
     typeof o["lat"] === "number" &&
@@ -41,6 +42,10 @@ export function isSnapshotItem(v: unknown): v is SnapshotItem {
     typeof o["placeName"] === "string" &&
     typeof o["year"] === "number" &&
     Number.isInteger(o["year"]) &&
-    typeof o["license"] === "string"
+    typeof o["license"] === "string" &&
+    (o["photographer"] === undefined || typeof o["photographer"] === "string") &&
+    typeof o["blurb"] === "string" &&
+    (o["blurb"] as string).length > 0 &&
+    typeof o["blurbSource"] === "string"
   );
 }

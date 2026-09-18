@@ -16,10 +16,7 @@ import {
   pickDailyIndex,
   pickRandomIndex,
   haversineKm,
-  locationScore,
-  yearScore,
   totalScore,
-  formatDistance,
 } from "./data.js";
 import { isSnapshotStored, type SnapshotStored } from "./stored.js";
 import type { SnapshotItem } from "./types.js";
@@ -223,10 +220,13 @@ export function createSnapshotGame(): GameInstance {
   detailsTitle.className = "snap-details-title";
   const detailsAnswer = document.createElement("p");
   detailsAnswer.className = "snap-details-answer";
-  const detailsGuess = document.createElement("p");
-  detailsGuess.className = "snap-details-meta";
-  const detailsScore = document.createElement("p");
-  detailsScore.className = "snap-details-meta";
+  const detailsBlurb = document.createElement("p");
+  detailsBlurb.className = "snap-details-blurb";
+  const detailsWikiLink = document.createElement("a");
+  detailsWikiLink.className = "snap-details-link";
+  detailsWikiLink.target = "_blank";
+  detailsWikiLink.rel = "noopener noreferrer";
+  detailsWikiLink.textContent = "More on Wikipedia ↗";
   const detailsLink = document.createElement("a");
   detailsLink.className = "snap-details-link";
   detailsLink.target = "_blank";
@@ -239,8 +239,8 @@ export function createSnapshotGame(): GameInstance {
   detailsText.append(
     detailsTitle,
     detailsAnswer,
-    detailsGuess,
-    detailsScore,
+    detailsBlurb,
+    detailsWikiLink,
     detailsLink,
     detailsLicense,
     detailsDaily,
@@ -637,13 +637,14 @@ export function createSnapshotGame(): GameInstance {
       revealed ? `Snapshot answer: ${item.title}` : "Snapshot: guess where and when",
     );
     if (revealed && distKm !== null && yearErr !== null && score !== null) {
-      const loc = locationScore(distKm);
-      const yrs = yearScore(yearErr);
-      detailsTitle.textContent = `${item.title} — ${item.creator}`;
+      detailsTitle.textContent = item.photographer
+        ? `${item.title} — ${item.photographer}`
+        : item.title;
       detailsAnswer.textContent = `Answer: ${item.placeName}, ${item.year}`;
-      detailsGuess.textContent =
-        `Your guess: ${formatDistance(distKm)} off · ${Math.abs(yearErr)} yr${Math.abs(yearErr) === 1 ? "" : "s"} off`;
-      detailsScore.textContent = `Location ${loc}/50 · Year ${yrs}/50 · Total ${score}/100`;
+      detailsBlurb.textContent = item.blurb;
+      const wikiSrc = item.blurbSource.startsWith("https://en.wikipedia.org/");
+      detailsWikiLink.classList.toggle("hidden", !wikiSrc);
+      if (wikiSrc) detailsWikiLink.setAttribute("href", item.blurbSource);
       detailsLink.setAttribute("href", item.page);
       detailsLicense.textContent = item.license;
       detailsDaily.textContent = modeShell.mode === "daily" ? dailyCompleteMessage() : "";
@@ -664,6 +665,8 @@ export function createSnapshotGame(): GameInstance {
     const locked = dailyLocked && modeShell.mode === "daily";
     photoActions.classList.toggle("hidden", locked || !started);
     // Post-reveal the photo Guess button links to the results view instead.
+    // (Reset disabled: the loading branch disables it until the item arrives.)
+    photoGuessBtn.disabled = false;
     photoGuessBtn.textContent = revealed ? "Results →" : "Guess";
     paintPhotoButtons();
     whereConfirmBtn.disabled = !started || item === null;
