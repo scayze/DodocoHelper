@@ -28,12 +28,9 @@ const YEAR_MIN = 1400;
 const YEAR_MAX = 2025;
 const YEAR_DEFAULT = 1900;
 
-/** Esri Light Gray Canvas: minimal Positron-like style with English labels,
- *  no key required. Two layers (base + transparent reference with labels).
- *  Canvas tops out at z16, so deeper zooms upscale (maxNativeZoom).
- *  (CARTO Positron is prettier but renders local scripts; switch back with:
- *  `https://{s}.basemaps.cartocdn.com/light_all/{z}/{x}/{y}{r}.png?key=${KEY}`
- *  plus a VITE_CARTO_API_KEY env var. Note Esri tile order is z/y/x.) */
+/** Esri Light Gray Canvas: minimal style with English labels, no key required.
+ *  Two layers (base + transparent reference with labels). Canvas tops out at
+ *  z16, so deeper zooms upscale (maxNativeZoom). Note Esri tile order is z/y/x. */
 const TILE_BASE_URL =
   "https://server.arcgisonline.com/ArcGIS/rest/services/Canvas/World_Light_Gray_Base/MapServer/tile/{z}/{y}/{x}";
 const TILE_REF_URL =
@@ -667,7 +664,6 @@ export function createSnapshotGame(): GameInstance {
     const locked = dailyLocked && modeShell.mode === "daily";
     photoActions.classList.toggle("hidden", locked || !started);
     // Post-reveal the photo Guess button links to the results view instead.
-    photoGuessBtn.disabled = false;
     photoGuessBtn.textContent = revealed ? "Results →" : "Guess";
     paintPhotoButtons();
     whereConfirmBtn.disabled = !started || item === null;
@@ -865,15 +861,7 @@ export function createSnapshotGame(): GameInstance {
     itemIndex = list.indexOf(found);
     dailyDay = slot.day;
     started = true;
-    // Legacy saves used "map"/"guess" for the map screen; both map to "where".
-    view =
-      s.view === "photo"
-        ? "photo"
-        : s.view === "when"
-          ? "when"
-          : s.view === "results"
-            ? "results"
-            : "where";
+    view = s.view;
     guessLat = s.guessLat;
     guessLon = s.guessLon;
     guessYear = s.guessYear;
@@ -945,8 +933,6 @@ export function createSnapshotGame(): GameInstance {
           moves: 1,
         });
         modeShell.paintMode();
-        // Answer status + daily countdown are painted by paint().
-        paint();
       }
     }
     persistActive();

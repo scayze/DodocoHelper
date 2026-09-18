@@ -6,8 +6,8 @@ export interface SnapshotStored {
   guessLat: number | null;
   guessLon: number | null;
   guessYear: number;
-  /** Active in-square screen. "map"/"guess" are legacy names of the map screen. */
-  view: "photo" | "when" | "where" | "results" | "guess" | "map";
+  /** Active in-square screen. */
+  view: "photo" | "when" | "where" | "results";
   revealed: boolean;
   distKm: number | null;
   yearErr: number | null;
@@ -31,9 +31,7 @@ export function isSnapshotStored(v: unknown): v is SnapshotStored {
     (o["view"] === "photo" ||
       o["view"] === "when" ||
       o["view"] === "where" ||
-      o["view"] === "results" ||
-      o["view"] === "guess" ||
-      o["view"] === "map") &&
+      o["view"] === "results") &&
     typeof o["revealed"] === "boolean" &&
     numOrNull(o["distKm"]) &&
     numOrNull(o["yearErr"]) &&
