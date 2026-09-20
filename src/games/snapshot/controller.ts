@@ -871,7 +871,7 @@ export function createSnapshotGame(): GameInstance {
   }
 
   function dealDaily(day: string, seed: number): void {
-    const index = pickDailyIndex(seed);
+    const index = pickDailyIndex(seed, day);
     if (modeShell.mode !== "daily") {
       const list = items();
       const safe = list.length === 0 ? 0 : index % list.length;

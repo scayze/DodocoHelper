@@ -5,9 +5,11 @@ import { isSnapshotItem, type SnapshotItem } from "./types.js";
  *  Loaded once per session from `/api/tinder/export`, validated item by
  *  item, stable id-sorted. Appends never reorder existing entries.
  *
- *  Note: the daily pick is `seed % len`, so accepting new photos mid-day
- *  can shift that day's puzzle for players who load later. Within one
- *  load the dataset is frozen, and every player loads the same export.
+ *  Daily freeze: each item carries `addedDay` (UTC acceptance day from
+ *  tinder `decided_at`). The daily for day D picks from entries with
+ *  `addedDay < D` only, so accepts today never shift today's puzzle.
+ *  Within one load the dataset is frozen, and every player loading the
+ *  same day sees the same eligible set.
  */
 let cache: SnapshotItem[] | null = null;
 let inflight: Promise<SnapshotItem[]> | null = null;
@@ -51,11 +53,29 @@ export function loadSnapshotItems(): Promise<SnapshotItem[]> {
   return inflight;
 }
 
-/** Deterministic pick for daily (seeded), uniform random for endless. */
-export function pickDailyIndex(seed: number): number {
-  const len = (cache ?? []).length;
-  if (len === 0) return 0;
-  return Math.abs(seed >>> 0) % len;
+/** Eligible entries for a daily day: accepted before that UTC day.
+ *  Items without `addedDay` (legacy exports) count as eligible. */
+export function eligibleSnapshotItems(day: string): SnapshotItem[] {
+  const list = cache ?? [];
+  const eligible = list.filter((it) => !it.addedDay || it.addedDay < day);
+  // Brand-new DB where everything was accepted today: fall back to the
+  // full list so the daily still resolves instead of going empty.
+  return eligible.length > 0 ? eligible : list;
+}
+
+/** Deterministic pick for daily (seeded), uniform random for endless.
+ *  The daily index is into the full id-sorted cache (so persisted
+ *  `itemIndex` values resolve via the normal id-checked path), but the
+ *  choice is `seed % eligible.length` over the pre-day entries only. */
+export function pickDailyIndex(seed: number, day?: string): number {
+  const list = cache ?? [];
+  if (list.length === 0) return 0;
+  if (day === undefined) return Math.abs(seed >>> 0) % list.length;
+  const eligible = eligibleSnapshotItems(day);
+  if (eligible.length === 0) return 0;
+  const pick = eligible[Math.abs(seed >>> 0) % eligible.length]!;
+  const full = list.indexOf(pick);
+  return full >= 0 ? full : 0;
 }
 
 export function pickRandomIndex(rand: () => number = Math.random): number {

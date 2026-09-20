@@ -368,12 +368,14 @@ export function tinderSeenByDecade(db: Db): number[] {
 
 export function tinderExport(db: Db, decision: "accepted" | "rejected" = "accepted"): Array<Record<string, unknown>> {
   const rows = db.prepare(
-    `SELECT event_qid, image AS thumb_img, title, place_name, lat, lon, year, page, thumb, license, blurb, blurb_source
-     FROM tinder_seen WHERE status = ? ORDER BY decided_at ASC`,
+    `SELECT event_qid, image AS thumb_img, title, place_name, lat, lon, year, page, thumb, license, blurb, blurb_source,
+            decided_at, created_at
+     FROM tinder_seen WHERE status = ? ORDER BY COALESCE(decided_at, created_at) ASC`,
   ).all(decision) as unknown as Array<{
     event_qid: string; thumb_img: string; title: string; place_name: string;
     lat: number; lon: number; year: number; page: string; thumb: string;
     license: string; blurb: string; blurb_source: string;
+    decided_at: string | null; created_at: string | null;
   }>;
   return rows.map((r) => ({
     id: `hp-${r.event_qid.replace(/^hp:/, "")}-${r.year}`,
@@ -387,6 +389,11 @@ export function tinderExport(db: Db, decision: "accepted" | "rejected" = "accept
     license: r.license,
     blurb: r.blurb,
     blurbSource: r.blurb_source,
+    // Snapshot-eligibility day = acceptance day (decided_at), falling back
+    // to created_at for legacy rows. Daily D only picks addedDay < D, so
+    // accepts today never shift today's puzzle. Both columns are UTC
+    // `YYYY-MM-DDTHH:MM:...Z`; the date prefix is the UTC calendar day.
+    addedDay: ((r.decided_at ?? r.created_at ?? "").slice(0, 10) || undefined) as string | undefined,
   }));
 }
 

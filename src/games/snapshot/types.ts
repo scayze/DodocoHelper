@@ -26,6 +26,10 @@ export interface SnapshotItem {
   blurb: string;
   /** Blurb attribution URL (pin page or Wikipedia article). */
   blurbSource: string;
+  /** UTC acceptance day (YYYY-MM-DD) from tinder `decided_at`. Missing on
+   *  legacy exports; treated as always eligible. Daily D only picks
+   *  entries with addedDay < D. */
+  addedDay?: string;
 }
 
 export function isSnapshotItem(v: unknown): v is SnapshotItem {
@@ -47,6 +51,7 @@ export function isSnapshotItem(v: unknown): v is SnapshotItem {
     (o["photographer"] === undefined || typeof o["photographer"] === "string") &&
     typeof o["blurb"] === "string" &&
     (o["blurb"] as string).length > 0 &&
-    typeof o["blurbSource"] === "string"
+    typeof o["blurbSource"] === "string" &&
+    (o["addedDay"] === undefined || typeof o["addedDay"] === "string")
   );
 }
