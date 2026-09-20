@@ -7,28 +7,21 @@ import {
 } from "../src/leaderboard/types.js";
 import {
   getLeaderboard,
+  poolDecadeHistogram,
   submitScore,
   tinderCounts,
   tinderExport,
-  tinderMarkSeen,
-  tinderNoteRendered,
-  tinderPoolCountRange,
-  tinderPoolRemove,
+  tinderMarkServed,
+  tinderPoolBySource,
   tinderPoolTakeRange,
-  tinderSeenByDecade,
   tinderVote,
   type Db,
 } from "./db.js";
 import { dailySeedsFor } from "./daily-seed.js";
 import { validateSubmit } from "./validate.js";
-import {
-  harvestHistorypinStep,
-  isPinId,
-  nextKeyword,
-  pickBucketOrder,
-  toCard,
-  type TinderCard,
-} from "./tinder.js";
+import { DECADE_BUCKETS, type TinderCard } from "./tinder.js";
+import { acceptsSourceId, allAdapters } from "./sources/index.js";
+import type { TinderPoolRow, TinderSourceFilter } from "./db.js";
 
 const MAX_BODY_BYTES = 10_000;
 
@@ -107,85 +100,79 @@ export interface AppOptions {
   now?: () => Date;
 }
 
-/** Lazy refill from Historypin (no auth, no key). Buckets are served
- *  least-curated-decades first; each bucket tops up via harvest steps only
- *  when its pool runs dry. Warm refills are pure DB reads (instant); cold
- *  ones cost list + detail fetches (~1s apart). */
-/** Serialize upstream work across concurrent refills: the second waiter
- *  re-checks pool coverage after the first finishes and usually skips. */
-let harvestGate: Promise<void> = Promise.resolve();
-async function gated<T>(thunk: () => Promise<T>): Promise<T> {
-  const prev = harvestGate;
-  let release!: () => void;
-  harvestGate = new Promise<void>((r) => {
-    release = r;
+/** Pure-DB serving: the request path never touches upstream for any source.
+ *  Historypin trickles in via its background worker (see
+ *  `server/sources/historypin.ts`), Wikidata via bulk worker cycles (see
+ *  `server/sources/wikidata/`). Cards are dealt scarcity-weighted (thin pool
+ *  regions first, nothing starves) and stay servable until voted. */
+/** Build a display card for a pool row via its owning adapter
+ *  (Historypin applies its CDN fresh key; Wikidata passes through). */
+function cardForPoolRow(row: TinderPoolRow): TinderCard {
+  const owner = allAdapters.find((a) => a.isSourceId(row.qid)) ?? allAdapters[0]!;
+  return owner.toCard({
+    sourceId: row.qid,
+    title: row.label || row.title,
+    image: row.thumb && row.thumb !== row.image ? row.image : (row.thumb || row.image),
+    fallbackImage: row.thumb && row.thumb !== row.image ? row.thumb : null,
+    sourceImage: row.image,
+    year: row.year,
+    lat: row.lat,
+    lon: row.lon,
+    page: row.page,
+    license: row.license,
+    blurb: row.description,
+    blurbSource: row.blurbSource || row.page,
+    dateKind: row.dateKind ?? "",
+    datePrecision: row.datePrecision ?? 0,
+    article: row.article ?? "",
+    fileUsage: row.fileUsage ?? "",
+    subjectTypes: row.subjectTypes ?? "",
   });
-  await prev;
-  try {
-    return await thunk();
-  } finally {
-    release();
-  }
 }
-async function serveTinderNext(db: Db, limit: number): Promise<TinderCard[]> {
+
+/** Scarcity-weighted decade order (weighted probability): thin pool
+ *  regions are served first, but everything stays eligible — no bucket
+ *  can starve the rest. Exponential-race shuffle over weights
+ *  w = 1/(1+count). */
+function scarcityOrder(db: Db, source: TinderSourceFilter | null): Array<{ bucket: (typeof DECADE_BUCKETS)[number] }> {
+  const counts = poolDecadeHistogram(db, source);
+  const keyed = DECADE_BUCKETS.map((bucket, i) => {
+    const w = 1 / (1 + (counts[i] ?? 0));
+    const r = Math.random();
+    return { bucket, key: -Math.log(1 - r) / w };
+  });
+  keyed.sort((a, b) => a.key - b.key);
+  return keyed;
+}
+/** Pool source filter from `?source=`: `hp` (Historypin), `wd` (Wikidata), else all. */
+function parseSourceParam(v: string | null): TinderSourceFilter | null {
+  if (v === "hp" || v === "historypin") return "hp";
+  if (v === "wd" || v === "wikidata") return "wd";
+  return null;
+}
+async function serveTinderNext(db: Db, limit: number, source: TinderSourceFilter | null = null): Promise<TinderCard[]> {
   const cards: TinderCard[] = [];
   const taken = new Set<string>();
-  const seenCounts = tinderSeenByDecade(db);
-  const order = pickBucketOrder(seenCounts);
-  // Shared harvest budget per call: top up until it can serve, but never
-  // grind through all buckets — the client prefetches again for the rest.
-  let stepsLeft = 4;
-  for (const { bucket } of order) {
-    if (cards.length >= limit) break;
-    const need = limit - cards.length;
-    // Top up this bucket's pool until it can serve (max 2 harvest steps
-    // and a shared per-call budget; steps are skipped entirely when the
-    // pool already covers it, and short serves are topped up next call).
-    for (let s = 0; s < 2 && stepsLeft > 0 && tinderPoolCountRange(db, bucket.from, bucket.to) < need; s++) {
-      try {
-        await gated(async () => {
-          if (stepsLeft > 0 && tinderPoolCountRange(db, bucket.from, bucket.to) < need) {
-            stepsLeft--;
-            await harvestHistorypinStep(db, bucket, nextKeyword());
-          }
-        });
-      } catch {
-        break;
-      }
-    }
-    const rows = tinderPoolTakeRange(db, bucket.from, bucket.to, need);
-    const served: string[] = [];
-    for (const row of rows) {
+  const served: string[] = [];
+  const order = scarcityOrder(db, source);
+  // Round-robin across decades (scarcest first): one card per decade per
+  // pass, so every response mixes years instead of filling greedily from
+  // a single decade. Pure reads — rows stay until voted (reload-safe).
+  for (let pass = 0; pass < 2 && cards.length < limit; pass++) {
+    let progress = false;
+    for (const { bucket } of order) {
       if (cards.length >= limit) break;
-      if (taken.has(row.image)) {
-        served.push(row.image); // stale pool row shadowing a served image: drop it.
-        continue;
-      }
+      const rows = tinderPoolTakeRange(db, bucket.from, bucket.to, 2, source);
+      const row = rows.find((r) => !taken.has(r.image));
+      if (!row) continue;
       taken.add(row.image);
       served.push(row.image);
-      const card = toCard({
-        pinId: row.qid,
-        title: row.label || row.title,
-        image: row.thumb && row.thumb !== row.image ? row.image : (row.thumb || row.image),
-        fallbackImage: row.thumb && row.thumb !== row.image ? row.thumb : null,
-        sourceImage: row.image,
-        year: row.year,
-        lat: row.lat,
-        lon: row.lon,
-        page: row.page,
-        license: row.license,
-        blurb: row.description,
-      });
-      tinderMarkSeen(db, [{
-        eventQid: row.qid, image: row.image, title: card.title, placeName: card.placeName,
-        lat: card.lat, lon: card.lon, year: card.year, pointInTime: String(card.year),
-        page: card.page, thumb: card.fallbackImage ?? card.image, license: card.license, blurb: card.blurb,
-        blurbSource: card.blurbSource,
-      }]);
-      cards.push(card);
+      cards.push(cardForPoolRow(row));
+      progress = true;
     }
-    if (served.length > 0) tinderPoolRemove(db, served);
+    if (!progress) break;
   }
+  if (served.length > 0) tinderMarkServed(db, served);
   return cards;
 }
 
@@ -293,7 +280,7 @@ export function createHandler(db: Db, opts: AppOptions = {}) {
       const limitRaw = Number(url.searchParams.get("limit") ?? "4");
       const limit = Number.isInteger(limitRaw) ? Math.min(Math.max(limitRaw, 1), 12) : 4;
       try {
-        const cards = await serveTinderNext(db, limit);
+        const cards = await serveTinderNext(db, limit, parseSourceParam(url.searchParams.get("source")));
         sendJson(res, 200, { cards, counts: tinderCounts(db) });
       } catch (e) {
         sendJson(res, 502, { error: `Upstream lookup failed: ${String(e).slice(0, 140)}` });
@@ -321,7 +308,7 @@ export function createHandler(db: Db, opts: AppOptions = {}) {
         ? (b["rendered"] as string).slice(0, 500)
         : image;
       const decision = b["decision"];
-      if (!isPinId(pinId) || !image.startsWith("http")) {
+      if (!acceptsSourceId(pinId) || !image.startsWith("http")) {
         sendJson(res, 400, { error: "pinId + image required." });
         return;
       }
@@ -329,14 +316,16 @@ export function createHandler(db: Db, opts: AppOptions = {}) {
         sendJson(res, 400, { error: "decision must be accepted|rejected." });
         return;
       }
-      const ok = tinderVote(db, pinId, image, decision);
-      if (ok) tinderNoteRendered(db, pinId, image, rendered);
+      // First vote wins: the decided row is assembled server-side from the
+      // served pool row, so the POST carries only ids. Re-votes and votes
+      // for unserved cards return ok:false.
+      const ok = tinderVote(db, { eventQid: pinId, image, rendered, decision });
       sendJson(res, ok ? 200 : 404, { ok, counts: tinderCounts(db) });
       return;
     }
 
     if (req.method === "GET" && url.pathname === "/api/tinder/stats") {
-      sendJson(res, 200, { counts: tinderCounts(db) });
+      sendJson(res, 200, { counts: tinderCounts(db), poolBySource: tinderPoolBySource(db) });
       return;
     }
 

@@ -1339,6 +1339,29 @@ nav[aria-label="Primary"] .mode-btn svg {
 .tinder-img-zoomable {
   cursor: zoom-in;
 }
+.tinder-map {
+  width: 100%;
+  aspect-ratio: 4 / 3;
+  border-radius: 12px;
+  background: #e9dcbd;
+  z-index: 0;
+}
+.tinder-map .leaflet-control-attribution {
+  font-size: 10px;
+  background: rgba(255, 255, 255, 0.7);
+}
+.tinder-meta-toggle {
+  cursor: pointer;
+}
+.tinder-pin {
+  display: block;
+  width: 16px;
+  height: 16px;
+  border-radius: 50%;
+  border: 2px solid #faf5e6;
+  box-shadow: 0 1px 4px rgba(0, 0, 0, 0.45);
+  background: #a37f1c;
+}
 
 .tinder-lightbox {
   position: fixed;

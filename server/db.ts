@@ -9,6 +9,7 @@ import {
   type LeaderboardGameId,
 } from "../src/leaderboard/types.js";
 import type { ValidSubmit } from "./validate.js";
+import { DECADE_BUCKETS } from "./sources/types.js";
 
 export type Db = DatabaseSync;
 
@@ -42,6 +43,13 @@ CREATE TABLE IF NOT EXISTS tinder_seen(
   license TEXT NOT NULL DEFAULT '',
   blurb TEXT NOT NULL DEFAULT '',
   blurb_source TEXT NOT NULL DEFAULT '',
+  source TEXT NOT NULL DEFAULT '',
+  date_kind TEXT NOT NULL DEFAULT '',
+  date_precision INTEGER NOT NULL DEFAULT 0,
+  article TEXT NOT NULL DEFAULT '',
+  file_usage TEXT NOT NULL DEFAULT '',
+  subject_types TEXT NOT NULL DEFAULT '',
+  date_claims TEXT NOT NULL DEFAULT '',
   translated INTEGER NOT NULL DEFAULT 0,
   status TEXT NOT NULL DEFAULT 'pending',
   created_at TEXT NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%fZ','now')),
@@ -63,11 +71,39 @@ CREATE TABLE IF NOT EXISTS tinder_pool(
   page TEXT NOT NULL DEFAULT '',
   thumb TEXT NOT NULL DEFAULT '',
   license TEXT NOT NULL DEFAULT '',
+  blurb_source TEXT NOT NULL DEFAULT '',
+  source TEXT NOT NULL DEFAULT '',
+  date_kind TEXT NOT NULL DEFAULT '',
+  date_precision INTEGER NOT NULL DEFAULT 0,
+  article TEXT NOT NULL DEFAULT '',
+  file_usage TEXT NOT NULL DEFAULT '',
+  subject_types TEXT NOT NULL DEFAULT '',
+  date_claims TEXT NOT NULL DEFAULT '',
+  served_at TEXT NOT NULL DEFAULT '',
   bucket INTEGER NOT NULL DEFAULT 0,
   created_at TEXT NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%fZ','now')),
   UNIQUE(qid, image)
 );
 CREATE INDEX IF NOT EXISTS idx_tinder_pool_bucket ON tinder_pool(bucket, created_at);
+CREATE TABLE IF NOT EXISTS wd_candidates(
+  qid TEXT PRIMARY KEY,
+  year INTEGER NOT NULL DEFAULT 0,
+  lat REAL NOT NULL DEFAULT 0,
+  lon REAL NOT NULL DEFAULT 0,
+  bucket INTEGER NOT NULL DEFAULT 0,
+  state TEXT NOT NULL DEFAULT 'new',
+  fail_count INTEGER NOT NULL DEFAULT 0,
+  updated_at TEXT NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%fZ','now'))
+);
+CREATE INDEX IF NOT EXISTS idx_wd_candidates_state ON wd_candidates(state, bucket);
+-- Slice-cursor machinery was replaced by gap-driven bulk discovery; drop residue.
+DROP TABLE IF EXISTS wd_slices;
+CREATE TABLE IF NOT EXISTS wd_stats(
+  day TEXT PRIMARY KEY,
+  sparql_count INTEGER NOT NULL DEFAULT 0,
+  sparql_errors INTEGER NOT NULL DEFAULT 0,
+  sparql_ms_total INTEGER NOT NULL DEFAULT 0
+);
 `;
 
 interface ScoreRow {
@@ -134,6 +170,10 @@ export function openDb(path: string): Db {
   db.exec("PRAGMA journal_mode = WAL;");
   db.exec("PRAGMA synchronous = NORMAL;");
   db.exec(SCHEMA);
+  ensurePoolBlurbSource(db);
+  ensureSourceColumns(db);
+  ensurePoolServedAt(db);
+  migratePendingToPool(db);
   ensureScoreColumns(db);
   return db;
 }
@@ -208,88 +248,154 @@ export function getLeaderboard(
   return rows.map(toEntry);
 }
 
-export interface TinderSeenInput {
-  /** Vote/dedupe namespace key: Historypin `hp:<id>`. */
-  eventQid: string;
-  image: string;
-  title: string;
-  placeName: string;
-  lat: number;
-  lon: number;
-  year: number;
-  pointInTime: string;
-  page: string;
-  thumb: string;
-  license: string;
-  blurb: string;
-  blurbSource: string;
+/** Canonical source key for a qid. */
+export function sourceForQid(qid: string): string {
+  if (qid.startsWith("wd:")) return "wikidata";
+  if (qid.startsWith("hp:")) return "historypin";
+  return "";
 }
 
-export function tinderSeenKeys(db: Db, images: string[]): Set<string> {
-  if (images.length === 0) return new Set();
-  const placeholders = images.map(() => "?").join(",");
-  const rows = db
-    .prepare(`SELECT image FROM tinder_seen WHERE image IN (${placeholders})`)
-    .all(...images) as unknown as Array<{ image: string }>;
-  return new Set(rows.map((r) => r.image));
+const SOURCE_COLUMNS = ["source", "date_kind", "date_precision", "article", "file_usage", "subject_types", "date_claims"] as const;
+
+function tableColumns(db: Db, table: string): Set<string> {
+  const cols = db
+    .prepare(`PRAGMA table_info(${table})`)
+    .all() as unknown as Array<{ name: string }>;
+  return new Set(cols.map((c) => c.name));
 }
 
-export function tinderMarkSeen(db: Db, cards: TinderSeenInput[]): void {
-  const stmt = db.prepare(
-    `INSERT OR IGNORE INTO tinder_seen(event_qid, image, title, place_name, lat, lon, year, decade, point_in_time, page, thumb, license, blurb, blurb_source, translated, status)
-     VALUES(?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 1, 'pending')`,
-  );
-  for (const c of cards) {
-    stmt.run(
-      c.eventQid, c.image, c.title, c.placeName, c.lat, c.lon, c.year,
-      Math.floor(c.year / 10) * 10, c.pointInTime, c.page, c.thumb,
-      c.license, c.blurb, c.blurbSource,
-    );
+/** Backfill for pre-existing databases: add provenance columns and derive
+ *  `source` from the qid namespace. New tables already carry the columns. */
+function ensureSourceColumns(db: Db): void {
+  for (const table of ["tinder_pool", "tinder_seen"] as const) {
+    const cols = tableColumns(db, table);
+    const idCol = table === "tinder_pool" ? "qid" : "event_qid";
+    for (const col of SOURCE_COLUMNS) {
+      if (cols.has(col)) continue;
+      const decl = col === "date_precision" ? "INTEGER NOT NULL DEFAULT 0" : "TEXT NOT NULL DEFAULT ''";
+      db.exec(`ALTER TABLE ${table} ADD COLUMN ${col} ${decl};`);
+    }
+    db.prepare(
+      `UPDATE ${table} SET source = CASE
+         WHEN ${idCol} LIKE 'wd:%' THEN 'wikidata'
+         WHEN ${idCol} LIKE 'hp:%' THEN 'historypin'
+         ELSE '' END
+       WHERE source = ''`,
+    ).run();
   }
 }
 
-/** Images to exclude from serving: everything decided, plus pendings
- *  served recently (abandoned queues older than 2h become servable again
- *  so the pool never shrinks from unvoted serves). */
+/** Images already decided (accepted/rejected). There is no pending state:
+ *  votes assemble decided rows directly from served pool rows, so undecided
+ *  cards stay servable (reload-safe) and only decided ones are excluded. */
 export function tinderExcludeKeys(db: Db): Set<string> {
   const rows = db.prepare(
-    `SELECT image FROM tinder_seen
-     WHERE status IN ('accepted','rejected')
-        OR (status = 'pending' AND created_at > datetime('now','-2 hours'))`,
+    `SELECT image FROM tinder_seen WHERE status <> 'pending'`,
   ).all() as unknown as Array<{ image: string }>;
   return new Set(rows.map((r) => r.image));
+}
+
+/** Decided event ids (same rows as above, qid namespace). Historypin
+ *  dedupes by pin id; Wikidata by image (one item, many files). */
+export function tinderExcludedQids(db: Db): Set<string> {
+  const rows = db.prepare(
+    `SELECT event_qid FROM tinder_seen WHERE status <> 'pending'`,
+  ).all() as unknown as Array<{ event_qid: string }>;
+  return new Set(rows.map((r) => r.event_qid));
+}
+
+/** Flag pool rows as served (votable). Serving itself is a pure read;
+ *  this flag is the only write, and it carries no quarantine semantics. */
+export function tinderMarkServed(db: Db, images: string[]): void {
+  if (images.length === 0) return;
+  const placeholders = images.map(() => "?").join(",");
+  db.prepare(
+    `UPDATE tinder_pool SET served_at = strftime('%Y-%m-%dT%H:%M:%fZ','now')
+     WHERE image IN (${placeholders}) AND served_at = ''`,
+  ).run(...images);
 }
 
 export interface TinderPoolRow {
   qid: string; image: string; title: string; label: string;
   description: string; descLang: string | null; year: number;
   lat: number; lon: number; page: string; thumb: string; license: string;
+  blurbSource?: string | null;
+  source?: string | null;
+  dateKind?: string | null;
+  datePrecision?: number | null;
+  article?: string | null;
+  fileUsage?: string | null;
+  subjectTypes?: string | null;
+  dateClaims?: string | null;
+}
+
+function ensurePoolBlurbSource(db: Db): void {
+  const cols = db
+    .prepare("PRAGMA table_info(tinder_pool)")
+    .all() as unknown as Array<{ name: string }>;
+  if (!cols.some((c) => c.name === "blurb_source")) {
+    db.exec("ALTER TABLE tinder_pool ADD COLUMN blurb_source TEXT NOT NULL DEFAULT '';");
+  }
+}
+
+function ensurePoolServedAt(db: Db): void {
+  const cols = tableColumns(db, "tinder_pool");
+  if (!cols.has("served_at")) {
+    db.exec("ALTER TABLE tinder_pool ADD COLUMN served_at TEXT NOT NULL DEFAULT '';");
+  }
+}
+
+/** One-time retirement of the pending state: resurrect served-but-undecided
+ *  rows back into the pool (they carry full metadata), then delete them.
+ *  Post-migration every seen row is decided; votes assemble decided rows
+ *  from served pool rows instead. */
+function migratePendingToPool(db: Db): void {
+  db.prepare(
+    `INSERT OR IGNORE INTO tinder_pool(qid, image, title, label, description, desc_lang, year, lat, lon, page, thumb, license, blurb_source, source, date_kind, date_precision, article, file_usage, subject_types, date_claims, bucket, served_at)
+     SELECT event_qid, image, title, title, blurb,
+            CASE translated WHEN 1 THEN 'en' ELSE NULL END,
+            year, lat, lon, page, thumb, license, blurb_source, source, date_kind, date_precision, article, file_usage, subject_types, date_claims, decade,
+            strftime('%Y-%m-%dT%H:%M:%fZ','now')
+     FROM tinder_seen WHERE status = 'pending'`,
+  ).run();
+  db.prepare(`DELETE FROM tinder_seen WHERE status = 'pending'`).run();
 }
 
 export function tinderPoolInsert(db: Db, rows: TinderPoolRow[]): number {
+  ensurePoolBlurbSource(db);
+  ensureSourceColumns(db);
+  ensurePoolServedAt(db);
   const stmt = db.prepare(
-    `INSERT OR IGNORE INTO tinder_pool(qid, image, title, label, description, desc_lang, year, lat, lon, page, thumb, license, bucket)
-     VALUES(?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+    `INSERT OR IGNORE INTO tinder_pool(qid, image, title, label, description, desc_lang, year, lat, lon, page, thumb, license, blurb_source, source, date_kind, date_precision, article, file_usage, subject_types, date_claims, bucket)
+     VALUES(?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
   );
   let n = 0;
   for (const r of rows) {
     const res = stmt.run(r.qid, r.image, r.title, r.label, r.description, r.descLang, r.year,
-      r.lat, r.lon, r.page, r.thumb, r.license, Math.floor(r.year / 10) * 10);
+      r.lat, r.lon, r.page, r.thumb, r.license, r.blurbSource ?? "",
+      r.source || sourceForQid(r.qid), r.dateKind ?? "", r.datePrecision ?? 0,
+      r.article ?? "", r.fileUsage ?? "", r.subjectTypes ?? "", r.dateClaims ?? "",
+      Math.floor(r.year / 10) * 10);
     n += Number(res.changes);
   }
   return n;
 }
 
-export function tinderPoolCountRange(db: Db, from: number, to: number): number {
-  const row = db.prepare(`SELECT COUNT(*) AS n FROM tinder_pool WHERE year >= ? AND year < ?`)
-    .get(from, to) as unknown as { n: number };
-  return row.n;
+export type TinderSourceFilter = "hp" | "wd";
+
+function sourceClause(source: TinderSourceFilter | null): string {
+  if (source === "hp") return ` AND source = 'historypin'`;
+  if (source === "wd") return ` AND source = 'wikidata'`;
+  return "";
 }
 
-export function tinderPoolTakeRange(db: Db, from: number, to: number, limit: number): TinderPoolRow[] {
+export function tinderPoolTakeRange(db: Db, from: number, to: number, limit: number, source: TinderSourceFilter | null = null): TinderPoolRow[] {
   const rows = db.prepare(
-    `SELECT qid, image, title, label, description, desc_lang AS descLang, year, lat, lon, page, thumb, license
-     FROM tinder_pool WHERE year >= ? AND year < ? ORDER BY created_at ASC LIMIT ?`,
+    `SELECT qid, image, title, label, description, desc_lang AS descLang, year, lat, lon, page, thumb, license,
+            blurb_source AS blurbSource, source, date_kind AS dateKind,
+            date_precision AS datePrecision, article, file_usage AS fileUsage,
+            subject_types AS subjectTypes, date_claims AS dateClaims
+     FROM tinder_pool WHERE year >= ? AND year < ?${sourceClause(source)} ORDER BY created_at ASC LIMIT ?`,
   ).all(from, to, limit * 3) as unknown as TinderPoolRow[];
   // Prefer distinct events within one serving so cards vary.
   const seenQid = new Set<string>();
@@ -311,28 +417,49 @@ export function tinderPoolRemove(db: Db, images: string[]): void {
   db.prepare(`DELETE FROM tinder_pool WHERE image IN (${placeholders})`).run(...images);
 }
 
-/** Remember the URL that actually rendered in the voter's browser: export
- *  prefers thumb, so the dataset keeps a known-good image URL. */
-export function tinderNoteRendered(db: Db, eventQid: string, image: string, rendered: string): void {
-  db.prepare(
-    `UPDATE tinder_seen SET thumb = ?
-     WHERE event_qid = ? AND (image = ? OR thumb = ?)`,
-  ).run(rendered.slice(0, 500), eventQid, image, image);
+export interface TinderVoteInput {
+  eventQid: string;
+  image: string;
+  /** URL that actually rendered client-side (display or fallback). */
+  rendered: string;
+  decision: "accepted" | "rejected";
 }
 
-export function tinderVote(
-  db: Db,
-  eventQid: string,
-  image: string,
-  decision: "accepted" | "rejected",
-): boolean {
-  const result = db
-    .prepare(
-      `UPDATE tinder_seen SET status = ?, decided_at = strftime('%Y-%m-%dT%H:%M:%fZ','now')
-       WHERE event_qid = ? AND (image = ? OR thumb = ?) AND status = 'pending'`,
-    )
-    .run(decision, eventQid, image, image);
-  return Number(result.changes) > 0;
+/** First vote wins. The decided row is assembled from the served pool row
+ *  (single source of truth — the vote POST carries only ids), the pool row
+ *  is retired, and the rendered URL is kept as thumb so the dataset holds a
+ *  known-good image. Votes for unserved/unknown cards or re-votes return
+ *  false. Undecided cards stay in the pool and remain servable. */
+export function tinderVote(db: Db, input: TinderVoteInput): boolean {
+  const pool = db.prepare(
+    `SELECT qid, image, title, description, year, lat, lon, page, thumb, license,
+            blurb_source AS blurbSource, source, date_kind AS dateKind,
+            date_precision AS datePrecision, article, file_usage AS fileUsage,
+            subject_types AS subjectTypes, date_claims AS dateClaims, served_at AS servedAt
+     FROM tinder_pool WHERE qid = ? AND image = ?`,
+  ).get(input.eventQid, input.image) as unknown as {
+    qid: string; image: string; title: string; description: string; year: number;
+    lat: number; lon: number; page: string; thumb: string; license: string;
+    blurbSource: string; source: string; dateKind: string; datePrecision: number;
+    article: string; fileUsage: string; subjectTypes: string; dateClaims: string;
+    servedAt: string;
+  } | undefined;
+  if (!pool || !pool.servedAt) return false;
+  const rendered = input.rendered.startsWith("http") ? input.rendered.slice(0, 500) : pool.image;
+  const res = db.prepare(
+    `INSERT OR IGNORE INTO tinder_seen(event_qid, image, title, place_name, lat, lon, year, decade, point_in_time, page, thumb, license, blurb, blurb_source, source, date_kind, date_precision, article, file_usage, subject_types, date_claims, translated, status, decided_at)
+     VALUES(?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 1, ?, strftime('%Y-%m-%dT%H:%M:%fZ','now'))`,
+  ).run(
+    pool.qid, pool.image, pool.title, pool.title, pool.lat, pool.lon, pool.year,
+    Math.floor(pool.year / 10) * 10, String(pool.year), pool.page, rendered,
+    pool.license, pool.description, pool.blurbSource || pool.page,
+    pool.source || sourceForQid(pool.qid), pool.dateKind ?? "", pool.datePrecision ?? 0,
+    pool.article ?? "", pool.fileUsage ?? "", pool.subjectTypes ?? "", pool.dateClaims ?? "",
+    input.decision,
+  );
+  if (Number(res.changes) === 0) return false;
+  db.prepare(`DELETE FROM tinder_pool WHERE qid = ? AND image = ?`).run(pool.qid, pool.image);
+  return true;
 }
 
 export function tinderCounts(db: Db): { pending: number; accepted: number; rejected: number } {
@@ -348,37 +475,35 @@ export function tinderCounts(db: Db): { pending: number; accepted: number; rejec
   return out;
 }
 
-export function tinderSeenByDecade(db: Db): number[] {
-  const rows = db
-    .prepare(`SELECT decade, COUNT(*) AS n FROM tinder_seen GROUP BY decade`)
-    .all() as unknown as Array<{ decade: number; n: number }>;
-  // Align with DECADE_BUCKETS order in server/tinder.ts (duplicated here
-  // to keep db.ts free of tinder.ts imports).
-  const buckets = [1700, 1800, 1850, 1900, 1920, 1940, 1960, 1980, 2000];
-  return buckets.map((from, i) => {
-    const to = i + 1 < buckets.length ? buckets[i + 1]! : 2026;
-    let n = 0;
-    for (const r of rows) {
-      if (r.decade >= from && r.decade < to) n += r.n;
-      else if (from === 1700 && r.decade < 1800 && r.decade >= 1400) n += r.n;
-    }
-    return n;
-  });
+/** Total pool depth (pool-size guard for the background worker). */
+export function poolTotal(db: Db): number {
+  const row = db.prepare(`SELECT COUNT(*) AS n FROM tinder_pool`).get() as unknown as { n: number };
+  return row.n;
 }
 
 export function tinderExport(db: Db, decision: "accepted" | "rejected" = "accepted"): Array<Record<string, unknown>> {
   const rows = db.prepare(
     `SELECT event_qid, image AS thumb_img, title, place_name, lat, lon, year, page, thumb, license, blurb, blurb_source,
-            decided_at, created_at
+            source, date_kind AS dateKind, date_precision AS datePrecision, article, file_usage AS fileUsage,
+            subject_types AS subjectTypes, date_claims AS dateClaims, decided_at, created_at
      FROM tinder_seen WHERE status = ? ORDER BY COALESCE(decided_at, created_at) ASC`,
   ).all(decision) as unknown as Array<{
     event_qid: string; thumb_img: string; title: string; place_name: string;
     lat: number; lon: number; year: number; page: string; thumb: string;
     license: string; blurb: string; blurb_source: string;
+    source: string; dateKind: string; datePrecision: number; article: string; fileUsage: string;
+    subjectTypes: string; dateClaims: string;
     decided_at: string | null; created_at: string | null;
   }>;
   return rows.map((r) => ({
-    id: `hp-${r.event_qid.replace(/^hp:/, "")}-${r.year}`,
+    id: exportIdForSource(r.event_qid, r.year),
+    source: r.source || sourceForQid(r.event_qid),
+    dateKind: r.dateKind || null,
+    datePrecision: r.datePrecision || null,
+    article: r.article || null,
+    fileUsage: parseFileUsage(r.fileUsage),
+    subjectTypes: parseSubjectTypes(r.subjectTypes),
+    dateClaims: parseDateClaims(r.dateClaims),
     title: r.title,
     image: r.thumb || r.thumb_img,
     page: r.page,
@@ -395,5 +520,106 @@ export function tinderExport(db: Db, decision: "accepted" | "rejected" = "accept
     // `YYYY-MM-DDTHH:MM:...Z`; the date prefix is the UTC calendar day.
     addedDay: ((r.decided_at ?? r.created_at ?? "").slice(0, 10) || undefined) as string | undefined,
   }));
+}
+
+/** Parse a stored file_usage blob into an array (null when none). */
+export function parseFileUsage(raw: string | null | undefined): Array<{ wiki: string; title: string; url: string }> | null {
+  if (!raw) return null;
+  try {
+    const v: unknown = JSON.parse(raw);
+    if (!Array.isArray(v) || v.length === 0) return null;
+    const out: Array<{ wiki: string; title: string; url: string }> = [];
+    for (const e of v) {
+      if (typeof e !== "object" || e === null) continue;
+      const o = e as Record<string, unknown>;
+      if (typeof o["wiki"] === "string" && typeof o["title"] === "string" && typeof o["url"] === "string") {
+        out.push({ wiki: o["wiki"], title: o["title"], url: o["url"] });
+      }
+    }
+    return out.length > 0 ? out : null;
+  } catch {
+    return null;
+  }
+}
+
+/** Parse a stored subject_types blob into QIDs ([] when none). */
+export function parseSubjectTypes(raw: string | null | undefined): string[] {
+  if (!raw) return [];
+  try {
+    const v: unknown = JSON.parse(raw);
+    if (!Array.isArray(v)) return [];
+    return v.filter((e): e is string => typeof e === "string" && /^Q\d+$/.test(e));
+  } catch {
+    return [];
+  }
+}
+
+export interface StoredDateClaim {
+  property: string;
+  time: string;
+  precision: number;
+}
+
+/** Parse a stored date_claims blob ([] when none). */
+export function parseDateClaims(raw: string | null | undefined): StoredDateClaim[] {
+  if (!raw) return [];
+  try {
+    const v: unknown = JSON.parse(raw);
+    if (!Array.isArray(v)) return [];
+    const out: StoredDateClaim[] = [];
+    for (const e of v) {
+      if (typeof e !== "object" || e === null) continue;
+      const o = e as Record<string, unknown>;
+      if (typeof o["property"] === "string" && typeof o["time"] === "string" && typeof o["precision"] === "number") {
+        out.push({ property: o["property"], time: o["time"], precision: o["precision"] });
+      }
+    }
+    return out;
+  } catch {
+    return [];
+  }
+}
+
+/** Stable Snapshot export id, routed by source namespace (`hp:` →
+ *  `hp-…`, `wd:Q…` → `wd-Q…-…`). Kept here (instead of importing the
+ *  adapter registry) to avoid a runtime import cycle: adapters import
+ *  this module for pool helpers. Rules must match
+ *  `server/sources/*` adapters. */
+export function exportIdForSource(eventQid: string, year: number): string {
+  if (/^hp:\d+$/.test(eventQid)) return `hp-${eventQid.replace(/^hp:/, "")}-${year}`;
+  if (/^wd:Q\d+$/.test(eventQid)) return `wd-${eventQid.replace(/^wd:/, "")}-${year}`;
+  const clean = eventQid.replace(/^(hp:|wd:)/, "").replace(/[^A-Za-z0-9]+/g, "");
+  return `src-${clean || "x"}-${year}`;
+}
+
+/** Per-source pool depth for `/api/tinder/stats` (additive, optional). */
+export function tinderPoolBySource(db: Db): { historypin: number; wikidata: number } {
+  const rows = db
+    .prepare(`SELECT source, qid FROM tinder_pool`)
+    .all() as unknown as Array<{ source: string; qid: string }>;
+  let historypin = 0;
+  let wikidata = 0;
+  for (const r of rows) {
+    const s = r.source || sourceForQid(r.qid);
+    if (s === "wikidata") wikidata++;
+    else historypin++;
+  }
+  return { historypin, wikidata };
+}
+
+/** Pool counts per DECADE_BUCKETS index (optional source filter).
+ *  Drives gap-driven bulk discovery and scarcity-weighted serving. */
+export function poolDecadeHistogram(db: Db, source: TinderSourceFilter | null = null): number[] {
+  const rows = db
+    .prepare(`SELECT year FROM tinder_pool WHERE 1 = 1${sourceClause(source)}`)
+    .all() as unknown as Array<{ year: number }>;
+  return DECADE_BUCKETS.map((b, i) => {
+    const to = i + 1 < DECADE_BUCKETS.length ? DECADE_BUCKETS[i + 1]!.from : 2026;
+    let n = 0;
+    for (const r of rows) {
+      if (r.year >= b.from && r.year < to) n++;
+    }
+    return n;
+  });
 }
 

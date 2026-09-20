@@ -1,10 +1,22 @@
 /** Tinder curator: one card, two buttons. No timer, no leaderboard.
  *
- * Cards come from Historypin (photo pins with time + location stamps).
+ * Cards come from curated sources (Historypin photo pins or Wikidata items with time + location stamps).
  * Same SnapshotItem schema as the game; votes land in a separate dataset.
  */
 import { apiUrl } from "../../leaderboard/api.js";
 import { el } from "../dom.js";
+import L from "leaflet";
+import "leaflet/dist/leaflet.css";
+
+/** Same keyless Esri canvas as the Snapshot minigame (base + labels).
+ *  Duplicated here to avoid coupling the two controllers. */
+const TINDER_TILE_BASE =
+  "https://server.arcgisonline.com/ArcGIS/rest/services/Canvas/World_Light_Gray_Base/MapServer/tile/{z}/{y}/{x}";
+const TINDER_TILE_REF =
+  "https://server.arcgisonline.com/ArcGIS/rest/services/Canvas/World_Light_Gray_Reference/MapServer/tile/{z}/{y}/{x}";
+const TINDER_TILE_ATTR =
+  "Tiles &copy; Esri &mdash; Source: Esri, DeLorme, NAVTEQ, USGS, Intermap, iPC, NRCAN, " +
+  "Esri Japan, METI, Esri China (Hong Kong), Esri Thailand, TomTom, 2012";
 
 interface TinderCard {
   id: string;
@@ -21,6 +33,14 @@ interface TinderCard {
   blurbSource: string;
   pinId: string;
   sourceImage: string;
+  /** Winning date property (`P571`/`P585`/…/`depicted`, '' = unknown). */
+  dateKind: string;
+  /** English Wikipedia article title about the subject ('' = none). */
+  article: string;
+  /** Server-computed display tag for the year, e.g. ` (built)`. */
+  dateTag: string;
+  /** Server-computed tooltip explaining the tag. */
+  dateHint: string;
 }
 
 /** Tinder fetches run live upstream harvests: allow 60s, not the 8s game default. */
@@ -44,11 +64,34 @@ export function initTinder(): void {
   const blurb = el("tinder-blurb");
   const blurbToggle = el<HTMLButtonElement>("tinder-blurb-toggle");
   const status = el("tinder-status");
-  const count = el("tinder-count");
   const acceptBtn = el<HTMLButtonElement>("tinder-accept");
   const rejectBtn = el<HTMLButtonElement>("tinder-reject");
   const retryBtn = el<HTMLButtonElement>("tinder-retry");
   const source = el<HTMLAnchorElement>("tinder-source");
+  const mapEl = el("tinder-map");
+  const sourceFilter = el<HTMLSelectElement>("tinder-source-filter");
+
+  // Card source filter: persisted, sent as ?source= on every fetch.
+  // Switching clears the prefetch queue so the new source applies at once.
+  let sourceSel = "all";
+  try {
+    sourceSel = window.localStorage.getItem("tinder-source") ?? "all";
+  } catch {
+    sourceSel = "all";
+  }
+  if (sourceSel !== "all" && sourceSel !== "hp" && sourceSel !== "wd") sourceSel = "all";
+  sourceFilter.value = sourceSel;
+  sourceFilter.addEventListener("change", () => {
+    sourceSel = sourceFilter.value;
+    try {
+      window.localStorage.setItem("tinder-source", sourceSel);
+    } catch {
+      // Private mode etc: filtering still works for this session.
+    }
+    queue = [];
+    current = null;
+    next();
+  });
   const lightbox = el("tinder-lightbox");
   // Host at body level: panel backdrop-filters would otherwise contain
   // the fixed overlay and clip it to the card.
@@ -62,25 +105,76 @@ export function initTinder(): void {
   let current: TinderCard | null = null;
   let paintedId = "";
   let busy = false;
-  let accepted = 0;
-  let rejected = 0;
   let fetching = false;
 
   // Rolling prefetch buffer: fill toward TARGET, top up below LOW.
-  const BUFFER_TARGET = 50;
-  const BUFFER_LOW = 25;
-  const BUFFER_FETCH = 10;
-  const FIRST_BATCH = 6;
+  // Small on purpose: warm fetches take ~10ms, so a deep buffer only
+  // serves stale snapshots; this still bridges cold-harvest latency.
+  const BUFFER_TARGET = 5;
+  const BUFFER_LOW = 2;
+  const BUFFER_FETCH = 3;
+  const FIRST_BATCH = 3;
 
   function setStatus(text: string): void {
     status.textContent = text;
   }
 
-  function paintCount(): void {
-    const parts = [`✓ ${accepted}`, `✗ ${rejected}`];
-    if (queue.length > 0) parts.push(`${queue.length}/${BUFFER_TARGET} queued`);
-    count.textContent = parts.join(" · ");
+  let tinderMap: L.Map | null = null;
+  let tinderMarker: L.Marker | null = null;
+  let showingMap = false;
+
+  /** Lazily create the Leaflet map on first toggle. Must only run while
+   *  the map box is visible (hidden => zero size). */
+  function ensureTinderMap(): void {
+    if (tinderMap) {
+      tinderMap.invalidateSize();
+      return;
+    }
+    tinderMap = L.map(mapEl, { zoomControl: true });
+    L.tileLayer(TINDER_TILE_BASE, {
+      attribution: TINDER_TILE_ATTR,
+      maxZoom: 19,
+      maxNativeZoom: 16,
+    }).addTo(tinderMap);
+    L.tileLayer(TINDER_TILE_REF, { maxZoom: 19, maxNativeZoom: 16 }).addTo(tinderMap);
+    tinderMarker = L.marker([0, 0], {
+      icon: L.divIcon({
+        className: "",
+        html: '<span class="tinder-pin"></span>',
+        iconSize: [16, 16],
+        iconAnchor: [8, 8],
+      }),
+    }).addTo(tinderMap);
   }
+
+  function setMapShown(show: boolean): void {
+    if (!current && show) return;
+    showingMap = show;
+    img.classList.toggle("hidden", show);
+    mapEl.classList.toggle("hidden", !show);
+    meta.setAttribute("aria-pressed", String(show));
+    meta.setAttribute("aria-label", show ? "Show photo" : "Show map");
+    if (show && current) {
+      ensureTinderMap();
+      tinderMap!.setView([current.lat, current.lon], 5);
+      tinderMarker!.setLatLng([current.lat, current.lon]);
+    }
+  }
+
+  // The coordinates line doubles as the map toggle (click or Enter/Space).
+  // The date tooltip (title) is untouched; toggle state uses aria only.
+  meta.classList.add("tinder-meta-toggle");
+  meta.setAttribute("role", "button");
+  meta.tabIndex = 0;
+  meta.setAttribute("aria-pressed", "false");
+  meta.setAttribute("aria-label", "Show map");
+  meta.addEventListener("click", () => setMapShown(!showingMap));
+  meta.addEventListener("keydown", (e) => {
+    if (e.key === "Enter" || e.key === " ") {
+      e.preventDefault();
+      setMapShown(!showingMap);
+    }
+  });
 
   function paint(): void {
     const has = current !== null;
@@ -99,10 +193,13 @@ export function initTinder(): void {
     }
     img.alt = current.title;
     title.textContent = current.title;
-    meta.textContent = `${current.year} · ${current.lat.toFixed(2)}°, ${current.lon.toFixed(2)}°`;
+    // Date context (built/founded/photo date/…) is computed server-side
+    // from the stored date kind + subject types.
+    meta.textContent = `${current.year}${current.dateTag ?? ""} · ${current.lat.toFixed(2)}°, ${current.lon.toFixed(2)}°`;
+    if (current.dateHint) meta.title = current.dateHint;
+    else meta.removeAttribute("title");
     setBlurb(current.blurb);
     source.setAttribute("href", current.page);
-    paintCount();
   }
 
   /** Blurbs arrive whole: collapse to 3 lines, expand on demand. The
@@ -131,19 +228,20 @@ export function initTinder(): void {
     current = queue.shift() ?? null;
     if (!current) {
       setStatus("Loading…");
+      setMapShown(false);
       img.removeAttribute("src");
       title.textContent = "";
       meta.textContent = "";
       blurb.textContent = "";
       blurb.classList.remove("is-expanded");
       blurbToggle.classList.add("hidden");
-      paintCount();
       void ensureBuffer();
       return;
     }
     setStatus("");
+    // New card always starts on the photo, never the map.
+    setMapShown(false);
     paint();
-    paintCount();
     void ensureBuffer();
   }
 
@@ -160,7 +258,9 @@ export function initTinder(): void {
         first = false;
         let added = 0;
         try {
-          const res = await fetchTinder("/tinder/next?limit=" + amount);
+          const res = await fetchTinder(
+            "/tinder/next?limit=" + amount + (sourceSel !== "all" ? "&source=" + sourceSel : ""),
+          );
           const cards = Array.isArray((res as { cards?: TinderCard[] }).cards)
             ? (res as { cards?: TinderCard[] }).cards as TinderCard[]
             : [];
@@ -177,10 +277,7 @@ export function initTinder(): void {
           break;
         }
         if (!current) next();
-        else {
-          paint();
-          paintCount();
-        }
+        else paint();
         if (added === 0 && ++dryRounds >= 2) break;
         if (added > 0) dryRounds = 0;
         if (queue.length < BUFFER_TARGET) {
@@ -188,7 +285,7 @@ export function initTinder(): void {
         }
       }
       if (queue.length === 0 && !current) {
-        setStatus(failed ? "Lookup failed (Historypin busy?)." : "Still nothing fresh — Historypin is sparse here.");
+        setStatus(failed ? "Lookup failed (source busy?)." : "Still nothing fresh — sources are sparse here.");
         retryBtn.classList.remove("hidden");
       }
     } finally {
@@ -201,6 +298,8 @@ export function initTinder(): void {
     const card = current;
     busy = true;
     paint();
+    // Best-effort: the server records first-vote-wins, so a duplicate POST
+    // after a reload is harmless (ignored, never double-counted).
     try {
       await fetch(apiUrl("/tinder/vote"), {
         method: "POST",
@@ -215,11 +314,9 @@ export function initTinder(): void {
         }),
       });
     } catch {
-      // Vote is best-effort: the row is already marked seen server-side,
-      // so the card will never resurface even if this POST fails.
+      // Undecided cards stay servable server-side, so a failed POST can
+      // simply be voted again on its next appearance.
     }
-    if (decision === "accepted") accepted++;
-    else rejected++;
     busy = false;
     next();
   }
