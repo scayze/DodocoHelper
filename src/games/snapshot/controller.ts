@@ -108,6 +108,9 @@ export function createSnapshotGame(): GameInstance {
   img.draggable = false;
   img.referrerPolicy = "no-referrer";
   img.loading = "lazy";
+  img.tabIndex = 0;
+  img.setAttribute("role", "button");
+  img.setAttribute("aria-label", "View image fullscreen");
   const photoActions = document.createElement("div");
   photoActions.className = "snap-photo-actions";
   const whenBtn = document.createElement("button");
@@ -672,13 +675,16 @@ export function createSnapshotGame(): GameInstance {
     }
   }
 
-  /** Fullscreen image viewer: shows the rendered answer photo large.
-   *  Voting/round state untouched; any tap or Esc closes it again. */
-  function openSnapLightbox(): void {
-    const src = detailsImg.getAttribute("src");
+  /** Fullscreen image viewer: shows the photo large, same as the result
+   *  Image tab. Voting/round state untouched; any tap or Esc closes it.
+   *  Remembers the opener so focus returns to the photo that launched it. */
+  let snapLightboxOpener: HTMLImageElement | null = null;
+  function openSnapLightbox(source: HTMLImageElement = detailsImg): void {
+    const src = source.getAttribute("src");
     if (!src) return;
+    snapLightboxOpener = source;
     snapLightboxImg.setAttribute("src", src);
-    snapLightboxImg.alt = detailsImg.alt;
+    snapLightboxImg.alt = source.alt;
     snapLightbox.classList.remove("hidden");
     document.body.style.overflow = "hidden";
     snapLightboxClose.focus();
@@ -688,7 +694,10 @@ export function createSnapshotGame(): GameInstance {
     snapLightbox.classList.add("hidden");
     snapLightboxImg.removeAttribute("src");
     document.body.style.overflow = "";
-    detailsImg.focus();
+    const opener =
+      snapLightboxOpener?.isConnected === true ? snapLightboxOpener : detailsImg;
+    snapLightboxOpener = null;
+    opener.focus();
   }
 
   function paint(): void {
@@ -1069,11 +1078,18 @@ export function createSnapshotGame(): GameInstance {
   mapExpandBtn.addEventListener("click", () =>
     setMapFullscreen(!resultPane.classList.contains("snap-result-fullscreen")),
   );
-  detailsImg.addEventListener("click", openSnapLightbox);
+  detailsImg.addEventListener("click", () => openSnapLightbox(detailsImg));
   detailsImg.addEventListener("keydown", (e: KeyboardEvent) => {
     if (e.key === "Enter" || e.key === " ") {
       e.preventDefault();
-      openSnapLightbox();
+      openSnapLightbox(detailsImg);
+    }
+  });
+  img.addEventListener("click", () => openSnapLightbox(img));
+  img.addEventListener("keydown", (e: KeyboardEvent) => {
+    if (e.key === "Enter" || e.key === " ") {
+      e.preventDefault();
+      openSnapLightbox(img);
     }
   });
   snapLightboxClose.addEventListener("click", closeSnapLightbox);
