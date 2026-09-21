@@ -609,12 +609,11 @@ nav[aria-label="Primary"] .mode-btn svg {
 }
 
 .tent-cell.is-tent .tent-chip {
-  background: #f0dfae;
+  background: #cfe0c3;
 }
 
 .tent-cell.is-grass .tent-chip {
-  background: #e9dcbd;
-  opacity: 0.55;
+  background: #cfe0c3;
 }
 
 .count-head {
@@ -642,7 +641,7 @@ nav[aria-label="Primary"] .mode-btn svg {
   background: rgba(15, 25, 48, 0.4);
 }
 
-/* Satisfied (zero left): same grayed tone as a grassed-out field. */
+/* Satisfied (zero left): dimmed tone marking a completed count. */
 .count-head.is-ok {
   color: #e9dcbd;
   opacity: 0.55;

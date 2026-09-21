@@ -407,6 +407,15 @@ export function createCrownsGame(): GameInstance {
       }
     }
     puzzleSolved = true;
+    // Auto-complete the board: every non-crown cell becomes a cross so the
+    // final view shows no unmarked cells.
+    for (let r = 0; r < puzzle.size; r++) {
+      for (let c = 0; c < puzzle.size; c++) {
+        if (fullSolution[r][c] !== "C" && puzzle.initial[r][c] !== "C") {
+          puzzle.initial[r][c] = ".";
+        }
+      }
+    }
     activeHint = null;
     hintMessage.textContent = modeShell.mode === "daily" ? dailyCompleteMessage() : "Solved.";
     freezeClock();

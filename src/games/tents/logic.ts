@@ -218,7 +218,20 @@ export function checkWin(board: TentsBoard): boolean {
 
   board.over = ok;
   board.won = ok;
+  if (ok) fillRemainingGrass(board);
   return ok;
+}
+
+/** Mark every leftover unknown cell as grass once the puzzle is solved, so
+ *  the final board shows no blank cells. Safe to call redundantly. */
+export function fillRemainingGrass(board: TentsBoard): void {
+  for (let r = 0; r < board.size; r++) {
+    for (let c = 0; c < board.size; c++) {
+      if (!board.trees[r][c] && board.marks[r][c] === "unknown") {
+        board.marks[r][c] = "grass";
+      }
+    }
+  }
 }
 
 // Solver and generator live in ./solver.ts and ./generator.ts.

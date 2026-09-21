@@ -216,6 +216,19 @@ function checkWin(board: MineBoard): void {
   if (board.revealedCount === total - board.mineCount) {
     board.over = true;
     board.won = true;
+    flagAllMines(board);
+  }
+}
+
+/** Mark every hidden mine once the puzzle is solved, so the final board
+ *  shows the complete flag layout. Safe to call redundantly. */
+export function flagAllMines(board: MineBoard): void {
+  for (let r = 0; r < board.size; r++) {
+    for (let c = 0; c < board.size; c++) {
+      if (board.mines[r][c] && board.state[r][c] === "hidden") {
+        board.state[r][c] = "flagged";
+      }
+    }
   }
 }
 
