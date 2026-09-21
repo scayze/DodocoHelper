@@ -46,9 +46,9 @@ describe("source routing", () => {
     assert.equal(exportIdForSource("wd:Q243", 1889), "wd-Q243-1889");
   });
 
-  it("defaults to historypin mode", () => {
+  it("defaults to mixed mode", () => {
     delete process.env["SOURCE"];
-    assert.equal(sourceMode(), "historypin");
+    assert.equal(sourceMode(), "mixed");
   });
 });
 

@@ -13,7 +13,7 @@ const server = createServer(createHandler(db));
 
 // All harvesting runs out-of-band: the request path only ever reads the DB.
 // Historypin trickles (small paced steps); Wikidata runs gap-driven bulk
-// cycles. Each source's worker is enabled by SOURCE (default: historypin).
+// cycles. Each source's worker is enabled by SOURCE (default: mixed).
 const mode = sourceMode();
 if (mode !== "wikidata") {
   const intervalMs = Number(process.env["HP_CRON_MS"] ?? String(10 * 60 * 1000));

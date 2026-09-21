@@ -8,7 +8,7 @@ export const allAdapters: SourceAdapter[] = [historypinAdapter, wikidataAdapter]
 export type SourceMode = "historypin" | "wikidata" | "mixed";
 
 export function sourceMode(): SourceMode {
-  const v = (process.env["SOURCE"] ?? "historypin").toLowerCase();
+  const v = (process.env["SOURCE"] ?? "mixed").toLowerCase();
   if (v === "wikidata" || v === "wd") return "wikidata";
   if (v === "mixed" || v === "all" || v === "both") return "mixed";
   return "historypin";
