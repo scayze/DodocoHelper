@@ -452,8 +452,8 @@ nav[aria-label="Primary"] .mode-btn svg {
 }
 
 .mine-cell.is-mine .mine-chip {
-  background: rgba(139, 63, 53, 0.25);
-  color: #8b3f35;
+  background: #c26a5c;
+  color: #111;
 }
 
 /* Guaranteed opening hint (daily + endless): pulsing gold ring on the
