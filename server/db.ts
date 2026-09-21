@@ -395,7 +395,9 @@ export function tinderPoolTakeRange(db: Db, from: number, to: number, limit: num
             blurb_source AS blurbSource, source, date_kind AS dateKind,
             date_precision AS datePrecision, article, file_usage AS fileUsage,
             subject_types AS subjectTypes, date_claims AS dateClaims
-     FROM tinder_pool WHERE year >= ? AND year < ?${sourceClause(source)} ORDER BY created_at ASC LIMIT ?`,
+     FROM tinder_pool WHERE year >= ? AND year < ?${sourceClause(source)}
+     AND NOT EXISTS (SELECT 1 FROM tinder_seen s WHERE s.status <> 'pending' AND (s.event_qid = tinder_pool.qid OR s.image = tinder_pool.image))
+     ORDER BY created_at ASC LIMIT ?`,
   ).all(from, to, limit * 3) as unknown as TinderPoolRow[];
   // Prefer distinct events within one serving so cards vary.
   const seenQid = new Set<string>();
@@ -425,11 +427,13 @@ export interface TinderVoteInput {
   decision: "accepted" | "rejected";
 }
 
-/** First vote wins. The decided row is assembled from the served pool row
- *  (single source of truth — the vote POST carries only ids), the pool row
- *  is retired, and the rendered URL is kept as thumb so the dataset holds a
- *  known-good image. Votes for unserved/unknown cards or re-votes return
- *  false. Undecided cards stay in the pool and remain servable. */
+/** First vote wins (idempotent retire). The decided row is assembled from
+ *  the served pool row (single source of truth — the vote POST carries only
+ *  ids), the pool row is retired, and the rendered URL is kept as thumb so
+ *  the dataset holds a known-good image. Re-votes for an already-decided
+ *  card still retire the pool row (harvest can re-insert a decided qid +
+ *  image; without this the card loops forever). Votes for unserved/unknown
+ *  cards return false. Undecided cards stay in the pool and remain servable. */
 export function tinderVote(db: Db, input: TinderVoteInput): boolean {
   const pool = db.prepare(
     `SELECT qid, image, title, description, year, lat, lon, page, thumb, license,
@@ -457,7 +461,10 @@ export function tinderVote(db: Db, input: TinderVoteInput): boolean {
     pool.article ?? "", pool.fileUsage ?? "", pool.subjectTypes ?? "", pool.dateClaims ?? "",
     input.decision,
   );
-  if (Number(res.changes) === 0) return false;
+  if (Number(res.changes) === 0) {
+    db.prepare(`DELETE FROM tinder_pool WHERE qid = ? AND image = ?`).run(pool.qid, pool.image);
+    return true;
+  }
   db.prepare(`DELETE FROM tinder_pool WHERE qid = ? AND image = ?`).run(pool.qid, pool.image);
   return true;
 }
