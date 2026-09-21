@@ -1,92 +1,61 @@
-# Dodoco Solver — Crown Puzzle Companion
+# Dodoco Helper — minigame collection
 
-Upload a crown puzzle screenshot and get the solved board with every crown placed.
-Each row, column, and region holds exactly 2 crowns, and crowns never touch —
-not even diagonally.
+Daily logic minigames (Crowns, Minesweeper, Seasons, Tents & Trees, Snapshot)
+with generated dailies, endless mode, and a friendly daily leaderboard.
+Live at `strey.dev/dodoco/`.
 
 ## Quickstart
 
 ```sh
 npm install
-npm run dev      # local dev server (proxies /api/* to localhost:3001)
-npm run dev:api  # leaderboard API with file SQLite (DB_PATH, default ./data/leaderboard.db)
+npm run dev      # Vite frontend (http://localhost:5173/dodoco/)
+npm run dev:api  # leaderboard API on :3001 (watches dist-server)
 npm run build    # typecheck + production build
-npm run preview  # serve the production build
-npm test         # full test suite (unit + screenshot fixtures)
+npm test         # index check + typecheck + unit + screenshot fixtures
 ```
 
-## Leaderboard (daily, one-shot, same deploy)
+`docker compose up --build` runs the full stack (game + API).
 
-Each game reports wins to a daily per-game board. The day key is
-UTC (`YYYY-MM-DD`) assigned server-side; players are identified by a
-nickname + anonymous UUID stored in `localStorage` (no login, no rename —
-the name is permanent until storage is cleared).
-
-- Home shows a name gate until a name is saved; then the daily board shows.
-  Chevron buttons beside the title step back a day or forward to today.
-- Nameless wins queue client-side (earliest per game, day-stamped); confirming
-  a name flushes the queue. Named wins submit immediately after each minigame
-  with a small toast; offline failures re-queue and retry later.
-- **One-shot:** the first `POST` per `(day, game, player)` counts; retries get
-  `409`. Entries queued on a previous day are dropped and never reach the
-  current board.
-
-```sh
-docker compose up --build   # :8080 serves the game; Caddy proxies /api/* to the api service
-```
-
-- `GET  /api/healthz`
-- `GET  /api/leaderboard?game=crowns&day=2026-09-09&limit=20` (day defaults to today UTC)
-- `POST /api/scores` `{game, displayName (2–20 chars), clientId (UUID), durationMs, moves?, hintsUsed?}` → `201` first submit, `409` retry
-- SQLite lives in the `leaderboard-data` volume (`DB_PATH=/data/leaderboard.db`); back it up by copying that file.
-- Abuse controls are best-effort v1: strict validation + per-IP/per-player rate limits. Times are client-reported, so treat the board as friendly rather than authoritative.
-
-## How it works
-
-1. **Start** from a screenshot of the board (PNG/JPEG/WebP), paste/drag it,
-   or generate a fresh level with one click.
-2. The app detects the board's grid with a lightweight pure-TypeScript
-   pipeline (`src/games/crowns/extract.ts`): it classifies region colors, projects
-   them onto both axes to find cell centers, and spots crowns / X marks.
-3. The backtracking solver (`src/games/crowns/solver.ts`) places crowns with
-   constraint propagation — sealed units, forced placements, MRV ordering.
-4. **Hint** explains a guaranteed deduction and highlights its relevant row, column,
-   region, or neighboring cells without revealing the answer; **Solve** reveals the full board.
-5. Click any board cell to cycle it through unmarked, cross, queen, and unmarked again.
-   Each edit re-solves the current board and clears any active hint.
-
-## Layout
+## Architecture
 
 ```
-index.html                  # app entry (Vite): static DOM for all views
-public/                     # favicon + dodoco artwork (served as-is)
-src/main.ts                 # shell tab-router (tabs driven by games/registry.ts)
-src/index.css               # Tailwind v4 theme
-src/games/                  # one folder per minigame: logic + solver + generator + controller
-src/games/crowns/           # solver/validator/hints/generator + extract (screenshot) + view + controller
-src/games/crowns/fixtures/  # ScreenshotFixtures (gating) + PhoneFixtures (best-effort)
-src/games/minesweeper/      # logic + controller
-src/games/seasons/          # logic + solver + generator + icons + controller
-src/games/tents/            # logic + solver + generator + controller
-src/games/registry.ts       # minigame list consumed by the shell
-tests/                      # node:test suite (mirrors src/games/*)
+src/main.ts              # shell: tabs, name gate, view switching
+src/games/registry.ts    # game list → tabs (source of truth for games)
+src/games/<id>/          # controller.ts + logic/solver + generator + stored.ts
+src/games/mode-shell.ts  # daily/endless toggle, timer, settings overlay
+src/games/mode.ts        # per-game endless settings + persistence
+src/games/daily.ts       # daily seeds (server + offline fallback)
+src/leaderboard/         # name gate, score submit, board view, toasts
+server/app.ts            # API routes (healthz, leaderboard, scores, daily-seed, tinder)
+index.html               # GENERATED — edit scripts/index.template.html instead
 ```
 
-## Puzzle JSON schema
+- Each game implements `GameDef{id, label, create}` → `GameInstance{mount, unmount, pauseClock, resumeClock}` (`src/games/types.ts`). Games own their DOM subtree and never touch another game's elements.
+- Per-game folder pattern: `controller.ts` (wiring) + `logic/solver` + `generator` + `stored.ts` (persisted board shape). Crowns additionally has `view.ts`, `hints.ts`, `extract.ts` (screenshot → board).
+- Modes: every load boots into **daily** (seed from `GET /api/daily-seed`, deterministic fallback offline). **Endless** settings persist in `localStorage`; progress persists per game via `stored.ts`.
+- Leaderboard: nickname + anonymous UUID (no login). First `POST /api/scores` per `(day, game, player)` counts (`201`); retries get `409`. Day key is UTC, assigned server-side.
+- Tinder (`/dodoco/tinder`) is a standalone curator view outside the game registry.
 
-```json
-{
-  "size": 9,
-  "crownsPerRow": 2,
-  "crownsPerColumn": 2,
-  "crownsPerRegion": 2,
-  "regions": [[0, 0, 1, "..."]],
-  "initial": [["?", "C", "."]],
-  "palette": ["#74C6C4", "..."]
-}
-```
+## API + deploy
 
-- `regions`: N×N ids `0..N-1`, exactly N distinct regions (any shape).
-- `initial`: `"?"` unknown, `"C"` crown, `"."`/`"X"` forced empty.
-- `palette`: optional per-region render colors.
-- Sample boards live in `src/games/crowns/fixtures/`.
+| Method | Route | Notes |
+|---|---|---|
+| `GET` | `/api/healthz` | health check |
+| `GET` | `/api/leaderboard?game=&day=&limit=` | daily board, day defaults to today UTC |
+| `GET` | `/api/daily-seed?day=` | per-game RNG seeds for the day |
+| `POST` | `/api/scores` | `{game, displayName, clientId, durationMs, moves, hintsUsed}` |
+| `GET/POST` | `/api/tinder/*` | `next`, `vote`, `stats`, `export` (curator queue) |
+
+Deploy: Vite builds with `base: '/dodoco/'`. Traefik matches `PathPrefix(/dodoco)`, strips it, → Caddy `:80` serves static and proxies `/api/*` → `api:3001`. SQLite lives in the `leaderboard-data` volume (`DB_PATH=/data/leaderboard.db`).
+
+## Add a game
+
+1. Create `src/games/<id>/` with `controller.ts` (return a `GameInstance`), plus solver/generator/`stored.ts`.
+2. Register in `src/games/registry.ts` and `LEADERBOARD_GAMES` (`src/leaderboard/types.ts`).
+3. Add its panel to `scripts/generate-index.mjs` (or custom markup in `scripts/index.template.html`), then `npm run generate:index`.
+4. Add a test in `tests/` mirroring existing `<game>.test.ts`.
+
+## Tests
+
+- `npm test` — index freshness check, typecheck, `node:test` suite, crowns screenshot fixtures (gating; `PhoneFixtures` are best-effort).
+- `npm run test:e2e` — built-harness browser run (`scripts/build-harness.mjs` + `harness/run.mjs`).
