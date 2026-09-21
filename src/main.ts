@@ -191,7 +191,7 @@ if (
   el("game-title").textContent = "Tinder";
   el("primary-nav").classList.add("hidden");
   el("home").classList.add("hidden");
-  el("solver").classList.add("hidden");
+  el("stage").classList.add("hidden");
   for (const id of ["mines", "seasons", "snapshot", "tents"]) {
     document.getElementById(id)?.classList.add("hidden");
   }

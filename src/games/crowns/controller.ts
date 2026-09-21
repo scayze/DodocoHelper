@@ -69,7 +69,7 @@ export function createCrownsGame(): GameInstance {
   const hintMessage = el<HTMLParagraphElement>("hint-message");
   const undoButton = el<HTMLButtonElement>("undo-button");
   const timerValue = el("crowns-timer-value");
-  const solverSection = el("solver");
+  const stageSection = el("stage");
   const modeDailyBtn = el<HTMLButtonElement>("crowns-mode-daily");
   const modeEndlessBtn = el<HTMLButtonElement>("crowns-mode-endless");
   const modeSep = el("crowns-mode-sep");
@@ -597,7 +597,7 @@ export function createCrownsGame(): GameInstance {
   return {
     id: "crowns",
     mount(): void {
-      solverSection.classList.remove("hidden");
+      stageSection.classList.remove("hidden");
       if (modeShell.mode === "daily" && daily && daily.day !== todayUTC()) {
         // Midnight rollover: the in-memory daily belongs to yesterday's seed.
         daily = null;
@@ -616,7 +616,7 @@ export function createCrownsGame(): GameInstance {
     },
     unmount(): void {
       pauseClock();
-      solverSection.classList.add("hidden");
+      stageSection.classList.add("hidden");
     },
     pauseClock,
     resumeClock,

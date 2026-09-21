@@ -1,8 +1,8 @@
 {
-  "name": "dodoco-solver",
+  "name": "dodoco-helper",
   "private": true,
   "version": "1.0.0",
-  "description": "Crown puzzle companion web app: upload a board screenshot, get every crown placed.",
+  "description": "Daily logic minigames (crowns, minesweeper, seasons, tents, snapshot) with leaderboard API.",
   "type": "module",
   "scripts": {
     "generate:index": "node scripts/generate-index.mjs",

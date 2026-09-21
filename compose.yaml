@@ -1,4 +1,4 @@
-# DodocoHelper — Crown puzzle solver + leaderboard API (Vite static site served by Caddy)
+# DodocoHelper — daily logic minigames + leaderboard API (Vite static site served by Caddy)
 # Public route: https://strey.dev/dodoco/ (path prefix on the existing strey.dev host)
 # Traefik matches Host(strey.dev) + PathPrefix(/dodoco), strips the prefix, and
 # forwards to Caddy :80. The app is built with vite base '/dodoco/' so its
