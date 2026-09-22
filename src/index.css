@@ -1432,3 +1432,157 @@ nav[aria-label="Primary"] .mode-btn svg {
 #tinder-reject:disabled {
   opacity: 0.5;
 }
+
+.tinder-db-filters {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  align-items: end;
+  margin-bottom: 8px;
+}
+.tinder-db-filters label {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  font-size: 12px;
+  font-weight: 600;
+  color: rgba(22, 34, 61, 0.6);
+}
+.tinder-db-filters select,
+.tinder-db-filters input {
+  height: 32px;
+  border-radius: 9999px;
+  border: 1px solid rgba(22, 34, 61, 0.2);
+  background: rgba(255, 255, 255, 0.7);
+  padding: 0 10px;
+  font-size: 13px;
+  font-weight: 600;
+  color: #16223d;
+  min-width: 0;
+}
+.tinder-db-filters input[type="number"] {
+  width: 84px;
+}
+.tinder-db-search input {
+  width: 130px;
+}
+.tinder-db-filters .btn-gold {
+  height: 32px;
+  border-radius: 9999px;
+  padding: 0 16px;
+  font-size: 13px;
+}
+.tinder-db-count {
+  font-size: 13px;
+  font-weight: 600;
+  color: rgba(22, 34, 61, 0.7);
+  margin-bottom: 6px;
+}
+.tinder-db-table-wrap {
+  overflow-x: auto;
+  overflow-y: auto;
+  max-height: min(42vh, 360px);
+  border-radius: 12px;
+  border: 1px solid rgba(22, 34, 61, 0.12);
+}
+.tinder-db-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 13px;
+}
+.tinder-db-table th,
+.tinder-db-table td {
+  padding: 6px 8px;
+  text-align: left;
+  border-bottom: 1px solid rgba(22, 34, 61, 0.08);
+  white-space: nowrap;
+}
+.tinder-db-table th {
+  position: sticky;
+  top: 0;
+  z-index: 1;
+  font-size: 11px;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  color: rgba(22, 34, 61, 0.55);
+  background: #f3e8cd;
+}
+.tinder-db-row {
+  cursor: pointer;
+}
+.tinder-db-row:hover {
+  background: rgba(217, 182, 74, 0.14);
+}
+.tinder-db-name {
+  max-width: 180px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  font-weight: 600;
+}
+.tinder-db-badge {
+  display: inline-block;
+  padding: 1px 8px;
+  border-radius: 9999px;
+  font-size: 11px;
+  font-weight: 700;
+}
+.tinder-db-badge.is-pending {
+  background: rgba(22, 34, 61, 0.1);
+  color: #16223d;
+}
+.tinder-db-badge.is-accepted {
+  background: rgba(46, 125, 50, 0.15);
+  color: #2e7d32;
+}
+.tinder-db-badge.is-rejected {
+  background: rgba(183, 28, 28, 0.12);
+  color: #b71c1c;
+}
+.tinder-db-pager {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  margin-top: 8px;
+}
+.tinder-db-pager .btn-outline {
+  height: 32px;
+  border-radius: 9999px;
+  padding: 0 14px;
+  font-size: 13px;
+  font-weight: 700;
+}
+.tinder-db-page {
+  font-size: 12px;
+  font-weight: 600;
+  color: rgba(22, 34, 61, 0.6);
+}
+.tinder-db-detail {
+  padding-top: 2px;
+}
+.tinder-db-back {
+  height: 32px;
+  border-radius: 9999px;
+  padding: 0 14px;
+  font-size: 13px;
+  font-weight: 700;
+  margin-bottom: 10px;
+}
+#tinder-db-accept.is-active {
+  outline: 2px solid #a07d1c;
+  outline-offset: 2px;
+}
+#tinder-db-reject.is-active {
+  background: rgba(183, 28, 28, 0.12);
+  border-color: #b71c1c;
+  color: #b71c1c;
+  outline: 2px solid #b71c1c;
+  outline-offset: 2px;
+}
+.tinder-db-img {
+  width: 100%;
+  aspect-ratio: 4 / 3;
+  object-fit: cover;
+  border-radius: 12px;
+  background: #e9dcbd;
+}

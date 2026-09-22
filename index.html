@@ -600,13 +600,19 @@
 
         <section id="tinder" class="hidden w-full shrink-0 place-items-center pt-[2px] pb-[9px]">
           <div class="mx-auto w-full" id="tinder-col">
-            <div class="mb-[8px] flex items-center justify-start gap-[8px]">
-              <label for="tinder-source-filter" class="text-[13px] font-semibold text-night-800/60">Source</label>
-              <select id="tinder-source-filter" class="h-[32px] rounded-full border border-night-700/20 bg-white/70 px-[10px] text-[13px] font-semibold text-night-900" aria-label="Card source">
-                <option value="all">All sources</option>
-                <option value="hp">Historypin</option>
-                <option value="wd">Wikidata</option>
-              </select>
+            <div class="mb-[8px] flex items-center justify-between gap-[8px]">
+              <div class="flex items-center gap-[6px]" role="group" aria-label="Tinder view">
+                <button id="tinder-view-curate" type="button" class="h-[32px] rounded-full bg-gold-600 px-[14px] text-[13px] font-bold text-white" aria-pressed="true">Curate</button>
+                <button id="tinder-view-db" type="button" class="h-[32px] rounded-full border border-night-700/20 bg-white/70 px-[14px] text-[13px] font-bold text-night-900" aria-pressed="false">Database</button>
+              </div>
+              <div class="flex items-center gap-[8px]" id="tinder-curate-filter">
+                <label for="tinder-source-filter" class="text-[13px] font-semibold text-night-800/60">Source</label>
+                <select id="tinder-source-filter" class="h-[32px] rounded-full border border-night-700/20 bg-white/70 px-[10px] text-[13px] font-semibold text-night-900" aria-label="Card source">
+                  <option value="all">All sources</option>
+                  <option value="hp">Historypin</option>
+                  <option value="wd">Wikidata</option>
+                </select>
+              </div>
             </div>
             <div id="tinder-card" class="rounded-2xl border border-night-700/15 bg-white/60 p-[14px] text-night-900 shadow-[0_16px_50px_rgba(60,45,10,0.12)] backdrop-blur-sm">
               <img id="tinder-img" class="tinder-img tinder-img-zoomable" alt="Candidate event photograph" referrerpolicy="no-referrer" draggable="false" role="button" tabindex="0" aria-label="View image fullscreen" />
@@ -623,6 +629,67 @@
               <div class="mt-[4px] grid grid-cols-2 gap-[10px]">
                 <button id="tinder-reject" type="button" class="btn-outline h-[56px] rounded-full text-[18px] font-bold" aria-label="Reject (left arrow)">✗</button>
                 <button id="tinder-accept" type="button" class="btn-gold h-[56px] rounded-full text-[18px] font-bold" aria-label="Accept (right arrow)">✓</button>
+              </div>
+            </div>
+            <div id="tinder-db" class="hidden rounded-2xl border border-night-700/15 bg-white/60 p-[14px] text-night-900 shadow-[0_16px_50px_rgba(60,45,10,0.12)] backdrop-blur-sm">
+              <div id="tinder-db-list">
+              <div class="tinder-db-filters">
+                <label>Status
+                  <select id="tinder-db-status" aria-label="Status filter">
+                    <option value="not-rejected" selected>Hide rejected</option>
+                    <option value="all">All</option>
+                    <option value="pending">Pending</option>
+                    <option value="accepted">Accepted</option>
+                    <option value="rejected">Rejected</option>
+                    <option value="decided">Decided</option>
+                  </select>
+                </label>
+                <label>Source
+                  <select id="tinder-db-source" aria-label="Source filter">
+                    <option value="all">All</option>
+                    <option value="hp">Historypin</option>
+                    <option value="wd">Wikidata</option>
+                  </select>
+                </label>
+                <label>From
+                  <input id="tinder-db-from" type="number" inputmode="numeric" placeholder="1700" aria-label="From year" />
+                </label>
+                <label>To
+                  <input id="tinder-db-to" type="number" inputmode="numeric" placeholder="2026" aria-label="To year" />
+                </label>
+                <label class="tinder-db-search">Search
+                  <input id="tinder-db-q" type="search" placeholder="name…" aria-label="Search by name" />
+                </label>
+                <button id="tinder-db-apply" type="button" class="btn-gold">Apply</button>
+              </div>
+              <p id="tinder-db-count" class="tinder-db-count" role="status" aria-live="polite"></p>
+              <div class="tinder-db-table-wrap" id="tinder-db-table-wrap">
+                <table class="tinder-db-table" aria-label="Tinder entries">
+                  <thead><tr><th>Name</th><th>Year</th><th>Loc</th><th>Status</th><th>Src</th></tr></thead>
+                  <tbody id="tinder-db-rows"></tbody>
+                </table>
+              </div>
+              <div class="tinder-db-pager">
+                <button id="tinder-db-prev" type="button" class="btn-outline">← Prev</button>
+                <span id="tinder-db-page" class="tinder-db-page"></span>
+                <button id="tinder-db-next" type="button" class="btn-outline">Next →</button>
+              </div>
+              </div>
+              <div id="tinder-db-detail" class="tinder-db-detail hidden" aria-live="polite">
+                <button id="tinder-db-back" type="button" class="btn-outline tinder-db-back" aria-label="Back to list">← Back</button>
+                <img id="tinder-db-img" class="tinder-db-img" alt="" referrerpolicy="no-referrer" draggable="false" />
+                <div id="tinder-db-map" class="tinder-map hidden" role="application" aria-label="Map of photo location"></div>
+                <p id="tinder-db-title" class="mt-[10px] text-[17px] font-bold leading-snug"></p>
+                <p id="tinder-db-meta" class="mt-[2px] text-[14px] font-semibold text-gold-600"></p>
+                <p id="tinder-db-blurb" class="tinder-blurb mt-[8px]"></p>
+                <div class="mt-[8px] flex items-center justify-between gap-[8px]">
+                  <a id="tinder-db-source-link" class="text-[13px] font-semibold text-gold-600 underline" target="_blank" rel="noopener noreferrer" href="#">Source ↗</a>
+                </div>
+                <p id="tinder-db-vote-status" class="min-h-[24px] text-center text-[14px] font-semibold text-night-800/70" role="status" aria-live="polite"></p>
+                <div class="mt-[4px] grid grid-cols-2 gap-[10px]">
+                  <button id="tinder-db-reject" type="button" class="btn-outline h-[48px] rounded-full text-[16px] font-bold" aria-pressed="false">✗ Reject</button>
+                  <button id="tinder-db-accept" type="button" class="btn-gold h-[48px] rounded-full text-[16px] font-bold" aria-pressed="false">✓ Accept</button>
+                </div>
               </div>
             </div>
           </div>

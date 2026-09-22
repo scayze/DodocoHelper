@@ -5,6 +5,7 @@
  */
 import { apiUrl } from "../../leaderboard/api.js";
 import { el } from "../dom.js";
+import { initTinderDb } from "./db-tool.js";
 import L from "leaflet";
 import "leaflet/dist/leaflet.css";
 
@@ -41,6 +42,14 @@ interface TinderCard {
   dateTag: string;
   /** Server-computed tooltip explaining the tag. */
   dateHint: string;
+}
+
+/** Display name for the link to the entry's origin, derived from the
+ *  namespaced source id (`hp:…` → HistoryPin, `wd:Q…` → Wikidata). */
+function sourceName(pinId: string): string {
+  if (pinId.startsWith("wd:")) return "Wikidata";
+  if (pinId.startsWith("hp:")) return "HistoryPin";
+  return "Source";
 }
 
 /** Tinder fetches run live upstream harvests: allow 60s, not the 8s game default. */
@@ -98,6 +107,42 @@ export function initTinder(): void {
   const lightboxImg = el<HTMLImageElement>("tinder-lightbox-img");
   const lightboxClose = el<HTMLButtonElement>("tinder-lightbox-close");
   document.body.appendChild(lightbox);
+
+  // Curate / Database view toggle. DB boots lazily on first open.
+  const viewCurateBtn = document.getElementById("tinder-view-curate") as HTMLButtonElement | null;
+  const viewDbBtn = document.getElementById("tinder-view-db") as HTMLButtonElement | null;
+  const card = document.getElementById("tinder-card");
+  const dbView = document.getElementById("tinder-db");
+  const curateFilter = document.getElementById("tinder-curate-filter");
+  let dbReady = false;
+  function setDbView(showDb: boolean): void {
+    card?.classList.toggle("hidden", showDb);
+    dbView?.classList.toggle("hidden", !showDb);
+    curateFilter?.classList.toggle("hidden", showDb);
+    // Curate filter row uses flex; hidden class alone leaves display from CSS.
+    if (curateFilter) curateFilter.style.display = showDb ? "none" : "";
+    viewCurateBtn?.setAttribute("aria-pressed", String(!showDb));
+    viewDbBtn?.setAttribute("aria-pressed", String(showDb));
+    if (viewCurateBtn && viewDbBtn) {
+      viewCurateBtn.className = showDb
+        ? "h-[32px] rounded-full border border-night-700/20 bg-white/70 px-[14px] text-[13px] font-bold text-night-900"
+        : "h-[32px] rounded-full bg-gold-600 px-[14px] text-[13px] font-bold text-white";
+      viewDbBtn.className = showDb
+        ? "h-[32px] rounded-full bg-gold-600 px-[14px] text-[13px] font-bold text-white"
+        : "h-[32px] rounded-full border border-night-700/20 bg-white/70 px-[14px] text-[13px] font-bold text-night-900";
+    }
+    if (showDb && !dbReady) {
+      dbReady = true;
+      try {
+        initTinderDb();
+      } catch {
+        // DB tool is progressive enhancement; curate view keeps working.
+      }
+    }
+  }
+  viewCurateBtn?.addEventListener("click", () => setDbView(false));
+  viewDbBtn?.addEventListener("click", () => setDbView(true));
+  if (typeof location !== "undefined" && location.hash.includes("db")) setDbView(true);
 
   root.classList.remove("hidden");
 
@@ -200,6 +245,7 @@ export function initTinder(): void {
     else meta.removeAttribute("title");
     setBlurb(current.blurb);
     source.setAttribute("href", current.page);
+    source.textContent = `${sourceName(current.pinId)} ↗`;
   }
 
   /** Blurbs arrive whole: collapse to 3 lines, expand on demand. The

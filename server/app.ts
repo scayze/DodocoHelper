@@ -9,11 +9,14 @@ import {
   getLeaderboard,
   poolDecadeHistogram,
   submitScore,
+  tinderBrowse,
   tinderCounts,
   tinderExport,
+  tinderGetItem,
   tinderMarkServed,
   tinderPoolBySource,
   tinderPoolTakeRange,
+  tinderSetDecision,
   tinderVote,
   type Db,
 } from "./db.js";
@@ -332,6 +335,91 @@ export function createHandler(db: Db, opts: AppOptions = {}) {
     if (req.method === "GET" && url.pathname === "/api/tinder/export") {
       const decision = url.searchParams.get("decision") === "rejected" ? "rejected" : "accepted";
       sendJson(res, 200, { items: tinderExport(db, decision) });
+      return;
+    }
+
+    if (req.method === "GET" && url.pathname === "/api/tinder/browse") {
+      if (!getLimit.hit(`tinder-browse:${ip}`)) {
+        sendJson(res, 429, { error: "Too many requests. Try again soon." });
+        return;
+      }
+      const statusRaw = url.searchParams.get("status") ?? "not-rejected";
+      const status = statusRaw === "all" || statusRaw === "pending" || statusRaw === "accepted"
+        || statusRaw === "rejected" || statusRaw === "decided" || statusRaw === "not-rejected"
+        ? statusRaw : "not-rejected";
+      const num = (v: string | null): number | null => {
+        if (v === null || v.trim() === "") return null;
+        const n = Number(v);
+        return Number.isFinite(n) ? Math.trunc(n) : null;
+      };
+      const sortRaw = url.searchParams.get("sort");
+      const sort = sortRaw === "title" || sortRaw === "decided" || sortRaw === "created" ? sortRaw : "year";
+      const order = url.searchParams.get("order") === "desc" ? "desc" : "asc";
+      const limitRaw = Number(url.searchParams.get("limit") ?? "50");
+      const limit = Number.isFinite(limitRaw) ? Math.min(Math.max(Math.trunc(limitRaw), 1), 200) : 50;
+      const offsetRaw = Number(url.searchParams.get("offset") ?? "0");
+      const offset = Number.isFinite(offsetRaw) ? Math.max(Math.trunc(offsetRaw), 0) : 0;
+      const { rows, total } = tinderBrowse(db, {
+        status,
+        source: parseSourceParam(url.searchParams.get("source")),
+        fromYear: num(url.searchParams.get("from")),
+        toYear: num(url.searchParams.get("to")),
+        q: url.searchParams.get("q") ?? "",
+        sort, order, limit, offset,
+      });
+      sendJson(res, 200, { rows, total, counts: tinderCounts(db) });
+      return;
+    }
+
+    if (req.method === "GET" && url.pathname === "/api/tinder/item") {
+      if (!getLimit.hit(`tinder-browse:${ip}`)) {
+        sendJson(res, 429, { error: "Too many requests. Try again soon." });
+        return;
+      }
+      const qid = url.searchParams.get("qid") ?? url.searchParams.get("pinId") ?? url.searchParams.get("eventQid") ?? "";
+      const image = url.searchParams.get("image") ?? "";
+      if (!acceptsSourceId(qid) || !image.startsWith("http")) {
+        sendJson(res, 400, { error: "qid + image required." });
+        return;
+      }
+      const item = tinderGetItem(db, qid, image);
+      if (!item) {
+        sendJson(res, 404, { error: "Not found." });
+        return;
+      }
+      sendJson(res, 200, { item });
+      return;
+    }
+
+    if (req.method === "POST" && url.pathname === "/api/tinder/revote") {
+      if (!submitLimit.hit(`tinder-vote:${ip}`)) {
+        sendJson(res, 429, { error: "Too many votes. Try again later." });
+        return;
+      }
+      let parsed: unknown;
+      try {
+        parsed = JSON.parse(await readBody(req));
+      } catch {
+        sendJson(res, 400, { error: "Body must be valid JSON." });
+        return;
+      }
+      const b = parsed as Record<string, unknown>;
+      const qid = typeof b["qid"] === "string" ? (b["qid"] as string)
+        : typeof b["pinId"] === "string" ? (b["pinId"] as string)
+        : typeof b["eventQid"] === "string" ? (b["eventQid"] as string) : "";
+      const image = typeof b["image"] === "string" ? (b["image"] as string) : "";
+      const rendered = typeof b["rendered"] === "string" ? (b["rendered"] as string) : "";
+      const decision = b["decision"];
+      if (!acceptsSourceId(qid) || !image.startsWith("http")) {
+        sendJson(res, 400, { error: "qid + image required." });
+        return;
+      }
+      if (decision !== "accepted" && decision !== "rejected" && decision !== "pending") {
+        sendJson(res, 400, { error: "decision must be accepted|rejected|pending." });
+        return;
+      }
+      const ok = tinderSetDecision(db, { qid, image, decision, rendered });
+      sendJson(res, ok ? 200 : 404, { ok, counts: tinderCounts(db) });
       return;
     }
 
