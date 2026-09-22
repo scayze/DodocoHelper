@@ -43,6 +43,8 @@ function gameLabel(game: LeaderboardGameId): string {
       return "Tents";
     case "snapshot":
       return "Snapshot";
+    case "shapes":
+      return "Shapes";
   }
 }
 

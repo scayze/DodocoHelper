@@ -138,6 +138,8 @@ describe("allEndlessKeys", () => {
       "dodoco:endless-unlocked:tents",
       "dodoco:endless:snapshot",
       "dodoco:endless-unlocked:snapshot",
+      "dodoco:endless:shapes",
+      "dodoco:endless-unlocked:shapes",
     ]);
   });
 });

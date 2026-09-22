@@ -6,6 +6,7 @@ export const LEADERBOARD_GAMES = [
   "seasons",
   "tents",
   "snapshot",
+  "shapes",
 ] as const;
 
 export type LeaderboardGameId = (typeof LEADERBOARD_GAMES)[number];
@@ -59,6 +60,8 @@ export const GAME_RULES: Record<LeaderboardGameId, GameRules> = {
   minesweeper: { metric: "higherScore", canLose: true },
   // snapshot: 0..100 points (50 location + 50 year); every guess finishes.
   snapshot: { metric: "higherScore", canLose: false },
+  // shapes: time-only (win-only) board; score is fixed at 0.
+  shapes: { metric: "time", canLose: false },
 };
 
 /** The exact score that counts as a win (0 unless a percent-based board). */

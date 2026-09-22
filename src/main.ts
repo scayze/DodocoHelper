@@ -18,6 +18,7 @@ initGameLeaderboard("minesweeper", "mines");
 initGameLeaderboard("seasons", "seasons");
 initGameLeaderboard("tents", "tents");
 initGameLeaderboard("snapshot", "snapshot");
+initGameLeaderboard("shapes", "shapes");
 
 const tabButtons = {
   home: el<HTMLButtonElement>("nav-home"),
@@ -192,7 +193,7 @@ if (
   el("primary-nav").classList.add("hidden");
   el("home").classList.add("hidden");
   el("stage").classList.add("hidden");
-  for (const id of ["mines", "seasons", "snapshot", "tents"]) {
+  for (const id of ["mines", "seasons", "snapshot", "tents", "shapes"]) {
     document.getElementById(id)?.classList.add("hidden");
   }
   initTinder();

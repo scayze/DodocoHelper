@@ -36,7 +36,7 @@ describe("GAME_RULES win semantics", () => {
   it("covers exactly the leaderboard games", () => {
     assert.deepEqual(
       Object.keys(GAME_RULES).sort(),
-      ["crowns", "minesweeper", "seasons", "snapshot", "tents"],
+      ["crowns", "minesweeper", "seasons", "shapes", "snapshot", "tents"],
     );
   });
 
@@ -44,8 +44,10 @@ describe("GAME_RULES win semantics", () => {
     // Time-only win-only boards: fixed 0 score, won always true.
     assert.equal(GAME_RULES.crowns.metric, "time");
     assert.equal(GAME_RULES.tents.metric, "time");
+    assert.equal(GAME_RULES.shapes.metric, "time");
     assert.equal(GAME_RULES.crowns.canLose, false);
     assert.equal(GAME_RULES.tents.canLose, false);
+    assert.equal(GAME_RULES.shapes.canLose, false);
     // Fail-capable boards: a score, and won means hitting the win score.
     assert.equal(GAME_RULES.seasons.metric, "lowerScore");
     assert.equal(GAME_RULES.minesweeper.metric, "higherScore");
@@ -61,6 +63,7 @@ describe("GAME_RULES win semantics", () => {
     assert.equal(winScoreFor("seasons"), 0);
     assert.equal(winScoreFor("crowns"), 0);
     assert.equal(winScoreFor("tents"), 0);
+    assert.equal(winScoreFor("shapes"), 0);
     assert.equal(winScoreFor("snapshot"), 100);
   });
 });

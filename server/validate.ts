@@ -31,7 +31,7 @@ export function validateSubmit(body: unknown):
   const b = body as Record<string, unknown>;
 
   if (!isLeaderboardGame(b["game"])) {
-    return { ok: false, error: "Unknown game. Expected crowns, minesweeper, seasons, tents or snapshot." };
+    return { ok: false, error: "Unknown game. Expected crowns, minesweeper, seasons, tents, snapshot or shapes." };
   }
   const name = normalizeName(b["displayName"]);
   if (name.length < MIN_NAME_LENGTH) {

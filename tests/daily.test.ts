@@ -61,12 +61,12 @@ describe("daily seeds", () => {
     assert.notEqual(c(), seqA[0]);
   });
 
-  it("local fallback seeds are stable per day with all five games", () => {
+  it("local fallback seeds are stable per day with all six games", () => {
     const first = localDailySeeds("2026-09-09");
     const second = localDailySeeds("2026-09-09");
     assert.deepEqual(first, second);
     assert.equal(first.day, "2026-09-09");
-    for (const game of ["crowns", "minesweeper", "seasons", "tents", "snapshot"] as const) {
+    for (const game of ["crowns", "minesweeper", "seasons", "tents", "snapshot", "shapes"] as const) {
       assert.equal(Number.isInteger(first.seeds[game]), true);
     }
     const other = localDailySeeds("2026-09-10");
@@ -78,7 +78,7 @@ describe("daily seeds", () => {
     const second = dailySeedsFor("2026-09-09");
     assert.deepEqual(first, second);
     const games = Object.values(first.seeds);
-    assert.equal(new Set(games).size, 5);
+    assert.equal(new Set(games).size, 6);
     for (const seed of games) {
       assert.equal(Number.isInteger(seed), true);
       assert.ok(seed >= 0 && seed < 2 ** 32);

@@ -1586,3 +1586,29 @@ nav[aria-label="Primary"] .mode-btn svg {
   border-radius: 12px;
   background: #e9dcbd;
 }
+
+/* Shapes: 4x4 swap board. Cards are light tiles with SVG glyphs; a gold ring
+   marks the selected card and green marks rows that form a valid set. */
+#shapes-grid {
+  gap: clamp(10px, 2vmin, 15px);
+  padding: clamp(4px, 1vmin, 8px);
+  background: transparent;
+}
+.shape-cell {
+  background: rgba(255, 253, 246, 0.92);
+  border: 2px solid rgba(60, 45, 10, 0.18);
+  touch-action: manipulation;
+}
+.shape-cell .shape-glyphs {
+  display: block;
+  width: 100%;
+  height: 100%;
+}
+.shape-cell.is-selected {
+  border-color: #b98a1d;
+  box-shadow: 0 0 0 2px #b98a1d;
+}
+.shape-cell.is-ok {
+  background: #e2f1e3;
+  border-color: #2e7d32;
+}

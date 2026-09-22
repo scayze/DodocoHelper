@@ -1,6 +1,7 @@
 import { createCrownsGame } from "./crowns/controller.js";
 import { createMinesweeperGame } from "./minesweeper/controller.js";
 import { createSeasonsGame } from "./seasons/controller.js";
+import { createShapesGame } from "./shapes/controller.js";
 import { createSnapshotGame } from "./snapshot/controller.js";
 import { createTentsGame } from "./tents/controller.js";
 import type { GameDef } from "./types.js";
@@ -11,5 +12,6 @@ export const GAMES: GameDef[] = [
   { id: "minesweeper", label: "Minesweeper", create: createMinesweeperGame },
   { id: "seasons", label: "Seasons", create: createSeasonsGame },
   { id: "tents", label: "Tents & Trees", create: createTentsGame },
+  { id: "shapes", label: "Shapes", create: createShapesGame },
   { id: "snapshot", label: "Snapshot", create: createSnapshotGame },
 ];

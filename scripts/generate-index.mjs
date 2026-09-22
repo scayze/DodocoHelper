@@ -37,6 +37,12 @@ const games = [
                   </label>`,
   },
   {
+    id: "shapes",
+    label: "Shapes",
+    settings: `
+                  <p class="text-center text-[15px] font-semibold leading-relaxed text-night-800/70">Each board is a new arrangement. No settings.</p>`,
+  },
+  {
     id: "snapshot",
     label: "Snapshot",
     settings: `
