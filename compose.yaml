@@ -50,6 +50,9 @@ services:
     environment:
       PORT: "3001"
       DB_PATH: /data/leaderboard.db
+      # Reverse-geocode enrichment (city..continent on accepted rows).
+      # Keyless by default (fair use); optional key raises quotas.
+      BIGDATACLOUD_API_KEY: ${BIGDATACLOUD_API_KEY:-}
     volumes:
       - leaderboard-data:/data
     healthcheck:

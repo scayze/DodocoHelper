@@ -18,6 +18,14 @@ export interface SnapshotItem {
   lat: number;
   lon: number;
   placeName: string;
+  /** Reverse-geocode labels (BigDataCloud, enriched server-side).
+   *  Optional: missing until backfilled; display falls back to placeName. */
+  geoCity?: string;
+  geoLocality?: string;
+  geoSubdivision?: string;
+  geoCountryName?: string;
+  geoCountryCode?: string;
+  geoContinent?: string;
   /** Year taken. */
   year: number;
   license: string;

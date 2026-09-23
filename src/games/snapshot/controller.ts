@@ -21,6 +21,7 @@ import {
   totalScore,
 } from "./data.js";
 import { isSnapshotStored, type SnapshotStored } from "./stored.js";
+import { answerPlace, detailAnswerLine, resultMissLine, resultPlaceLine } from "./geo-label.js";
 import type { SnapshotItem } from "./types.js";
 
 const YEAR_MIN = 1400;
@@ -218,7 +219,15 @@ export function createSnapshotGame(): GameInstance {
   resultOsmEl.setAttribute("role", "application");
   resultOsmEl.setAttribute("aria-label", "Result map: your guess and the answer.");
   const resultHint = document.createElement("p");
-  resultHint.className = "snap-map-hint";
+  resultHint.className = "snap-map-hint snap-result-hint";
+  const resultScore = document.createElement("span");
+  resultScore.className = "snap-result-score";
+  resultScore.setAttribute("aria-live", "polite");
+  const resultDetail = document.createElement("span");
+  resultDetail.className = "snap-result-detail";
+  const resultPlace = document.createElement("span");
+  resultPlace.className = "snap-result-place";
+  resultHint.append(resultScore, resultDetail, resultPlace);
   const mapExpandBtn = document.createElement("button");
   mapExpandBtn.type = "button";
   mapExpandBtn.className = "snap-map-expand";
@@ -477,7 +486,15 @@ export function createSnapshotGame(): GameInstance {
     if (resultsTab !== "result") setMapFullscreen(false);
     detailsText.classList.toggle("hidden", resultsTab !== "text");
     detailsImg.classList.toggle("hidden", resultsTab !== "image");
-    resultHint.textContent = revealed ? answerStatus() : "";
+    if (revealed && item && score !== null && distKm !== null && yearErr !== null) {
+      resultScore.textContent = `${score}/100`;
+      resultDetail.textContent = resultMissLine(distKm, yearErr);
+      resultPlace.textContent = resultPlaceLine(item);
+    } else {
+      resultScore.textContent = "";
+      resultDetail.textContent = revealed ? answerStatus() : "";
+      resultPlace.textContent = "";
+    }
   }
 
   let map: L.Map | null = null;
@@ -632,7 +649,7 @@ export function createSnapshotGame(): GameInstance {
   /** Exact post-guess answer line: `Answer: London, 1982 | Score: 86`. */
   function answerStatus(): string {
     if (!item || score === null) return "";
-    return `Answer: ${item.placeName}, ${item.year} | Score: ${score}`;
+    return `Answer: ${answerPlace(item)}, ${item.year} | Score: ${score}`;
   }
 
   function paintYear(): void {
@@ -729,7 +746,7 @@ export function createSnapshotGame(): GameInstance {
       detailsTitle.textContent = item.photographer
         ? `${item.title} — ${item.photographer}`
         : item.title;
-      detailsAnswer.textContent = `Answer: ${item.placeName}, ${item.year}`;
+      detailsAnswer.textContent = detailAnswerLine(item);
       detailsBlurb.textContent = item.blurb;
       const wikiSrc = item.blurbSource.startsWith("https://en.wikipedia.org/");
       detailsWikiLink.classList.toggle("hidden", !wikiSrc);

@@ -10,6 +10,7 @@ import {
   poolDecadeHistogram,
   submitScore,
   tinderBrowse,
+  tinderCountryCodes,
   tinderCounts,
   tinderExport,
   tinderGetItem,
@@ -24,6 +25,7 @@ import { dailySeedsFor } from "./daily-seed.js";
 import { validateSubmit } from "./validate.js";
 import { DECADE_BUCKETS, type TinderCard } from "./tinder.js";
 import { acceptsSourceId, allAdapters } from "./sources/index.js";
+import { enrichGeoRow, geoApiKey } from "./sources/geocode.js";
 import type { TinderPoolRow, TinderSourceFilter } from "./db.js";
 
 const MAX_BODY_BYTES = 10_000;
@@ -323,6 +325,11 @@ export function createHandler(db: Db, opts: AppOptions = {}) {
       // served pool row, so the POST carries only ids. Re-votes and votes
       // for unserved cards return ok:false.
       const ok = tinderVote(db, { eventQid: pinId, image, rendered, decision });
+      if (ok && decision === "accepted") {
+        // Best-effort geo labels (city..continent) for the new answer.
+        // Async, never blocks the vote response; no-ops without a key.
+        void enrichGeoRow(db, pinId, image, geoApiKey()).catch(() => {});
+      }
       sendJson(res, ok ? 200 : 404, { ok, counts: tinderCounts(db) });
       return;
     }
@@ -362,12 +369,22 @@ export function createHandler(db: Db, opts: AppOptions = {}) {
       const { rows, total } = tinderBrowse(db, {
         status,
         source: parseSourceParam(url.searchParams.get("source")),
+        countryCode: url.searchParams.get("country") ?? "",
         fromYear: num(url.searchParams.get("from")),
         toYear: num(url.searchParams.get("to")),
         q: url.searchParams.get("q") ?? "",
         sort, order, limit, offset,
       });
       sendJson(res, 200, { rows, total, counts: tinderCounts(db) });
+      return;
+    }
+
+    if (req.method === "GET" && url.pathname === "/api/tinder/countries") {
+      if (!getLimit.hit(`tinder:${ip}`)) {
+        sendJson(res, 429, { error: "Too many requests. Try again soon." });
+        return;
+      }
+      sendJson(res, 200, { countries: tinderCountryCodes(db) });
       return;
     }
 
@@ -419,6 +436,9 @@ export function createHandler(db: Db, opts: AppOptions = {}) {
         return;
       }
       const ok = tinderSetDecision(db, { qid, image, decision, rendered });
+      if (ok && decision === "accepted") {
+        void enrichGeoRow(db, qid, image, geoApiKey()).catch(() => {});
+      }
       sendJson(res, ok ? 200 : 404, { ok, counts: tinderCounts(db) });
       return;
     }

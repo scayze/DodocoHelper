@@ -16,6 +16,7 @@ interface BrowseRow {
   year: number;
   lat: number;
   lon: number;
+  geoCountryCode?: string;
   placeName: string;
   page: string;
   thumb: string;
@@ -69,6 +70,7 @@ function srcName(source: string): string {
 export function initTinderDb(): void {
   const statusSel = el<HTMLSelectElement>("tinder-db-status");
   const sourceSel = el<HTMLSelectElement>("tinder-db-source");
+  const countrySel = el<HTMLSelectElement>("tinder-db-country");
   const fromInput = el<HTMLInputElement>("tinder-db-from");
   const toInput = el<HTMLInputElement>("tinder-db-to");
   const qInput = el<HTMLInputElement>("tinder-db-q");
@@ -162,6 +164,8 @@ export function initTinderDb(): void {
     p.set("status", statusSel.value || "not-rejected");
     const src = sourceSel.value || "all";
     if (src !== "all") p.set("source", src);
+    const country = (countrySel.value || "all").toUpperCase();
+    if (country !== "ALL" && country !== "") p.set("country", country);
     if (fromInput.value.trim() !== "") p.set("from", fromInput.value.trim());
     if (toInput.value.trim() !== "") p.set("to", toInput.value.trim());
     if (qInput.value.trim() !== "") p.set("q", qInput.value.trim());
@@ -206,7 +210,10 @@ export function initTinderDb(): void {
         const year = document.createElement("td");
         year.textContent = String(r.year);
         const loc = document.createElement("td");
-        loc.textContent = `${Number(r.lat).toFixed(1)}°, ${Number(r.lon).toFixed(1)}°`;
+        // Country code for enriched rows, coords fallback (pending pool rows).
+        const coords = `${Number(r.lat).toFixed(1)}°, ${Number(r.lon).toFixed(1)}°`;
+        loc.textContent = r.geoCountryCode || coords;
+        loc.title = r.geoCountryCode ? `${r.geoCountryCode} · ${coords}` : coords;
         const st = document.createElement("td");
         const badge = document.createElement("span");
         badge.className = `tinder-db-badge is-${r.status}`;
@@ -313,6 +320,22 @@ export function initTinderDb(): void {
     offset = 0;
     void load();
   });
+  // Country options come from decided rows (codes + counts); the
+  // static "All" option stays first. Failure keeps just "All".
+  void fetch(apiUrl("/tinder/countries"))
+    .then((res) => (res.ok ? res.json() : null))
+    .then((body) => {
+      const list = (body as { countries?: Array<{ code: string; n: number }> } | null)?.countries;
+      if (!Array.isArray(list)) return;
+      for (const c of list) {
+        if (typeof c.code !== "string" || !/^[A-Z]{2}$/.test(c.code)) continue;
+        const opt = document.createElement("option");
+        opt.value = c.code;
+        opt.textContent = typeof c.n === "number" ? `${c.code} (${c.n})` : c.code;
+        countrySel.appendChild(opt);
+      }
+    })
+    .catch(() => {});
   qInput.addEventListener("keydown", (e) => {
     if (e.key === "Enter") {
       offset = 0;

@@ -52,6 +52,12 @@ CREATE TABLE IF NOT EXISTS tinder_seen(
   date_claims TEXT NOT NULL DEFAULT '',
   translated INTEGER NOT NULL DEFAULT 0,
   status TEXT NOT NULL DEFAULT 'pending',
+  geo_city TEXT NOT NULL DEFAULT '',
+  geo_locality TEXT NOT NULL DEFAULT '',
+  geo_subdivision TEXT NOT NULL DEFAULT '',
+  geo_country_name TEXT NOT NULL DEFAULT '',
+  geo_country_code TEXT NOT NULL DEFAULT '',
+  geo_continent TEXT NOT NULL DEFAULT '',
   created_at TEXT NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%fZ','now')),
   decided_at TEXT,
   UNIQUE(event_qid, image)
@@ -81,6 +87,12 @@ CREATE TABLE IF NOT EXISTS tinder_pool(
   date_claims TEXT NOT NULL DEFAULT '',
   served_at TEXT NOT NULL DEFAULT '',
   bucket INTEGER NOT NULL DEFAULT 0,
+  geo_city TEXT NOT NULL DEFAULT '',
+  geo_locality TEXT NOT NULL DEFAULT '',
+  geo_subdivision TEXT NOT NULL DEFAULT '',
+  geo_country_name TEXT NOT NULL DEFAULT '',
+  geo_country_code TEXT NOT NULL DEFAULT '',
+  geo_continent TEXT NOT NULL DEFAULT '',
   created_at TEXT NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%fZ','now')),
   UNIQUE(qid, image)
 );
@@ -172,6 +184,7 @@ export function openDb(path: string): Db {
   db.exec(SCHEMA);
   ensurePoolBlurbSource(db);
   ensureSourceColumns(db);
+  ensureGeoColumns(db);
   ensurePoolServedAt(db);
   migratePendingToPool(db);
   ensureScoreColumns(db);
@@ -257,11 +270,34 @@ export function sourceForQid(qid: string): string {
 
 const SOURCE_COLUMNS = ["source", "date_kind", "date_precision", "article", "file_usage", "subject_types", "date_claims"] as const;
 
+/** BigDataCloud reverse-geocode labels (all TEXT, '' = not yet enriched). */
+export const GEO_COLUMNS = [
+  "geo_city",
+  "geo_locality",
+  "geo_subdivision",
+  "geo_country_name",
+  "geo_country_code",
+  "geo_continent",
+] as const;
+
 function tableColumns(db: Db, table: string): Set<string> {
   const cols = db
     .prepare(`PRAGMA table_info(${table})`)
     .all() as unknown as Array<{ name: string }>;
   return new Set(cols.map((c) => c.name));
+}
+
+/** Backfill for pre-existing databases: BigDataCloud reverse-geocode
+ *  labels on tinder_seen + tinder_pool (city down to continent).
+ *  New tables already carry the columns. Values stay '' until enriched. */
+function ensureGeoColumns(db: Db): void {
+  for (const table of ["tinder_seen", "tinder_pool"] as const) {
+    const cols = tableColumns(db, table);
+    for (const col of GEO_COLUMNS) {
+      if (cols.has(col)) continue;
+      db.exec(`ALTER TABLE ${table} ADD COLUMN ${col} TEXT NOT NULL DEFAULT '';`);
+    }
+  }
 }
 
 /** Backfill for pre-existing databases: add provenance columns and derive
@@ -439,7 +475,9 @@ export function tinderVote(db: Db, input: TinderVoteInput): boolean {
     `SELECT qid, image, title, description, year, lat, lon, page, thumb, license,
             blurb_source AS blurbSource, source, date_kind AS dateKind,
             date_precision AS datePrecision, article, file_usage AS fileUsage,
-            subject_types AS subjectTypes, date_claims AS dateClaims, served_at AS servedAt
+            subject_types AS subjectTypes, date_claims AS dateClaims, served_at AS servedAt,
+            geo_city, geo_locality, geo_subdivision,
+            geo_country_name, geo_country_code, geo_continent
      FROM tinder_pool WHERE qid = ? AND image = ?`,
   ).get(input.eventQid, input.image) as unknown as {
     qid: string; image: string; title: string; description: string; year: number;
@@ -447,12 +485,15 @@ export function tinderVote(db: Db, input: TinderVoteInput): boolean {
     blurbSource: string; source: string; dateKind: string; datePrecision: number;
     article: string; fileUsage: string; subjectTypes: string; dateClaims: string;
     servedAt: string;
+    geo_city: string; geo_locality: string; geo_subdivision: string;
+    geo_country_name: string; geo_country_code: string; geo_continent: string;
   } | undefined;
   if (!pool || !pool.servedAt) return false;
   const rendered = input.rendered.startsWith("http") ? input.rendered.slice(0, 500) : pool.image;
   const res = db.prepare(
-    `INSERT OR IGNORE INTO tinder_seen(event_qid, image, title, place_name, lat, lon, year, decade, point_in_time, page, thumb, license, blurb, blurb_source, source, date_kind, date_precision, article, file_usage, subject_types, date_claims, translated, status, decided_at)
-     VALUES(?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 1, ?, strftime('%Y-%m-%dT%H:%M:%fZ','now'))`,
+    `INSERT OR IGNORE INTO tinder_seen(event_qid, image, title, place_name, lat, lon, year, decade, point_in_time, page, thumb, license, blurb, blurb_source, source, date_kind, date_precision, article, file_usage, subject_types, date_claims, translated, status, decided_at,
+      geo_city, geo_locality, geo_subdivision, geo_country_name, geo_country_code, geo_continent)
+     VALUES(?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 1, ?, strftime('%Y-%m-%dT%H:%M:%fZ','now'), ?, ?, ?, ?, ?, ?)`,
   ).run(
     pool.qid, pool.image, pool.title, pool.title, pool.lat, pool.lon, pool.year,
     Math.floor(pool.year / 10) * 10, String(pool.year), pool.page, rendered,
@@ -460,6 +501,8 @@ export function tinderVote(db: Db, input: TinderVoteInput): boolean {
     pool.source || sourceForQid(pool.qid), pool.dateKind ?? "", pool.datePrecision ?? 0,
     pool.article ?? "", pool.fileUsage ?? "", pool.subjectTypes ?? "", pool.dateClaims ?? "",
     input.decision,
+    pool.geo_city ?? "", pool.geo_locality ?? "", pool.geo_subdivision ?? "",
+    pool.geo_country_name ?? "", pool.geo_country_code ?? "", pool.geo_continent ?? "",
   );
   if (Number(res.changes) === 0) {
     db.prepare(`DELETE FROM tinder_pool WHERE qid = ? AND image = ?`).run(pool.qid, pool.image);
@@ -467,6 +510,64 @@ export function tinderVote(db: Db, input: TinderVoteInput): boolean {
   }
   db.prepare(`DELETE FROM tinder_pool WHERE qid = ? AND image = ?`).run(pool.qid, pool.image);
   return true;
+}
+
+/** Reverse-geocode labels for one curated row (BigDataCloud fields). */
+export interface GeoFields {
+  city: string;
+  locality: string;
+  subdivision: string;
+  countryName: string;
+  countryCode: string;
+  continent: string;
+}
+
+export function emptyGeoFields(): GeoFields {
+  return { city: "", locality: "", subdivision: "", countryName: "", countryCode: "", continent: "" };
+}
+
+/** Decided rows still missing geo labels (oldest decision first). */
+export function tinderSeenNeedingGeo(db: Db, limit = 500): Array<{
+  eventQid: string; image: string; lat: number; lon: number;
+}> {
+  const n = Number.isFinite(limit) ? Math.min(Math.max(Math.trunc(limit), 1), 5000) : 500;
+  return db.prepare(
+    `SELECT event_qid AS eventQid, image, lat, lon FROM tinder_seen
+     WHERE geo_country_name = ''
+     ORDER BY COALESCE(decided_at, created_at) ASC LIMIT ${n}`,
+  ).all() as unknown as Array<{ eventQid: string; image: string; lat: number; lon: number }>;
+}
+
+/** Pool rows still missing geo labels (oldest first). */
+export function tinderPoolNeedingGeo(db: Db, limit = 500): Array<{
+  qid: string; image: string; lat: number; lon: number;
+}> {
+  const n = Number.isFinite(limit) ? Math.min(Math.max(Math.trunc(limit), 1), 5000) : 500;
+  return db.prepare(
+    `SELECT qid, image, lat, lon FROM tinder_pool
+     WHERE geo_country_name = ''
+     ORDER BY created_at ASC LIMIT ${n}`,
+  ).all() as unknown as Array<{ qid: string; image: string; lat: number; lon: number }>;
+}
+
+/** Store reverse-geocode labels for one decided row. */
+export function tinderUpdateGeo(db: Db, qid: string, image: string, geo: GeoFields): boolean {
+  const res = db.prepare(
+    `UPDATE tinder_seen SET geo_city = ?, geo_locality = ?, geo_subdivision = ?,
+            geo_country_name = ?, geo_country_code = ?, geo_continent = ?
+     WHERE event_qid = ? AND image = ?`,
+  ).run(geo.city, geo.locality, geo.subdivision, geo.countryName, geo.countryCode, geo.continent, qid, image);
+  return Number(res.changes) > 0;
+}
+
+/** Store reverse-geocode labels for one pool row. */
+export function tinderPoolUpdateGeo(db: Db, qid: string, image: string, geo: GeoFields): boolean {
+  const res = db.prepare(
+    `UPDATE tinder_pool SET geo_city = ?, geo_locality = ?, geo_subdivision = ?,
+            geo_country_name = ?, geo_country_code = ?, geo_continent = ?
+     WHERE qid = ? AND image = ?`,
+  ).run(geo.city, geo.locality, geo.subdivision, geo.countryName, geo.countryCode, geo.continent, qid, image);
+  return Number(res.changes) > 0;
 }
 
 export interface TinderSetDecisionInput {
@@ -493,33 +594,42 @@ export function tinderSetDecision(db: Db, input: TinderSetDecisionInput): boolea
     `SELECT qid, image, title, description, year, lat, lon, page, thumb, license,
             blurb_source AS blurbSource, source, date_kind AS dateKind,
             date_precision AS datePrecision, article, file_usage AS fileUsage,
-            subject_types AS subjectTypes, date_claims AS dateClaims
+            subject_types AS subjectTypes, date_claims AS dateClaims,
+            geo_city, geo_locality, geo_subdivision,
+            geo_country_name, geo_country_code, geo_continent
      FROM tinder_pool WHERE qid = ? AND image = ?`,
   ).get(qid, image) as unknown as {
     qid: string; image: string; title: string; description: string; year: number;
     lat: number; lon: number; page: string; thumb: string; license: string;
     blurbSource: string; source: string; dateKind: string; datePrecision: number;
     article: string; fileUsage: string; subjectTypes: string; dateClaims: string;
+    geo_city: string; geo_locality: string; geo_subdivision: string;
+    geo_country_name: string; geo_country_code: string; geo_continent: string;
   } | undefined;
   if (!seen && !pool) return false;
   if (input.decision === "pending") {
     if (!seen) return true; // already pending
-    // Move seen → pool so it becomes votable again.
+    // Move seen → pool so it becomes votable again (geo labels travel along).
     const full = db.prepare(
       `SELECT event_qid, image, title, year, lat, lon, page, thumb, license, blurb,
               blurb_source, source, date_kind, date_precision, article,
-              file_usage, subject_types, date_claims
+              file_usage, subject_types, date_claims,
+              geo_city, geo_locality, geo_subdivision,
+              geo_country_name, geo_country_code, geo_continent
        FROM tinder_seen WHERE event_qid = ? AND image = ?`,
     ).get(qid, image) as unknown as {
       event_qid: string; image: string; title: string; year: number; lat: number; lon: number;
       page: string; thumb: string; license: string; blurb: string; blurb_source: string;
       source: string; date_kind: string; date_precision: number; article: string;
       file_usage: string; subject_types: string; date_claims: string;
+      geo_city: string; geo_locality: string; geo_subdivision: string;
+      geo_country_name: string; geo_country_code: string; geo_continent: string;
     };
     db.prepare(
       `INSERT OR IGNORE INTO tinder_pool(qid, image, title, label, description, year, lat, lon, page, thumb,
-        license, blurb_source, source, date_kind, date_precision, article, file_usage, subject_types, date_claims, bucket, served_at)
-       VALUES(?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, strftime('%Y-%m-%dT%H:%M:%fZ','now'))`,
+        license, blurb_source, source, date_kind, date_precision, article, file_usage, subject_types, date_claims, bucket, served_at,
+        geo_city, geo_locality, geo_subdivision, geo_country_name, geo_country_code, geo_continent)
+       VALUES(?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, strftime('%Y-%m-%dT%H:%M:%fZ','now'), ?, ?, ?, ?, ?, ?)`,
     ).run(
       full.event_qid, full.image, full.title, full.title, full.blurb, full.year,
       full.lat, full.lon, full.page, full.thumb || full.image, full.license,
@@ -527,6 +637,8 @@ export function tinderSetDecision(db: Db, input: TinderSetDecisionInput): boolea
       full.date_kind ?? "", full.date_precision ?? 0, full.article ?? "",
       full.file_usage ?? "", full.subject_types ?? "", full.date_claims ?? "",
       Math.floor(full.year / 10) * 10,
+      full.geo_city ?? "", full.geo_locality ?? "", full.geo_subdivision ?? "",
+      full.geo_country_name ?? "", full.geo_country_code ?? "", full.geo_continent ?? "",
     );
     db.prepare(`DELETE FROM tinder_seen WHERE event_qid = ? AND image = ?`).run(qid, image);
     return true;
@@ -545,8 +657,9 @@ export function tinderSetDecision(db: Db, input: TinderSetDecisionInput): boolea
   const rendered = typeof input.rendered === "string" && input.rendered.startsWith("http")
     ? input.rendered.slice(0, 500) : (pool!.thumb || pool!.image);
   db.prepare(
-    `INSERT OR IGNORE INTO tinder_seen(event_qid, image, title, place_name, lat, lon, year, decade, point_in_time, page, thumb, license, blurb, blurb_source, source, date_kind, date_precision, article, file_usage, subject_types, date_claims, translated, status, decided_at)
-     VALUES(?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 1, ?, strftime('%Y-%m-%dT%H:%M:%fZ','now'))`,
+    `INSERT OR IGNORE INTO tinder_seen(event_qid, image, title, place_name, lat, lon, year, decade, point_in_time, page, thumb, license, blurb, blurb_source, source, date_kind, date_precision, article, file_usage, subject_types, date_claims, translated, status, decided_at,
+      geo_city, geo_locality, geo_subdivision, geo_country_name, geo_country_code, geo_continent)
+     VALUES(?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 1, ?, strftime('%Y-%m-%dT%H:%M:%fZ','now'), ?, ?, ?, ?, ?, ?)`,
   ).run(
     pool!.qid, pool!.image, pool!.title, pool!.title, pool!.lat, pool!.lon, pool!.year,
     Math.floor(pool!.year / 10) * 10, String(pool!.year), pool!.page, rendered,
@@ -554,6 +667,8 @@ export function tinderSetDecision(db: Db, input: TinderSetDecisionInput): boolea
     pool!.source || sourceForQid(pool!.qid), pool!.dateKind ?? "", pool!.datePrecision ?? 0,
     pool!.article ?? "", pool!.fileUsage ?? "", pool!.subjectTypes ?? "", pool!.dateClaims ?? "",
     input.decision,
+    pool!.geo_city ?? "", pool!.geo_locality ?? "", pool!.geo_subdivision ?? "",
+    pool!.geo_country_name ?? "", pool!.geo_country_code ?? "", pool!.geo_continent ?? "",
   );
   db.prepare(`DELETE FROM tinder_pool WHERE qid = ? AND image = ?`).run(pool!.qid, pool!.image);
   return true;
@@ -572,6 +687,18 @@ export function tinderCounts(db: Db): { pending: number; accepted: number; rejec
   return out;
 }
 
+/** Distinct enriched country codes on decided + pool rows (DB filter). */
+export function tinderCountryCodes(db: Db): Array<{ code: string; n: number }> {
+  const rows = db.prepare(
+    `SELECT geo_country_code AS code, COUNT(*) AS n FROM (
+       SELECT geo_country_code FROM tinder_seen WHERE geo_country_code <> ''
+       UNION ALL
+       SELECT geo_country_code FROM tinder_pool WHERE geo_country_code <> ''
+     ) GROUP BY geo_country_code ORDER BY n DESC, code ASC`,
+  ).all() as unknown as Array<{ code: string; n: number }>;
+  return rows;
+}
+
 /** Total pool depth (pool-size guard for the background worker). */
 export function poolTotal(db: Db): number {
   const row = db.prepare(`SELECT COUNT(*) AS n FROM tinder_pool`).get() as unknown as { n: number };
@@ -583,6 +710,8 @@ export type TinderBrowseStatus = "all" | "pending" | "accepted" | "rejected" | "
 export interface TinderBrowseFilters {
   status?: TinderBrowseStatus | null;
   source?: TinderSourceFilter | null;
+  /** ISO country code (seen rows only; pool rows have no geo labels). */
+  countryCode?: string | null;
   fromYear?: number | null;
   toYear?: number | null;
   q?: string | null;
@@ -599,6 +728,8 @@ export interface TinderBrowseRow {
   year: number;
   lat: number;
   lon: number;
+  /** BigDataCloud country code (seen rows only, '' until enriched). */
+  geoCountryCode?: string;
   placeName: string;
   page: string;
   thumb: string;
@@ -618,6 +749,8 @@ export function tinderBrowse(db: Db, f: TinderBrowseFilters = {}): { rows: Tinde
   const fromYear = typeof f.fromYear === "number" && Number.isFinite(f.fromYear) ? Math.trunc(f.fromYear) : null;
   const toYear = typeof f.toYear === "number" && Number.isFinite(f.toYear) ? Math.trunc(f.toYear) : null;
   const q = (f.q ?? "").trim().slice(0, 80);
+  const rawCountry = (f.countryCode ?? "").trim().toUpperCase().slice(0, 2);
+  const country = /^[A-Z]{2}$/.test(rawCountry) ? rawCountry : null;
   const sort = f.sort === "title" || f.sort === "decided" || f.sort === "created" ? f.sort : "year";
   const order = f.order === "desc" ? "desc" : "asc";
   const limit = typeof f.limit === "number" && Number.isFinite(f.limit)
@@ -625,6 +758,8 @@ export function tinderBrowse(db: Db, f: TinderBrowseFilters = {}): { rows: Tinde
   const offset = typeof f.offset === "number" && Number.isFinite(f.offset)
     ? Math.max(Math.trunc(f.offset), 0) : 0;
 
+  // Pool rows carry geo labels too (enriched by the same loop); a country
+  // filter applies to both tables.
   const wantPool = status === "all" || status === "pending" || status === "not-rejected";
   const wantAccepted = status === "all" || status === "accepted" || status === "decided" || status === "not-rejected";
   const wantRejected = status === "all" || status === "rejected" || status === "decided";
@@ -645,17 +780,20 @@ export function tinderBrowse(db: Db, f: TinderBrowseFilters = {}): { rows: Tinde
     if (fromYear !== null) { wc.push("year >= ?"); wa.push(fromYear); }
     if (toYear !== null) { wc.push("year <= ?"); wa.push(toYear); }
     if (q) { wc.push("title LIKE ?"); wa.push(`%${q}%`); }
+    if (country !== null) { wc.push("geo_country_code = ?"); wa.push(country); }
     const rows = db.prepare(
-      `SELECT qid, image, title, year, lat, lon, page, thumb, source, created_at
+      `SELECT qid, image, title, year, lat, lon, page, thumb, source, created_at, geo_country_code
        FROM tinder_pool WHERE ${wc.join(" AND ")} LIMIT 6000`,
     ).all(...wa) as unknown as Array<{
       qid: string; image: string; title: string; year: number; lat: number; lon: number;
       page: string; thumb: string; source: string; created_at: string;
+      geo_country_code: string;
     }>;
     for (const r of rows) {
       out.push({
         qid: r.qid, image: r.image, title: r.title, year: r.year,
         lat: r.lat, lon: r.lon, placeName: r.title, page: r.page,
+        geoCountryCode: r.geo_country_code || undefined,
         thumb: r.thumb, source: r.source || sourceForQid(r.qid),
         status: "pending", decided_at: null, created_at: r.created_at ?? null,
       });
@@ -669,21 +807,25 @@ export function tinderBrowse(db: Db, f: TinderBrowseFilters = {}): { rows: Tinde
     const placeholders = wanted.map(() => "?").join(",");
     const wc: string[] = [`status IN (${placeholders})`, srcConds("event_qid")];
     const wa: Array<string | number> = [...wanted];
+    if (country !== null) { wc.push("geo_country_code = ?"); wa.push(country); }
     if (fromYear !== null) { wc.push("year >= ?"); wa.push(fromYear); }
     if (toYear !== null) { wc.push("year <= ?"); wa.push(toYear); }
     if (q) { wc.push("(title LIKE ? OR place_name LIKE ?)"); wa.push(`%${q}%`, `%${q}%`); }
     const rows = db.prepare(
-      `SELECT event_qid, image, title, place_name, year, lat, lon, page, thumb, source, status, decided_at, created_at
+      `SELECT event_qid, image, title, place_name, year, lat, lon, page, thumb, source, status, decided_at, created_at,
+              geo_country_code
        FROM tinder_seen WHERE ${wc.join(" AND ")} LIMIT 10000`,
     ).all(...wa) as unknown as Array<{
       event_qid: string; image: string; title: string; place_name: string; year: number;
       lat: number; lon: number; page: string; thumb: string; source: string;
       status: string; decided_at: string | null; created_at: string;
+      geo_country_code: string;
     }>;
     for (const r of rows) {
       out.push({
         qid: r.event_qid, image: r.image, title: r.title, year: r.year,
         lat: r.lat, lon: r.lon, placeName: r.place_name || r.title, page: r.page,
+        geoCountryCode: r.geo_country_code || undefined,
         thumb: r.thumb, source: r.source || sourceForQid(r.event_qid),
         status: r.status === "rejected" ? "rejected" : "accepted",
         decided_at: r.decided_at ?? null, created_at: r.created_at ?? null,
@@ -754,7 +896,9 @@ export function tinderExport(db: Db, decision: "accepted" | "rejected" = "accept
   const rows = db.prepare(
     `SELECT event_qid, image AS thumb_img, title, place_name, lat, lon, year, page, thumb, license, blurb, blurb_source,
             source, date_kind AS dateKind, date_precision AS datePrecision, article, file_usage AS fileUsage,
-            subject_types AS subjectTypes, date_claims AS dateClaims, decided_at, created_at
+            subject_types AS subjectTypes, date_claims AS dateClaims, decided_at, created_at,
+            geo_city AS geoCity, geo_locality AS geoLocality, geo_subdivision AS geoSubdivision,
+            geo_country_name AS geoCountryName, geo_country_code AS geoCountryCode, geo_continent AS geoContinent
      FROM tinder_seen WHERE status = ? ORDER BY COALESCE(decided_at, created_at) ASC`,
   ).all(decision) as unknown as Array<{
     event_qid: string; thumb_img: string; title: string; place_name: string;
@@ -763,6 +907,8 @@ export function tinderExport(db: Db, decision: "accepted" | "rejected" = "accept
     source: string; dateKind: string; datePrecision: number; article: string; fileUsage: string;
     subjectTypes: string; dateClaims: string;
     decided_at: string | null; created_at: string | null;
+    geoCity: string; geoLocality: string; geoSubdivision: string;
+    geoCountryName: string; geoCountryCode: string; geoContinent: string;
   }>;
   return rows.map((r) => ({
     id: exportIdForSource(r.event_qid, r.year),
@@ -783,6 +929,12 @@ export function tinderExport(db: Db, decision: "accepted" | "rejected" = "accept
     license: r.license,
     blurb: r.blurb,
     blurbSource: r.blurb_source,
+    geoCity: r.geoCity || undefined,
+    geoLocality: r.geoLocality || undefined,
+    geoSubdivision: r.geoSubdivision || undefined,
+    geoCountryName: r.geoCountryName || undefined,
+    geoCountryCode: r.geoCountryCode || undefined,
+    geoContinent: r.geoContinent || undefined,
     // Snapshot-eligibility day = acceptance day (decided_at), falling back
     // to created_at for legacy rows. Daily D only picks addedDay < D, so
     // accepts today never shift today's puzzle. Both columns are UTC

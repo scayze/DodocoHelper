@@ -1068,6 +1068,25 @@ nav[aria-label="Primary"] .mode-btn svg {
   min-height: 32px;
 }
 
+.snap-result-score {
+  display: block;
+  font-size: 16px;
+  font-weight: 800;
+  color: #16223d;
+}
+
+.snap-result-score:empty {
+  display: none;
+}
+
+.snap-result-detail {
+  display: block;
+}
+
+.snap-result-place {
+  display: block;
+}
+
 .snap-screen-results {
   display: flex;
   flex-direction: column;

@@ -4,6 +4,7 @@ import { openDb } from "./db.js";
 import { sourceMode } from "./sources/index.js";
 import { scheduleHistorypinWorker } from "./sources/historypin.js";
 import { scheduleWikidataWorker } from "./sources/wikidata/worker.js";
+import { scheduleGeoWorker } from "./sources/geocode.js";
 
 const port = Number(process.env["PORT"] ?? "3001");
 const dbPath = process.env["DB_PATH"] ?? "./data/leaderboard.db";
@@ -24,6 +25,13 @@ if (mode !== "historypin") {
   const intervalMs = Number(process.env["WD_CRON_MS"] ?? String(15 * 60 * 1000));
   scheduleWikidataWorker(db, Number.isFinite(intervalMs) ? intervalMs : 15 * 60 * 1000);
   console.log(`wikidata worker enabled (mode=${mode})`);
+}
+// Geo labels trickle over pool + decided rows (keyless fair use, small
+// batches); backfill script covers the initial backlog.
+{
+  const intervalMs = Number(process.env["GEO_CRON_MS"] ?? String(10 * 60 * 1000));
+  scheduleGeoWorker(db, Number.isFinite(intervalMs) ? intervalMs : 10 * 60 * 1000);
+  console.log("geo worker enabled");
 }
 
 server.listen(port, () => {

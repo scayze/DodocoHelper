@@ -48,6 +48,8 @@ index.html               # GENERATED — edit scripts/index.template.html instea
 
 Deploy: Vite builds with `base: '/dodoco/'`. Traefik matches `PathPrefix(/dodoco)`, strips it, → Caddy `:80` serves static and proxies `/api/*` → `api:3001`. SQLite lives in the `leaderboard-data` volume (`DB_PATH=/data/leaderboard.db`).
 
+Optional: `BIGDATACLOUD_API_KEY` raises quotas for server-side reverse-geocode enrichment (city/locality/subdivision/country/continent on accepted Tinder rows, shown in Snapshot results). Without a key the keyless fair-use endpoint is used. Backfill: `npm run build:server && node scripts/backfill-geo.mjs`.
+
 ## Add a game
 
 1. Create `src/games/<id>/` with `controller.ts` (return a `GameInstance`), plus solver/generator/`stored.ts`.
