@@ -5,6 +5,9 @@
  */
 import type { SnapshotItem } from "./types.js";
 import { formatDistance } from "./logic.js";
+import { geoLabel } from "../geo-label.js";
+
+export { geoLabel };
 
 function clean(v: unknown): string {
   return typeof v === "string" ? v.trim() : "";
@@ -13,22 +16,6 @@ function clean(v: unknown): string {
 /** "City, Country" chain with graceful fallbacks:
  *  city+country → "Paris, France"; city only; locality (oceans:
  *  "Atlantic Ocean"); subdivision; country; '' when unenriched. */
-export function geoLabel(item: Pick<SnapshotItem, "geoCity" | "geoLocality" | "geoSubdivision" | "geoCountryName">): string {
-  const city = clean(item.geoCity);
-  const locality = clean(item.geoLocality);
-  const subdivision = clean(item.geoSubdivision);
-  const country = clean(item.geoCountryName);
-  if (city && country) return `${city}, ${country}`;
-  if (city) return city;
-  // No city and no country: oceans/remote land name the locality.
-  if (locality && !country) return locality;
-  if (subdivision && country) return `${subdivision}, ${country}`;
-  if (subdivision) return subdivision;
-  if (country) return country;
-  if (locality) return locality;
-  return "";
-}
-
 /** Details-tab answer line: "address, date" only — the title already sits
  *  above it, so neither the title nor an "Answer:" prefix is repeated.
  *  Geo label when enriched, else the placeName (unless it duplicates the

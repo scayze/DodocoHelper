@@ -357,6 +357,12 @@ export interface TinderPoolRow {
   lat: number; lon: number; page: string; thumb: string; license: string;
   blurbSource?: string | null;
   source?: string | null;
+  geoCity?: string | null;
+  geoLocality?: string | null;
+  geoSubdivision?: string | null;
+  geoCountryName?: string | null;
+  geoCountryCode?: string | null;
+  geoContinent?: string | null;
   dateKind?: string | null;
   datePrecision?: number | null;
   article?: string | null;
@@ -430,7 +436,9 @@ export function tinderPoolTakeRange(db: Db, from: number, to: number, limit: num
     `SELECT qid, image, title, label, description, desc_lang AS descLang, year, lat, lon, page, thumb, license,
             blurb_source AS blurbSource, source, date_kind AS dateKind,
             date_precision AS datePrecision, article, file_usage AS fileUsage,
-            subject_types AS subjectTypes, date_claims AS dateClaims
+            subject_types AS subjectTypes, date_claims AS dateClaims,
+            geo_city AS geoCity, geo_locality AS geoLocality, geo_subdivision AS geoSubdivision,
+            geo_country_name AS geoCountryName, geo_country_code AS geoCountryCode, geo_continent AS geoContinent
      FROM tinder_pool WHERE year >= ? AND year < ?${sourceClause(source)}
      AND NOT EXISTS (SELECT 1 FROM tinder_seen s WHERE s.status <> 'pending' AND (s.event_qid = tinder_pool.qid OR s.image = tinder_pool.image))
      ORDER BY created_at ASC LIMIT ?`,
@@ -851,7 +859,8 @@ export function tinderGetItem(db: Db, qid: string, image: string): Record<string
   const seen = db.prepare(
     `SELECT event_qid, image, title, place_name, lat, lon, year, page, thumb, license,
             blurb, blurb_source, source, date_kind, date_precision, article,
-            file_usage, subject_types, date_claims, status, decided_at, created_at
+            file_usage, subject_types, date_claims, status, decided_at, created_at,
+            geo_city, geo_locality, geo_subdivision, geo_country_name
      FROM tinder_seen WHERE event_qid = ? AND image = ?`,
   ).get(qid, image) as unknown as Record<string, unknown> | undefined;
   if (seen) {
@@ -866,13 +875,18 @@ export function tinderGetItem(db: Db, qid: string, image: string): Record<string
       dateKind: s["date_kind"], datePrecision: s["date_precision"], article: s["article"],
       fileUsage: s["file_usage"], subjectTypes: s["subject_types"], dateClaims: s["date_claims"],
       status: s["status"], decided_at: s["decided_at"], created_at: s["created_at"],
+      geoCity: (s["geo_city"] as string) || undefined,
+      geoLocality: (s["geo_locality"] as string) || undefined,
+      geoSubdivision: (s["geo_subdivision"] as string) || undefined,
+      geoCountryName: (s["geo_country_name"] as string) || undefined,
       pinId: s["event_qid"],
     };
   }
   const pool = db.prepare(
     `SELECT qid, image, title, label, description, year, lat, lon, page, thumb, license,
             blurb_source, source, date_kind, date_precision, article,
-            file_usage, subject_types, date_claims, served_at, created_at
+            file_usage, subject_types, date_claims, served_at, created_at,
+            geo_city, geo_locality, geo_subdivision, geo_country_name
      FROM tinder_pool WHERE qid = ? AND image = ?`,
   ).get(qid, image) as unknown as Record<string, unknown> | undefined;
   if (!pool) return null;
@@ -888,6 +902,10 @@ export function tinderGetItem(db: Db, qid: string, image: string): Record<string
     dateKind: p["date_kind"], datePrecision: p["date_precision"], article: p["article"],
     fileUsage: p["file_usage"], subjectTypes: p["subject_types"], dateClaims: p["date_claims"],
     status: "pending", decided_at: null, created_at: p["created_at"],
+    geoCity: (p["geo_city"] as string) || undefined,
+    geoLocality: (p["geo_locality"] as string) || undefined,
+    geoSubdivision: (p["geo_subdivision"] as string) || undefined,
+    geoCountryName: (p["geo_country_name"] as string) || undefined,
     pinId: p["qid"],
   };
 }

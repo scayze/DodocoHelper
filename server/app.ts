@@ -114,7 +114,7 @@ export interface AppOptions {
  *  (Historypin applies its CDN fresh key; Wikidata passes through). */
 function cardForPoolRow(row: TinderPoolRow): TinderCard {
   const owner = allAdapters.find((a) => a.isSourceId(row.qid)) ?? allAdapters[0]!;
-  return owner.toCard({
+  const card = owner.toCard({
     sourceId: row.qid,
     title: row.label || row.title,
     image: row.thumb && row.thumb !== row.image ? row.image : (row.thumb || row.image),
@@ -133,6 +133,14 @@ function cardForPoolRow(row: TinderPoolRow): TinderCard {
     fileUsage: row.fileUsage ?? "",
     subjectTypes: row.subjectTypes ?? "",
   });
+  // Pool-enriched geo labels ride along ('' until the loop labels the row).
+  card.geoCity = row.geoCity || undefined;
+  card.geoLocality = row.geoLocality || undefined;
+  card.geoSubdivision = row.geoSubdivision || undefined;
+  card.geoCountryName = row.geoCountryName || undefined;
+  card.geoCountryCode = row.geoCountryCode || undefined;
+  card.geoContinent = row.geoContinent || undefined;
+  return card;
 }
 
 /** Scarcity-weighted decade order (weighted probability): thin pool

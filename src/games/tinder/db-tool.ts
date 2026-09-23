@@ -6,6 +6,7 @@
  */
 import { apiUrl } from "../../leaderboard/api.js";
 import { el } from "../dom.js";
+import { geoLabel } from "../geo-label.js";
 import L from "leaflet";
 import "leaflet/dist/leaflet.css";
 
@@ -34,6 +35,10 @@ interface DetailItem {
   year: number;
   lat: number;
   lon: number;
+  geoCity?: string;
+  geoLocality?: string;
+  geoSubdivision?: string;
+  geoCountryName?: string;
   page: string;
   license: string;
   blurb: string;
@@ -89,6 +94,11 @@ export function initTinderDb(): void {
   const dTitle = el("tinder-db-title");
   const dMeta = el("tinder-db-meta");
   const dBlurb = el("tinder-db-blurb");
+  const dBlurbToggle = el<HTMLButtonElement>("tinder-db-blurb-toggle");
+  // Shared fullscreen viewer (same overlay the curator card uses).
+  const dbLightbox = el("tinder-lightbox");
+  const dbLightboxImg = el<HTMLImageElement>("tinder-lightbox-img");
+  const dbLightboxClose = el<HTMLButtonElement>("tinder-lightbox-close");
   const dSource = el<HTMLAnchorElement>("tinder-db-source-link");
   let savedScroll = 0;
 
@@ -250,6 +260,10 @@ export function initTinderDb(): void {
     dTitle.textContent = "";
     dMeta.textContent = "";
     dBlurb.textContent = "";
+    dBlurb.classList.remove("is-expanded");
+    dBlurbToggle.classList.add("hidden");
+    dBlurbToggle.textContent = "more…";
+    dBlurbToggle.setAttribute("aria-expanded", "false");
     try {
       const res = await fetch(
         apiUrl(`/tinder/item?qid=${encodeURIComponent(qid)}&image=${encodeURIComponent(image)}`),
@@ -266,12 +280,56 @@ export function initTinderDb(): void {
     }
   }
 
+  /** Blurbs arrive whole: collapse to 3 lines, expand on demand. The
+   *  toggle only shows when the text actually overflows. */
+  function setDbBlurb(text: string): void {
+    dBlurb.textContent = text;
+    dBlurb.classList.remove("is-expanded");
+    dBlurbToggle.classList.add("hidden");
+    dBlurbToggle.textContent = "more…";
+    dBlurbToggle.setAttribute("aria-expanded", "false");
+    window.requestAnimationFrame(() => {
+      if (dBlurb.textContent !== text) return; // detail moved on already
+      if (dBlurb.scrollHeight > dBlurb.clientHeight + 2) {
+        dBlurbToggle.classList.remove("hidden");
+      }
+    });
+  }
+
+  dBlurbToggle.addEventListener("click", () => {
+    const expanded = dBlurb.classList.toggle("is-expanded");
+    dBlurbToggle.textContent = expanded ? "less" : "more…";
+    dBlurbToggle.setAttribute("aria-expanded", String(expanded));
+  });
+
+  // Fullscreen viewer on the detail photo, reusing the curator overlay.
+  // Open only — the curator's close/backdrop/Esc handlers do the rest.
+  // The opener id steers focus back to this photo on close.
+  function openDbLightbox(): void {
+    if (!currentDetail) return;
+    const src = dImg.getAttribute("src");
+    if (!src) return;
+    dbLightboxImg.setAttribute("src", src);
+    dbLightboxImg.alt = currentDetail.title;
+    dbLightbox.dataset["openerId"] = "tinder-db-img";
+    dbLightbox.classList.remove("hidden");
+    document.body.style.overflow = "hidden";
+    dbLightboxClose.focus();
+  }
+  dImg.addEventListener("click", openDbLightbox);
+  dImg.addEventListener("keydown", (e: KeyboardEvent) => {
+    if (e.key === "Enter" || e.key === " ") {
+      e.preventDefault();
+      openDbLightbox();
+    }
+  });
+
   function paintDetail(it: DetailItem): void {
     dImg.setAttribute("src", it.image);
     dImg.alt = it.title;
     dTitle.textContent = it.title;
-    dMeta.textContent = `${it.year} · ${Number(it.lat).toFixed(2)}°, ${Number(it.lon).toFixed(2)}°`;
-    dBlurb.textContent = it.blurb || it.placeName || "";
+    dMeta.textContent = `${it.year} · ${geoLabel(it) || `${Number(it.lat).toFixed(2)}°, ${Number(it.lon).toFixed(2)}°`}`;
+    setDbBlurb(it.blurb || it.placeName || "");
     dSource.setAttribute("href", it.page || "#");
     dSource.textContent = `${srcName(it.source)} ↗`;
     // Keep the map pin in sync when repainting (e.g. after a revote).

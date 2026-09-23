@@ -5,6 +5,7 @@
  */
 import { apiUrl } from "../../leaderboard/api.js";
 import { el } from "../dom.js";
+import { geoLabel } from "../geo-label.js";
 import { initTinderDb } from "./db-tool.js";
 import L from "leaflet";
 import "leaflet/dist/leaflet.css";
@@ -27,6 +28,10 @@ interface TinderCard {
   lat: number;
   lon: number;
   placeName: string;
+  geoCity?: string;
+  geoLocality?: string;
+  geoSubdivision?: string;
+  geoCountryName?: string;
   year: number;
   license: string;
   blurb: string;
@@ -239,9 +244,13 @@ export function initTinder(): void {
     img.alt = current.title;
     title.textContent = current.title;
     // Date context (built/founded/photo date/…) is computed server-side
-    // from the stored date kind + subject types.
-    meta.textContent = `${current.year}${current.dateTag ?? ""} · ${current.lat.toFixed(2)}°, ${current.lon.toFixed(2)}°`;
-    if (current.dateHint) meta.title = current.dateHint;
+    // from the stored date kind + subject types. Textual geo label when
+    // the row is enriched, exact coords fallback (kept in the tooltip).
+    const coords = `${current.lat.toFixed(2)}°, ${current.lon.toFixed(2)}°`;
+    const geo = geoLabel(current);
+    meta.textContent = `${current.year}${current.dateTag ?? ""} · ${geo || coords}`;
+    const tip = [current.dateHint || "", geo ? coords : ""].filter((s) => s !== "").join(" · ");
+    if (tip) meta.title = tip;
     else meta.removeAttribute("title");
     setBlurb(current.blurb);
     source.setAttribute("href", current.page);
@@ -384,6 +393,7 @@ export function initTinder(): void {
     if (!src) return;
     lightboxImg.setAttribute("src", src);
     lightboxImg.alt = current.title;
+    lightbox.dataset["openerId"] = "tinder-img";
     lightbox.classList.remove("hidden");
     document.body.style.overflow = "hidden";
     lightboxClose.focus();
@@ -393,7 +403,10 @@ export function initTinder(): void {
     lightbox.classList.add("hidden");
     lightboxImg.removeAttribute("src");
     document.body.style.overflow = "";
-    img.focus();
+    // Focus returns to whichever photo opened the overlay (curator or DB).
+    const openerId = lightbox.dataset["openerId"];
+    const opener = openerId ? document.getElementById(openerId) : null;
+    (opener ?? img).focus();
   }
   img.addEventListener("click", openLightbox);
   img.addEventListener("keydown", (e) => {

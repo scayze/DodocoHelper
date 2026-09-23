@@ -54,6 +54,13 @@ export interface TinderCard {
   dateTag: string;
   /** Tooltip explaining the tag. */
   dateHint: string;
+  /** Reverse-geocode labels (pool-enriched, '' until labeled). */
+  geoCity?: string | null;
+  geoLocality?: string | null;
+  geoSubdivision?: string | null;
+  geoCountryName?: string | null;
+  geoCountryCode?: string | null;
+  geoContinent?: string | null;
 }
 
 /** P31 (instance of) → inception verb, priority-ordered (specific before
