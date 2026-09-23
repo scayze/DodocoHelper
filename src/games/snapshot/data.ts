@@ -85,4 +85,4 @@ export function pickRandomIndex(rand: () => number = Math.random): number {
 }
 
 /** Re-export scoring for the controller. */
-export { haversineKm, locationScore, yearScore, totalScore, formatDistance } from "./logic.js";
+export { haversineKm, locationScore, yearScore, yearTau, totalScore, formatDistance } from "./logic.js";

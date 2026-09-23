@@ -16,8 +16,7 @@ const TINDER_TILE_BASE =
 const TINDER_TILE_REF =
   "https://server.arcgisonline.com/ArcGIS/rest/services/Canvas/World_Light_Gray_Reference/MapServer/tile/{z}/{y}/{x}";
 const TINDER_TILE_ATTR =
-  "Tiles &copy; Esri &mdash; Source: Esri, DeLorme, NAVTEQ, USGS, Intermap, iPC, NRCAN, " +
-  "Esri Japan, METI, Esri China (Hong Kong), Esri Thailand, TomTom, 2012";
+  '\u00a9 <a href="https://www.esri.com/" target="_blank" rel="noopener">Esri</a> &amp; contributors';
 
 interface TinderCard {
   id: string;
@@ -176,6 +175,7 @@ export function initTinder(): void {
       return;
     }
     tinderMap = L.map(mapEl, { zoomControl: true });
+    tinderMap.attributionControl.setPrefix(false);
     L.tileLayer(TINDER_TILE_BASE, {
       attribution: TINDER_TILE_ATTR,
       maxZoom: 19,

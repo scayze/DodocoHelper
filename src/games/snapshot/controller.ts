@@ -35,11 +35,12 @@ const TILE_BASE_URL =
 const TILE_REF_URL =
   "https://server.arcgisonline.com/ArcGIS/rest/services/Canvas/World_Light_Gray_Reference/MapServer/tile/{z}/{y}/{x}";
 const TILE_ATTR =
-  "Tiles &copy; Esri &mdash; Source: Esri, DeLorme, NAVTEQ, USGS, Intermap, iPC, NRCAN, " +
-  "Esri Japan, METI, Esri China (Hong Kong), Esri Thailand, TomTom, 2012";
+  '\u00a9 <a href="https://www.esri.com/" target="_blank" rel="noopener">Esri</a> &amp; contributors';
 
 /** Stack base + label layers onto a map (attribution once, on the base). */
 function addCanvasLayers(target: L.Map): void {
+  // Drop the default Leaflet prefix link: saves a line of credit on mobile.
+  target.attributionControl.setPrefix(false);
   L.tileLayer(TILE_BASE_URL, {
     attribution: TILE_ATTR,
     maxZoom: 19,
@@ -575,7 +576,7 @@ export function createSnapshotGame(): GameInstance {
     if (!revealed) {
       mapHint.textContent =
         hasGuess && guessLat !== null && guessLon !== null
-          ? "Pin: " + guessLat.toFixed(1) + "°, " + guessLon.toFixed(1) + "° — tap to move it"
+          ? "Pin: " + guessLat.toFixed(2) + "°, " + guessLon.toFixed(2) + "° — tap to move it"
           : "Tap the map to place your pin";
     } else {
       mapHint.textContent = answerStatus();
@@ -615,9 +616,9 @@ export function createSnapshotGame(): GameInstance {
       whereBtn.innerHTML =
         PIN_SVG +
         "<span>" +
-        guessLat!.toFixed(1) +
+        guessLat!.toFixed(2) +
         "°, " +
-        guessLon!.toFixed(1) +
+        guessLon!.toFixed(2) +
         "°</span>";
     } else {
       whereBtn.textContent = "Where?";
@@ -802,8 +803,10 @@ export function createSnapshotGame(): GameInstance {
   function setGuess(lat: number, lon: number): void {
     if (revealed || !started || !item) return;
     if (dailyLocked && modeShell.mode === "daily") return;
-    guessLat = Math.max(-85, Math.min(85, Math.round(lat * 10) / 10));
-    guessLon = Math.max(-180, Math.min(180, Math.round(lon * 10) / 10));
+    // Free placement: clamp only, no grid snap. Round to 4 decimals
+    // (~11 m) to avoid float noise in persisted state.
+    guessLat = Math.max(-85, Math.min(85, Math.round(lat * 10000) / 10000));
+    guessLon = Math.max(-180, Math.min(180, Math.round(lon * 10000) / 10000));
     paintMap();
     paint();
     persistActive();
@@ -1019,7 +1022,7 @@ export function createSnapshotGame(): GameInstance {
     if (dailyLocked && modeShell.mode === "daily") return;
     distKm = haversineKm(guessLat, guessLon, item.lat, item.lon);
     yearErr = guessYear - item.year;
-    score = totalScore(distKm, yearErr);
+    score = totalScore(distKm, yearErr, item.year);
     revealed = true;
     freezeClock();
     // The result lives on the results view: go there (paints + persists).

@@ -58,8 +58,7 @@ const DB_TILE_BASE =
 const DB_TILE_REF =
   "https://server.arcgisonline.com/ArcGIS/rest/services/Canvas/World_Light_Gray_Reference/MapServer/tile/{z}/{y}/{x}";
 const DB_TILE_ATTR =
-  "Tiles &copy; Esri &mdash; Source: Esri, DeLorme, NAVTEQ, USGS, Intermap, iPC, NRCAN, " +
-  "Esri Japan, METI, Esri China (Hong Kong), Esri Thailand, TomTom, 2012";
+  '\u00a9 <a href="https://www.esri.com/" target="_blank" rel="noopener">Esri</a> &amp; contributors';
 
 function srcName(source: string): string {
   if (source === "wikidata" || source === "wd") return "Wikidata";
@@ -127,6 +126,7 @@ export function initTinderDb(): void {
       return;
     }
     dbMap = L.map(mapEl, { zoomControl: true });
+    dbMap.attributionControl.setPrefix(false);
     L.tileLayer(DB_TILE_BASE, {
       attribution: DB_TILE_ATTR,
       maxZoom: 19,
